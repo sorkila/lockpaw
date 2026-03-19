@@ -20,5 +20,5 @@ build/
 .LSOverride
 
 # Raycast
-bevaka-raycast/node_modules/
-bevaka-raycast/dist/
+lockpaw-raycast/node_modules/
+lockpaw-raycast/dist/

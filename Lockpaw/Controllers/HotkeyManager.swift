@@ -12,7 +12,7 @@ class HotkeyManager {
         guard !isRegistered else { return }
 
         let hotKeyID = EventHotKeyID(
-            signature: OSType(0x4256_4B41),
+            signature: OSType(0x4C4B_5057),
             id: 1
         )
         let defaults = UserDefaults.standard
