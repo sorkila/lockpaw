@@ -1,14 +1,14 @@
 import LocalAuthentication
 import os.log
 
-private let logger = Logger(subsystem: "com.eriknielsen.bevaka", category: "Authenticator")
+private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "Authenticator")
 
 @MainActor
 class Authenticator {
     private var activeContext: LAContext?
 
     /// Authenticate with Touch ID, with password fallback via system dialog.
-    func authenticate(reason: String = "Unlock Bevaka") async -> Bool {
+    func authenticate(reason: String = "Unlock Lockpaw") async -> Bool {
         cancelPending()
 
         let context = LAContext()
@@ -41,7 +41,7 @@ class Authenticator {
     }
 
     /// Authenticate with macOS password (system dialog, user can click "Use Password").
-    func authenticateWithPassword(reason: String = "Enter your password to unlock Bevaka") async -> Bool {
+    func authenticateWithPassword(reason: String = "Enter your password to unlock Lockpaw") async -> Bool {
         cancelPending()
 
         let context = LAContext()

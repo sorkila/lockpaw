@@ -37,7 +37,7 @@ struct OnboardingView: View {
                 HStack(spacing: 8) {
                     ForEach(0..<totalSteps, id: \.self) { i in
                         Circle()
-                            .fill(i == step ? Color("BevakaTeal") : .gray.opacity(0.3))
+                            .fill(i == step ? Color("LockpawTeal") : .gray.opacity(0.3))
                             .frame(width: 6, height: 6)
                     }
                 }
@@ -53,7 +53,7 @@ struct OnboardingView: View {
                         .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .fill(canAdvance
-                                      ? Color("BevakaTeal")
+                                      ? Color("LockpawTeal")
                                       : Color.gray.opacity(0.3))
                         )
                 }
@@ -104,7 +104,7 @@ struct OnboardingView: View {
                 .frame(width: 80, height: 80)
 
             VStack(spacing: 8) {
-                Text("Welcome to Bevaka")
+                Text("Welcome to Lockpaw")
                     .font(.title2.weight(.semibold))
 
                 Text("A screen guard for when your\ncomputer is working and you're not.")
@@ -122,7 +122,7 @@ struct OnboardingView: View {
         VStack(spacing: 20) {
             Image(systemName: "keyboard")
                 .font(.system(size: 36, weight: .light))
-                .foregroundStyle(Color("BevakaTeal"))
+                .foregroundStyle(Color("LockpawTeal"))
 
             VStack(spacing: 8) {
                 Text("Set your hotkey")
@@ -141,22 +141,22 @@ struct OnboardingView: View {
                     if isRecording {
                         Text("Press your shortcut…")
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(Color("BevakaTeal").opacity(0.7))
+                            .foregroundStyle(Color("LockpawTeal").opacity(0.7))
                     } else {
                         Text(recordedKeyDisplay)
                             .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(Color("BevakaTeal"))
+                            .foregroundStyle(Color("LockpawTeal"))
                     }
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color("BevakaTeal").opacity(isRecording ? 0.15 : 0.08))
+                        .fill(Color("LockpawTeal").opacity(isRecording ? 0.15 : 0.08))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(Color("BevakaTeal").opacity(isRecording ? 0.4 : 0.15), lineWidth: 1)
+                        .strokeBorder(Color("LockpawTeal").opacity(isRecording ? 0.4 : 0.15), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -176,7 +176,7 @@ struct OnboardingView: View {
                 if accessibilityGranted {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 36, weight: .light))
-                        .foregroundStyle(Color("BevakaTeal"))
+                        .foregroundStyle(Color("LockpawTeal"))
                         .transition(.scale.combined(with: .opacity))
                 } else {
                     Image(systemName: "hand.raised.fill")
@@ -193,13 +193,13 @@ struct OnboardingView: View {
                     .animation(.none, value: accessibilityGranted)
 
                 if accessibilityGranted {
-                    Text("Bevaka can now block keyboard input\nwhile your screen is locked.")
+                    Text("Lockpaw can now block keyboard input\nwhile your screen is locked.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(2)
                 } else {
-                    Text("Bevaka needs Accessibility permission to\nblock keyboard input while locked.")
+                    Text("Lockpaw needs Accessibility permission to\nblock keyboard input while locked.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -221,18 +221,18 @@ struct OnboardingView: View {
                             Text("Open System Settings")
                                 .font(.system(size: 13, weight: .medium))
                         }
-                        .foregroundStyle(Color("BevakaTeal"))
+                        .foregroundStyle(Color("LockpawTeal"))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color("BevakaTeal").opacity(0.1))
+                                .fill(Color("LockpawTeal").opacity(0.1))
                         )
                     }
                     .buttonStyle(.plain)
 
                     VStack(spacing: 4) {
-                        Text("Find Bevaka in the list and toggle it on.")
+                        Text("Find Lockpaw in the list and toggle it on.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                         Text("This window will update automatically.")
@@ -262,15 +262,15 @@ struct OnboardingView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(.white.opacity(0.4))
 
-                    // Bevaka icon — highlighted
+                    // Lockpaw icon — highlighted
                     ZStack {
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Color("BevakaTeal").opacity(0.15))
+                            .fill(Color("LockpawTeal").opacity(0.15))
                             .frame(width: 24, height: 20)
 
                         Image(systemName: "lock.open")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color("BevakaTeal"))
+                            .foregroundStyle(Color("LockpawTeal"))
                     }
 
                     // Clock
@@ -289,7 +289,7 @@ struct OnboardingView: View {
             .frame(width: 220)
 
             VStack(spacing: 8) {
-                Text("Bevaka lives in your menu bar")
+                Text("Lockpaw lives in your menu bar")
                     .font(.title3.weight(.semibold))
 
                 Text("Look for the lock icon in the top-right\nof your screen. That's your control center.")
@@ -307,12 +307,12 @@ struct OnboardingView: View {
 
                 Text(recordedKeyDisplay)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color("BevakaTeal"))
+                    .foregroundStyle(Color("LockpawTeal"))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color("BevakaTeal").opacity(0.08))
+                            .fill(Color("LockpawTeal").opacity(0.08))
                     )
             }
         }

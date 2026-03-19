@@ -3,7 +3,7 @@ import Combine
 import AppKit
 import os.log
 
-private let logger = Logger(subsystem: "com.eriknielsen.bevaka", category: "LockController")
+private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "LockController")
 
 @MainActor
 class LockController: ObservableObject {
@@ -45,7 +45,7 @@ class LockController: ObservableObject {
         }
 
         sessionLostObserver = NotificationCenter.default.addObserver(
-            forName: .bevakSessionLost, object: nil, queue: .main
+            forName: .lockpawSessionLost, object: nil, queue: .main
         ) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [weak self] in
@@ -80,7 +80,7 @@ class LockController: ObservableObject {
         }
 
         inputBlockerFailedObserver = NotificationCenter.default.addObserver(
-            forName: .bevakInputBlockerFailed, object: nil, queue: .main
+            forName: .lockpawInputBlockerFailed, object: nil, queue: .main
         ) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [weak self] in

@@ -1,9 +1,9 @@
 import SwiftUI
 
 enum Constants {
-    static let appName = "Bevaka"
-    static let bundleIdentifier = "com.eriknielsen.bevaka"
-    static let urlScheme = "bevaka"
+    static let appName = "Lockpaw"
+    static let bundleIdentifier = "com.eriknielsen.lockpaw"
+    static let urlScheme = "lockpaw"
     static let defaultLockMessage = "Agents are working. Don't turn me off."
 
     enum Anim {

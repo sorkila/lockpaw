@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "bevaka",
-  "title": "Bevaka",
-  "description": "Control the Bevaka lock screen for AI agents",
+  "name": "lockpaw",
+  "title": "Lockpaw",
+  "description": "Control the Lockpaw lock screen for AI agents",
   "icon": "assets/extension-icon.png",
   "author": "eriknielsen",
   "categories": ["Productivity", "System"],
@@ -11,34 +11,34 @@
     {
       "name": "lock",
       "title": "Lock Screen",
-      "subtitle": "Bevaka",
-      "description": "Activate the Bevaka lock screen overlay",
+      "subtitle": "Lockpaw",
+      "description": "Activate the Lockpaw lock screen overlay",
       "mode": "no-view",
-      "keywords": ["bevaka", "lock", "privacy", "agent"]
+      "keywords": ["lockpaw", "lock", "privacy", "agent"]
     },
     {
       "name": "unlock",
       "title": "Unlock Screen",
-      "subtitle": "Bevaka",
-      "description": "Request unlock of the Bevaka lock screen (requires authentication)",
+      "subtitle": "Lockpaw",
+      "description": "Request unlock of the Lockpaw lock screen (requires authentication)",
       "mode": "no-view",
-      "keywords": ["bevaka", "unlock"]
+      "keywords": ["lockpaw", "unlock"]
     },
     {
       "name": "unlock-password",
       "title": "Unlock with Password",
-      "subtitle": "Bevaka",
-      "description": "Unlock the Bevaka lock screen with your Mac password",
+      "subtitle": "Lockpaw",
+      "description": "Unlock the Lockpaw lock screen with your Mac password",
       "mode": "no-view",
-      "keywords": ["bevaka", "password", "unlock"]
+      "keywords": ["lockpaw", "password", "unlock"]
     },
     {
       "name": "toggle",
       "title": "Toggle Lock Screen",
-      "subtitle": "Bevaka",
-      "description": "Toggle the Bevaka lock screen on/off",
+      "subtitle": "Lockpaw",
+      "description": "Toggle the Lockpaw lock screen on/off",
       "mode": "no-view",
-      "keywords": ["bevaka", "toggle"]
+      "keywords": ["lockpaw", "toggle"]
     }
   ],
   "dependencies": {

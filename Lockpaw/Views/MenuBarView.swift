@@ -44,22 +44,22 @@ struct MenuBarView: View {
             }
             .keyboardShortcut(",")
 
-            Button("Quit Bevaka") {
+            Button("Quit Lockpaw") {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
         }
-        .onReceive(NotificationCenter.default.publisher(for: .bevakLock)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .lockpawLock)) { _ in
             if controller.state == .unlocked {
                 controller.lock()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .bevakUnlock)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .lockpawUnlock)) { _ in
             if controller.state == .locked {
                 controller.requestUnlock()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .bevakUnlockPassword)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .lockpawUnlockPassword)) { _ in
             if controller.state == .locked {
                 controller.requestPasswordUnlock()
             }

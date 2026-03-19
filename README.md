@@ -1,13 +1,13 @@
 <p align="center">
   <br>
   <br>
-  <img src="bevaka-raycast/assets/extension-icon.png" width="128" />
+  <img src="lockpaw-raycast/assets/extension-icon.png" width="128" />
   <br>
   <br>
 </p>
 
 <h1 align="center">
-  Bevaka
+  Lockpaw
 </h1>
 
 <p align="center">
@@ -32,7 +32,7 @@
 
 <br>
 
-> *Bevaka* — Swedish: to guard, to watch over.
+> Lock + Paw. Your screen's faithful guard dog.
 
 Lock your screen. A metallic watchdog appears in a pool of breathing teal light. All input stops. Your agents keep working. When you return — Touch ID, and you're back.
 
@@ -55,10 +55,10 @@ Lock your screen. A metallic watchdog appears in a pool of breathing teal light.
 # Requires Xcode 15+ and XcodeGen
 brew install xcodegen
 
-git clone https://github.com/eriknielsen/bevaka.git
-cd bevaka
+git clone https://github.com/eriknielsen/lockpaw.git
+cd lockpaw
 xcodegen generate
-xcodebuild -scheme Bevaka -configuration Release build
+xcodebuild -scheme Lockpaw -configuration Release build
 ```
 
 On first launch, grant **Accessibility** when prompted.
@@ -100,7 +100,7 @@ The lock screen is intentionally minimal. Black canvas. Single radial glow. One 
 
 ## ✦ Security model
 
-Bevaka is a **visual privacy tool**, not a security boundary.
+Lockpaw is a **visual privacy tool**, not a security boundary.
 
 It guards against the accidental — a colleague, a cat, your own muscle memory while agents run. Not the intentional.
 
@@ -122,7 +122,7 @@ It guards against the accidental — a colleague, a cat, your own muscle memory 
 <summary><strong>What it doesn't do</strong></summary>
 <br>
 
-- Prevent `pkill Bevaka`
+- Prevent `pkill Lockpaw`
 - Block synthetic events (AppleScript, Accessibility API)
 - Survive kernel-level access
 
@@ -137,10 +137,10 @@ For real security: `Ctrl+Cmd+Q`.
 Four commands. No view. Instant.
 
 ```
-Lock Screen           → bevaka://lock
-Unlock Screen         → bevaka://unlock
-Unlock with Password  → bevaka://unlock-password
-Toggle Lock Screen    → bevaka://toggle
+Lock Screen           → lockpaw://lock
+Unlock Screen         → lockpaw://unlock
+Unlock with Password  → lockpaw://unlock-password
+Toggle Lock Screen    → lockpaw://toggle
 ```
 
 All unlock commands require authentication.
@@ -150,9 +150,9 @@ All unlock commands require authentication.
 ## ✦ Architecture
 
 ```
-Bevaka/
+Lockpaw/
 │
-├─ BevakApp                     Entry, menu bar, URL scheme
+├─ LockpawApp                     Entry, menu bar, URL scheme
 │
 ├─ Controllers/
 │  ├─ LockController            State machine, orchestration
@@ -180,7 +180,7 @@ Bevaka/
 
 <p align="center">
   <sub>
-    Built with care in Stockholm.
+    Built with care in Stockholm.<br>https://getlockpaw.com
     <br>
     The watchdog is always awake.
   </sub>

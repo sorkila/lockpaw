@@ -21,7 +21,7 @@ struct SettingsView: View {
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Bevaka")
+                        Text("Lockpaw")
                             .font(.title3.weight(.semibold))
                         Text("Screen guard for when your computer is working and you're not")
                             .font(.subheadline)
@@ -67,7 +67,7 @@ struct SettingsView: View {
                 Toggle("Global hotkey enabled", isOn: $hotkeyEnabled)
                     .onChange(of: hotkeyEnabled) { _, enabled in
                         NotificationCenter.default.post(
-                            name: .bevakHotkeyPreferenceChanged,
+                            name: .lockpawHotkeyPreferenceChanged,
                             object: nil,
                             userInfo: ["enabled": enabled]
                         )
@@ -100,7 +100,7 @@ struct SettingsView: View {
                     if AccessibilityChecker.isEnabled {
                         Label("Granted", systemImage: "checkmark.circle.fill")
                             .font(.callout)
-                            .foregroundStyle(Color("BevakaTeal"))
+                            .foregroundStyle(Color("LockpawTeal"))
                     } else {
                         Button("Grant Access") {
                             AccessibilityChecker.openSystemSettings()
@@ -113,7 +113,7 @@ struct SettingsView: View {
             // Lock now
             Section {
                 Button {
-                    NotificationCenter.default.post(name: .bevakLock, object: nil)
+                    NotificationCenter.default.post(name: .lockpawLock, object: nil)
                 } label: {
                     HStack {
                         Label("Lock Screen Now", systemImage: "lock.fill")
@@ -127,7 +127,7 @@ struct SettingsView: View {
 
             // About
             Section("About") {
-                Text("Bevaka is a visual privacy tool — it prevents accidental input while your screen is guarded. For real security, use your Mac's lock screen (Ctrl+Cmd+Q).")
+                Text("Lockpaw is a visual privacy tool — it prevents accidental input while your screen is guarded. For real security, use your Mac's lock screen (Ctrl+Cmd+Q).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

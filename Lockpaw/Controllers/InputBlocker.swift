@@ -2,13 +2,13 @@ import Cocoa
 import Carbon
 import os.log
 
-private let logger = Logger(subsystem: "com.eriknielsen.bevaka", category: "InputBlocker")
+private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "InputBlocker")
 
 class InputBlocker {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isBlocking = false
-    private static let inputQueue = DispatchQueue(label: "com.eriknielsen.bevaka.input", qos: .userInteractive)
+    private static let inputQueue = DispatchQueue(label: "com.eriknielsen.lockpaw.input", qos: .userInteractive)
 
     private static let eventMask: CGEventMask = {
         let types: [CGEventType] = [
@@ -55,7 +55,7 @@ class InputBlocker {
                     // Let the unlock hotkey through
                     if modifiersMatch && keyCode == savedKeyCode {
                         InputBlocker.inputQueue.async {
-                            NotificationCenter.default.post(name: .toggleBevaka, object: nil)
+                            NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
                         }
                         return nil
                     }
@@ -75,7 +75,7 @@ class InputBlocker {
 
         guard let eventTap = eventTap else {
             logger.error("Could not create event tap")
-            NotificationCenter.default.post(name: .bevakInputBlockerFailed, object: nil)
+            NotificationCenter.default.post(name: .lockpawInputBlockerFailed, object: nil)
             return
         }
 

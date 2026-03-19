@@ -1,10 +1,10 @@
 import SwiftUI
 import os.log
 
-private let logger = Logger(subsystem: "com.eriknielsen.bevaka", category: "App")
+private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "App")
 
 @main
-struct BevakApp: App {
+struct LockpawApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var lockController = LockController()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
@@ -12,7 +12,7 @@ struct BevakApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(controller: lockController)
-                .onReceive(NotificationCenter.default.publisher(for: .toggleBevaka)) { _ in
+                .onReceive(NotificationCenter.default.publisher(for: .toggleLockpaw)) { _ in
                     if lockController.state == .unlocked {
                         lockController.lock()
                     } else if lockController.state == .locked {
@@ -56,7 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.setEnabled(enabled)
 
         hotkeyObserver = NotificationCenter.default.addObserver(
-            forName: .bevakHotkeyPreferenceChanged, object: nil, queue: .main
+            forName: .lockpawHotkeyPreferenceChanged, object: nil, queue: .main
         ) { [weak self] notification in
             if let enabled = notification.userInfo?["enabled"] as? Bool {
                 self?.hotkeyManager.setEnabled(enabled)
@@ -85,7 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
-        window.title = "Welcome to Bevaka"
+        window.title = "Welcome to Lockpaw"
         window.contentView = NSHostingView(rootView: view)
         window.center()
         window.isReleasedWhenClosed = false
@@ -103,10 +103,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for url in urls {
             guard url.scheme == Constants.urlScheme else { continue }
             switch url.host {
-            case "lock": NotificationCenter.default.post(name: .bevakLock, object: nil)
-            case "unlock": NotificationCenter.default.post(name: .bevakUnlock, object: nil)
-            case "unlock-password": NotificationCenter.default.post(name: .bevakUnlockPassword, object: nil)
-            case "toggle": NotificationCenter.default.post(name: .toggleBevaka, object: nil)
+            case "lock": NotificationCenter.default.post(name: .lockpawLock, object: nil)
+            case "unlock": NotificationCenter.default.post(name: .lockpawUnlock, object: nil)
+            case "unlock-password": NotificationCenter.default.post(name: .lockpawUnlockPassword, object: nil)
+            case "toggle": NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
             default: logger.warning("Unknown URL scheme: \(url.host ?? "nil")")
             }
         }

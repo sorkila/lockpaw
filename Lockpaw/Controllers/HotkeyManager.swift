@@ -1,7 +1,7 @@
 import Carbon
 import os.log
 
-private let logger = Logger(subsystem: "com.eriknielsen.bevaka", category: "HotkeyManager")
+private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "HotkeyManager")
 
 class HotkeyManager {
     private var hotKeyRef: EventHotKeyRef?
@@ -39,7 +39,7 @@ class HotkeyManager {
         InstallEventHandler(
             GetApplicationEventTarget(),
             { _, _, _ -> OSStatus in
-                NotificationCenter.default.post(name: .toggleBevaka, object: nil)
+                NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
                 return noErr
             },
             1, &eventType, nil, &handlerRef

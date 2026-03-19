@@ -1,4 +1,4 @@
-name: Bevaka
+name: Lockpaw
 options:
   bundleIdPrefix: com.eriknielsen
   deploymentTarget:
@@ -11,17 +11,17 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
 
 targets:
-  Bevaka:
+  Lockpaw:
     type: application
     platform: macOS
     sources:
-      - path: Bevaka
+      - path: Lockpaw
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.eriknielsen.bevaka
-        PRODUCT_NAME: Bevaka
-        INFOPLIST_FILE: Bevaka/Info.plist
-        CODE_SIGN_ENTITLEMENTS: Bevaka/Bevaka.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.eriknielsen.lockpaw
+        PRODUCT_NAME: Lockpaw
+        INFOPLIST_FILE: Lockpaw/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Lockpaw/Lockpaw.entitlements
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"

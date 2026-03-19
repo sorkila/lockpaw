@@ -2,8 +2,8 @@
 set -e
 
 # Configuration
-APP_NAME="Bevaka"
-BUNDLE_ID="com.eriknielsen.bevaka"
+APP_NAME="Lockpaw"
+BUNDLE_ID="com.eriknielsen.lockpaw"
 # Update this with your Developer ID certificate name:
 SIGNING_IDENTITY="Developer ID Application: Erik Nielsen"
 # Update with your Apple ID for notarization:

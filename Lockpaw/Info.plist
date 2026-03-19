@@ -23,15 +23,15 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAccessibilityUsageDescription</key>
-	<string>Bevaka needs Accessibility access to block keyboard and mouse input while your lock screen is active.</string>
+	<string>Lockpaw needs Accessibility access to block keyboard and mouse input while your lock screen is active.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.eriknielsen.bevaka</string>
+			<string>com.eriknielsen.lockpaw</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>bevaka</string>
+				<string>lockpaw</string>
 			</array>
 		</dict>
 	</array>
