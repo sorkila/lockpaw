@@ -1,7 +1,7 @@
 <p align="center">
   <br>
   <br>
-  <img src="Lockpaw/Resources/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="128" />
+  <img src="Lockpaw/Resources/Assets.xcassets/Mascot.imageset/Mascot.png" width="128" />
   <br>
   <br>
 </p>
