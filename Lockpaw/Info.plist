@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSAccessibilityUsageDescription</key>
 	<string>Lockpaw needs Accessibility access to block keyboard and mouse input while your lock screen is active.</string>
+	<key>SUFeedURL</key>
+	<string>https://getlockpaw.com/appcast.xml</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

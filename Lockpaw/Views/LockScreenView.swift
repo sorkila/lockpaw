@@ -202,8 +202,8 @@ struct LockScreenView: View {
             withAnimation(reduceMotion ? .none : .easeOut(duration: 0.5)) { appeared = true }
             guard !reduceMotion else { return }
             withAnimation(Constants.Anim.breathe) { phase = 1 }
-            // Auto-show help after 5 seconds of inactivity
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            // Auto-show help after inactivity
+            DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.autoShowHelpDelay) {
                 if !showingHelp && !controller.isAuthenticating {
                     withAnimation(Constants.Anim.gentle) { showingHelp = true }
                 }

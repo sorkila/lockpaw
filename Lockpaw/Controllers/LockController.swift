@@ -86,7 +86,7 @@ class LockController: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.lastError = "Input blocking failed"
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(nanoseconds: Constants.Timing.errorDisplayBeforeForceUnlockNs)
                 self.forceUnlock()
             }
         }
@@ -116,10 +116,17 @@ class LockController: ObservableObject {
         sleepPreventer.preventSleep()
 
         let lockView = LockScreenView(controller: self)
-        overlayManager.showOverlay(content: lockView)
+        guard overlayManager.showOverlay(content: lockView) else {
+            logger.error("Lock failed — no screens available for overlay")
+            sleepPreventer.allowSleep()
+            transitionTo(.unlocked)
+            lastError = "No screens available"
+            scheduleErrorClear()
+            return
+        }
 
         Task {
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(nanoseconds: Constants.Timing.inputBlockerDelayNs)
             inputBlocker.startBlocking()
         }
 
@@ -158,9 +165,9 @@ class LockController: ObservableObject {
         guard state == .locked, !authenticationInProgress else { return }
 
         // Rate limit after 3 failures
-        if failCount >= 3, let lastFail = lastAuthFailTime,
-           Date().timeIntervalSince(lastFail) < 30 {
-            let remaining = Int(30 - Date().timeIntervalSince(lastFail))
+        if failCount >= Constants.Timing.maxAuthAttempts, let lastFail = lastAuthFailTime,
+           Date().timeIntervalSince(lastFail) < Constants.Timing.authRateLimitCooldown {
+            let remaining = Int(Constants.Timing.authRateLimitCooldown - Date().timeIntervalSince(lastFail))
             lastError = "Too many attempts. Wait \(remaining)s."
             scheduleErrorClear()
             return
@@ -191,7 +198,7 @@ class LockController: ObservableObject {
             if authenticated {
                 NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
                 unlockSucceeded = true
-                try? await Task.sleep(nanoseconds: 400_000_000)
+                try? await Task.sleep(nanoseconds: Constants.Timing.unlockSuccessAnimNs)
                 guard !Task.isCancelled else { return }
                 unlock()
             } else {
@@ -203,9 +210,9 @@ class LockController: ObservableObject {
     func requestPasswordUnlock() {
         guard state == .locked, !authenticationInProgress else { return }
 
-        if failCount >= 3, let lastFail = lastAuthFailTime,
-           Date().timeIntervalSince(lastFail) < 30 {
-            let remaining = Int(30 - Date().timeIntervalSince(lastFail))
+        if failCount >= Constants.Timing.maxAuthAttempts, let lastFail = lastAuthFailTime,
+           Date().timeIntervalSince(lastFail) < Constants.Timing.authRateLimitCooldown {
+            let remaining = Int(Constants.Timing.authRateLimitCooldown - Date().timeIntervalSince(lastFail))
             lastError = "Too many attempts. Wait \(remaining)s."
             scheduleErrorClear()
             return
@@ -236,7 +243,7 @@ class LockController: ObservableObject {
             if authenticated {
                 NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
                 unlockSucceeded = true
-                try? await Task.sleep(nanoseconds: 400_000_000)
+                try? await Task.sleep(nanoseconds: Constants.Timing.unlockSuccessAnimNs)
                 guard !Task.isCancelled else { return }
                 unlock()
             } else {
@@ -251,7 +258,7 @@ class LockController: ObservableObject {
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
         failCount += 1
         lastAuthFailTime = Date()
-        lastError = failCount >= 3 ? "Too many attempts. Wait 30 seconds." : "Try again"
+        lastError = failCount >= Constants.Timing.maxAuthAttempts ? "Too many attempts. Wait \(Int(Constants.Timing.authRateLimitCooldown)) seconds." : "Try again"
 
         overlayManager.blockSystemDialogs()
         inputBlocker.startBlocking()
@@ -262,7 +269,7 @@ class LockController: ObservableObject {
     private func scheduleErrorClear() {
         errorClearTask?.cancel()
         errorClearTask = Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            try? await Task.sleep(nanoseconds: Constants.Timing.errorAutoClearNs)
             if !Task.isCancelled, lastError != nil { lastError = nil }
         }
     }
@@ -317,7 +324,7 @@ class LockController: ObservableObject {
                 guard let self, self.state == .locked, !AccessibilityChecker.isEnabled else { return }
                 logger.critical("Accessibility revoked while locked — force unlocking")
                 self.lastError = "Accessibility permission revoked"
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(nanoseconds: Constants.Timing.errorDisplayBeforeForceUnlockNs)
                 self.forceUnlock()
             }
         }

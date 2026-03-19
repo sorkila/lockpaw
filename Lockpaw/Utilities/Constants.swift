@@ -6,6 +6,17 @@ enum Constants {
     static let urlScheme = "lockpaw"
     static let defaultLockMessage = "Agents are working. Don't turn me off."
 
+    enum Timing {
+        static let inputBlockerDelayNs: UInt64 = 50_000_000           // 50ms
+        static let unlockSuccessAnimNs: UInt64 = 400_000_000          // 400ms
+        static let errorDisplayBeforeForceUnlockNs: UInt64 = 1_500_000_000 // 1.5s
+        static let errorAutoClearNs: UInt64 = 5_000_000_000           // 5s
+        static let autoShowHelpDelay: TimeInterval = 5.0              // seconds
+        static let authRateLimitCooldown: TimeInterval = 30.0         // seconds
+        static let maxAuthAttempts = 3
+        static let urlSchemeDebounce: TimeInterval = 0.1              // seconds
+    }
+
     enum Anim {
         static let quick: Animation = .easeOut(duration: 0.2)
         static let standard: Animation = .easeOut(duration: 0.35)

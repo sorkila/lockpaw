@@ -5,9 +5,10 @@ struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @State private var step = 0
     @State private var isRecording = false
-    @State private var recordedKeyDisplay = UserDefaults.standard.string(forKey: "hotkeyDisplay") ?? "Cmd+Shift+L"
+    @State private var recordedKeyDisplay = HotkeyConfig.display
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
     @State private var accessibilityTimer: Timer?
+    @State private var hotkeyConflict: String?
 
     private let totalSteps = 4
 
@@ -113,6 +114,13 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
             }
+
+            Text("Lockpaw is a visual privacy tool, not a security lock. For real security, use your Mac's lock screen (Ctrl+Cmd+Q).")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
         }
     }
 
@@ -161,9 +169,15 @@ struct OnboardingView: View {
             }
             .buttonStyle(.plain)
 
-            Text(isRecording ? "Press any modifier + key" : "Click to change")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            if let conflict = hotkeyConflict {
+                Text(conflict)
+                    .font(.caption)
+                    .foregroundStyle(Color("LockpawError"))
+            } else {
+                Text(isRecording ? "Press any modifier + key" : "Click to change")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .onAppear { setupKeyRecorder() }
     }
@@ -179,9 +193,8 @@ struct OnboardingView: View {
                         .foregroundStyle(Color("LockpawTeal"))
                         .transition(.scale.combined(with: .opacity))
                 } else {
-                    Image(systemName: "hand.raised.fill")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundStyle(.orange)
+                    Text("✋")
+                        .font(.system(size: 36))
                         .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -268,8 +281,11 @@ struct OnboardingView: View {
                             .fill(Color("LockpawTeal").opacity(0.15))
                             .frame(width: 24, height: 20)
 
-                        Image(systemName: "lock.open")
-                            .font(.system(size: 11))
+                        Image("MenuBarIcon")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 12)
                             .foregroundStyle(Color("LockpawTeal"))
                     }
 
@@ -292,7 +308,7 @@ struct OnboardingView: View {
                 Text("Lockpaw lives in your menu bar")
                     .font(.title3.weight(.semibold))
 
-                Text("Look for the lock icon in the top-right\nof your screen. That's your control center.")
+                Text("Look for the dog icon in the top-right\nof your screen. That's your control center.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -336,7 +352,16 @@ struct OnboardingView: View {
                 parts.append(chars)
             }
 
-            recordedKeyDisplay = parts.joined(separator: "+")
+            let display = parts.joined(separator: "+")
+
+            // Check for conflicts with common system shortcuts
+            if let conflict = HotkeyConfig.systemConflict(keyCode: Int(event.keyCode), modifiers: event.modifierFlags) {
+                hotkeyConflict = "\(display) conflicts with \(conflict). Try another."
+                return nil
+            }
+
+            recordedKeyDisplay = display
+            hotkeyConflict = nil
             isRecording = false
 
             // Persist the hotkey to UserDefaults
@@ -345,9 +370,9 @@ struct OnboardingView: View {
             if event.modifierFlags.contains(.shift) { carbonMods |= shiftKey }
             if event.modifierFlags.contains(.option) { carbonMods |= optionKey }
             if event.modifierFlags.contains(.control) { carbonMods |= controlKey }
-            UserDefaults.standard.set(Int(event.keyCode), forKey: "hotkeyKeyCode")
-            UserDefaults.standard.set(carbonMods, forKey: "hotkeyModifiers")
-            UserDefaults.standard.set(recordedKeyDisplay, forKey: "hotkeyDisplay")
+            HotkeyConfig.saveKeyCode(Int(event.keyCode))
+            HotkeyConfig.saveModifiers(carbonMods)
+            HotkeyConfig.saveDisplay(recordedKeyDisplay)
 
             return nil
         }

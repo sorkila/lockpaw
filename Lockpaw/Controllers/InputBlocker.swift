@@ -10,6 +10,13 @@ class InputBlocker {
     private var isBlocking = false
     private static let inputQueue = DispatchQueue(label: "com.eriknielsen.lockpaw.input", qos: .userInteractive)
 
+    /// Cached hotkey values — read once, used in the event tap callback
+    /// to avoid hitting UserDefaults on every keystroke.
+    var cachedKeyCode: Int64 = Int64(HotkeyConfig.defaultKeyCode)
+    var cachedModifiers: Int = HotkeyConfig.defaultModifiers
+
+    private var hotkeyObserver: NSObjectProtocol?
+
     private static let eventMask: CGEventMask = {
         let types: [CGEventType] = [
             .keyDown, .keyUp, .flagsChanged,
@@ -19,8 +26,29 @@ class InputBlocker {
         return types.reduce(CGEventMask(0)) { mask, type in mask | (1 << type.rawValue) }
     }()
 
+    init() {
+        reloadHotkeyConfig()
+
+        hotkeyObserver = NotificationCenter.default.addObserver(
+            forName: .lockpawHotkeyPreferenceChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reloadHotkeyConfig()
+        }
+    }
+
+    /// Refresh cached hotkey key-code and modifiers from HotkeyConfig.
+    func reloadHotkeyConfig() {
+        cachedKeyCode = Int64(HotkeyConfig.keyCode)
+        cachedModifiers = HotkeyConfig.modifiers
+    }
+
     func startBlocking() {
         guard !isBlocking else { return }
+
+        // Ensure cached values are fresh before installing the tap.
+        reloadHotkeyConfig()
 
         eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -42,10 +70,13 @@ class InputBlocker {
                     let flags = event.flags
                     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
-                    // Read saved hotkey from UserDefaults (default: Cmd+Shift+L)
-                    let defaults = UserDefaults.standard
-                    let savedKeyCode = Int64(defaults.object(forKey: "hotkeyKeyCode") as? Int ?? 37)
-                    let savedMods = defaults.object(forKey: "hotkeyModifiers") as? Int ?? (cmdKey | shiftKey)
+                    guard let refcon = refcon else { return nil }
+                    let blocker = Unmanaged<InputBlocker>.fromOpaque(refcon).takeUnretainedValue()
+
+                    // Use cached hotkey values instead of reading UserDefaults
+                    let savedKeyCode = blocker.cachedKeyCode
+                    let savedMods = blocker.cachedModifiers
+
                     var modifiersMatch = true
                     if savedMods & cmdKey != 0 { modifiersMatch = modifiersMatch && flags.contains(.maskCommand) }
                     if savedMods & shiftKey != 0 { modifiersMatch = modifiersMatch && flags.contains(.maskShift) }
@@ -94,5 +125,10 @@ class InputBlocker {
         isBlocking = false
     }
 
-    deinit { stopBlocking() }
+    deinit {
+        stopBlocking()
+        if let observer = hotkeyObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 }
