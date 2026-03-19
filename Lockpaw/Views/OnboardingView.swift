@@ -9,6 +9,7 @@ struct OnboardingView: View {
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
     @State private var accessibilityTimer: Timer?
     @State private var hotkeyConflict: String?
+    @Environment(\.openSettings) private var openSettings
 
     private let totalSteps = 4
 
@@ -90,7 +91,11 @@ struct OnboardingView: View {
                 if step == 2 { startAccessibilityPolling() }
             } else {
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                NotificationCenter.default.post(name: .lockpawHotkeyPreferenceChanged, object: nil)
                 hasCompletedOnboarding = true
+                // Open Settings immediately — this activates the event pipeline
+                // so the global hotkey works without needing to click the menu bar.
+                openSettings()
             }
         }
     }
@@ -373,6 +378,8 @@ struct OnboardingView: View {
             HotkeyConfig.saveKeyCode(Int(event.keyCode))
             HotkeyConfig.saveModifiers(carbonMods)
             HotkeyConfig.saveDisplay(recordedKeyDisplay)
+            // Don't post lockpawHotkeyPreferenceChanged here — Accessibility isn't
+            // granted yet during onboarding. The completion step posts it instead.
 
             return nil
         }

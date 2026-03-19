@@ -1,58 +1,108 @@
+import Cocoa
 import Carbon
 import os.log
 
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "HotkeyManager")
 
-// NOTE: Carbon RegisterEventHotKey is deprecated but remains the only way to register
-// global hotkeys without Accessibility permission. No modern AppKit/SwiftUI equivalent exists.
-// Monitor for a replacement API in future macOS releases.
+/// Manages global hotkey detection using a CGEventTap on a dedicated background thread.
+/// Running on its own thread with its own run loop bypasses the LSUIElement activation
+/// issue where the main run loop doesn't process events until user interaction.
+/// Requires Accessibility permission.
 class HotkeyManager {
-    private var hotKeyRef: EventHotKeyRef?
-    private var handlerRef: EventHandlerRef?
+    private var eventTap: CFMachPort?
+    private var tapThread: Thread?
+    private var tapRunLoop: CFRunLoop?
     private(set) var isRegistered = false
 
     func registerHotkey() {
         guard !isRegistered else { return }
 
-        let hotKeyID = EventHotKeyID(
-            signature: OSType(0x4C4B_5057),
-            id: 1
-        )
-        let modifiers: UInt32 = UInt32(HotkeyConfig.modifiers)
-        let keyCode: UInt32 = UInt32(HotkeyConfig.keyCode)
+        logger.info("registerHotkey: accessibility=\(AXIsProcessTrusted())")
 
-        let status = RegisterEventHotKey(
-            keyCode, modifiers, hotKeyID,
-            GetApplicationEventTarget(), 0, &hotKeyRef
+        // Create the event tap on the calling thread first
+        eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: 1 << CGEventType.keyDown.rawValue,
+            callback: { _, type, event, _ -> Unmanaged<CGEvent>? in
+                // Re-enable if the tap gets disabled
+                if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    return Unmanaged.passUnretained(event)
+                }
+
+                let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+                let flags = event.flags
+
+                let savedKeyCode = HotkeyConfig.keyCode
+                let savedMods = HotkeyConfig.modifiers
+
+                guard keyCode == savedKeyCode else { return Unmanaged.passUnretained(event) }
+
+                var matches = true
+                if savedMods & cmdKey != 0 { matches = matches && flags.contains(.maskCommand) }
+                if savedMods & shiftKey != 0 { matches = matches && flags.contains(.maskShift) }
+                if savedMods & optionKey != 0 { matches = matches && flags.contains(.maskAlternate) }
+                if savedMods & controlKey != 0 { matches = matches && flags.contains(.maskControl) }
+
+                if matches {
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
+                    }
+                }
+
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: nil
         )
 
-        guard status == noErr else {
-            logger.error("Failed to register hotkey: \(status)")
+        guard let eventTap else {
+            logger.error("Failed to create event tap for hotkey")
             return
         }
 
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
+        // Run the event tap on a dedicated background thread with its own run loop.
+        // This avoids the LSUIElement main run loop activation issue entirely.
+        let thread = Thread { [weak self] in
+            guard let self, let tap = self.eventTap else { return }
 
-        InstallEventHandler(
-            GetApplicationEventTarget(),
-            { _, _, _ -> OSStatus in
-                NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
-                return noErr
-            },
-            1, &eventType, nil, &handlerRef
-        )
+            self.tapRunLoop = CFRunLoopGetCurrent()
+
+            let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
+            CGEvent.tapEnable(tap: tap, enable: true)
+
+            logger.info("registerHotkey: event tap running on background thread")
+
+            CFRunLoopRun()
+
+            logger.info("registerHotkey: background run loop exited")
+        }
+        thread.name = "com.eriknielsen.lockpaw.hotkey"
+        thread.qualityOfService = .userInteractive
+        thread.start()
+        tapThread = thread
 
         isRegistered = true
+        logger.info("registerHotkey: complete")
     }
 
     func unregisterHotkey() {
         guard isRegistered else { return }
-        if let ref = hotKeyRef { UnregisterEventHotKey(ref); hotKeyRef = nil }
-        if let ref = handlerRef { RemoveEventHandler(ref); handlerRef = nil }
+
+        if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false) }
+        if let rl = tapRunLoop { CFRunLoopStop(rl) }
+        tapRunLoop = nil
+        tapThread = nil
+        eventTap = nil
         isRegistered = false
+        logger.info("unregisterHotkey: complete")
+    }
+
+    func reregister() {
+        logger.info("reregister called")
+        unregisterHotkey()
+        registerHotkey()
     }
 
     func setEnabled(_ enabled: Bool) {

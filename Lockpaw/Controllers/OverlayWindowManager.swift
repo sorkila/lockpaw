@@ -40,12 +40,11 @@ class OverlayWindowManager {
                     window.animator().alphaValue = 0
                 }
             }, completionHandler: {
-                // Delay cleanup to ensure animation is fully complete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                // Delay cleanup so animation objects are fully released
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     for window in windowsToClose {
                         window.orderOut(nil)
                         window.contentView = nil
-                        window.close()
                     }
                 }
             })

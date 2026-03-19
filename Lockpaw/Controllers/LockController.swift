@@ -27,11 +27,26 @@ class LockController: ObservableObject {
     private var inputBlockerFailedObserver: Any?
     private var accessibilityCheckTimer: Timer?
     private var errorClearTask: Task<Void, Never>?
+    private var toggleObserver: Any?
     private var authenticationInProgress = false
     private var sessionWasLost = false
     private var lastAuthFailTime: Date?
 
     init() {
+        toggleObserver = NotificationCenter.default.addObserver(
+            forName: .toggleLockpaw, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.state == .unlocked {
+                    self.lock()
+                } else if self.state == .locked {
+                    self.quickUnlock()
+                }
+            }
+        }
+
         sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -93,6 +108,7 @@ class LockController: ObservableObject {
     }
 
     deinit {
+        if let obs = toggleObserver { NotificationCenter.default.removeObserver(obs) }
         timer?.invalidate()
         accessibilityCheckTimer?.invalidate()
         errorClearTask?.cancel()

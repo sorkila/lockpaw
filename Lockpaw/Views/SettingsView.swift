@@ -1,6 +1,7 @@
 import SwiftUI
 import ServiceManagement
 import Sparkle
+import Carbon
 
 struct SettingsView: View {
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
@@ -9,6 +10,10 @@ struct SettingsView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
+
+    @State private var isRecording = false
+    @State private var hotkeyConflict: String?
+    @State private var keyMonitor: Any?
 
     var body: some View {
         Form {
@@ -54,20 +59,35 @@ struct SettingsView: View {
             // Shortcuts
             Section("Shortcuts") {
                 LabeledContent("Lock / Unlock") {
-                    Text(hotkeyDisplay)
-                        .font(.callout.monospaced())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(.background)
-                                .shadow(color: .primary.opacity(0.06), radius: 0.5, y: 0.5)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .strokeBorder(.separator, lineWidth: 0.5)
-                        )
+                    Button {
+                        if isRecording {
+                            stopRecording()
+                        } else {
+                            startRecording()
+                        }
+                    } label: {
+                        Text(isRecording ? "Press shortcut…" : hotkeyDisplay)
+                            .font(.callout.monospaced())
+                            .foregroundStyle(isRecording ? Color("LockpawTeal") : .secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(isRecording ? Color("LockpawTeal").opacity(0.1) : Color(.controlBackgroundColor))
+                                    .shadow(color: .primary.opacity(0.06), radius: 0.5, y: 0.5)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .strokeBorder(isRecording ? Color("LockpawTeal").opacity(0.4) : Color(.separatorColor), lineWidth: 0.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let conflict = hotkeyConflict {
+                    Text(conflict)
+                        .font(.caption)
+                        .foregroundStyle(Color("LockpawError"))
                 }
 
                 Toggle("Global hotkey enabled", isOn: $hotkeyEnabled)
@@ -165,6 +185,59 @@ struct SettingsView: View {
         case 1: NSApp.appearance = NSAppearance(named: .aqua)
         case 2: NSApp.appearance = NSAppearance(named: .darkAqua)
         default: NSApp.appearance = nil // Follow system
+        }
+    }
+
+    // MARK: - Hotkey Recorder
+
+    private func startRecording() {
+        hotkeyConflict = nil
+        isRecording = true
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            var parts: [String] = []
+            if event.modifierFlags.contains(.command) { parts.append("Cmd") }
+            if event.modifierFlags.contains(.shift) { parts.append("Shift") }
+            if event.modifierFlags.contains(.option) { parts.append("Opt") }
+            if event.modifierFlags.contains(.control) { parts.append("Ctrl") }
+
+            guard !parts.isEmpty else { return event }
+
+            if let chars = event.charactersIgnoringModifiers?.uppercased(), !chars.isEmpty {
+                parts.append(chars)
+            }
+
+            let display = parts.joined(separator: "+")
+
+            if let conflict = HotkeyConfig.systemConflict(keyCode: Int(event.keyCode), modifiers: event.modifierFlags) {
+                hotkeyConflict = "\(display) conflicts with \(conflict)"
+                return nil
+            }
+
+            // Save and apply
+            var carbonMods: Int = 0
+            if event.modifierFlags.contains(.command) { carbonMods |= cmdKey }
+            if event.modifierFlags.contains(.shift) { carbonMods |= shiftKey }
+            if event.modifierFlags.contains(.option) { carbonMods |= optionKey }
+            if event.modifierFlags.contains(.control) { carbonMods |= controlKey }
+
+            HotkeyConfig.saveKeyCode(Int(event.keyCode))
+            HotkeyConfig.saveModifiers(carbonMods)
+            HotkeyConfig.saveDisplay(display)
+            hotkeyDisplay = display
+            hotkeyConflict = nil
+            stopRecording()
+
+            NotificationCenter.default.post(name: .lockpawHotkeyPreferenceChanged, object: nil)
+
+            return nil
+        }
+    }
+
+    private func stopRecording() {
+        isRecording = false
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
         }
     }
 }

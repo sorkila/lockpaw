@@ -13,13 +13,6 @@ struct LockpawApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(controller: lockController)
-                .onReceive(NotificationCenter.default.publisher(for: .toggleLockpaw)) { _ in
-                    if lockController.state == .unlocked {
-                        lockController.lock()
-                    } else if lockController.state == .locked {
-                        lockController.quickUnlock()
-                    }
-                }
         } label: {
             Image("MenuBarIcon")
                 .renderingMode(.template)
@@ -54,14 +47,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         default: NSApp.appearance = nil
         }
 
-        let enabled = HotkeyConfig.enabled
-        hotkeyManager.setEnabled(enabled)
+        // Only register hotkey if onboarding is complete (Accessibility granted).
+        // Otherwise, wait for onboarding to finish and post the notification.
+        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+            let enabled = HotkeyConfig.enabled
+            hotkeyManager.setEnabled(enabled)
+        }
 
         hotkeyObserver = NotificationCenter.default.addObserver(
-            forName: .lockpawHotkeyPreferenceChanged, object: nil, queue: .main
+            forName: .lockpawHotkeyPreferenceChanged, object: nil, queue: nil
         ) { [weak self] notification in
-            if let enabled = notification.userInfo?["enabled"] as? Bool {
-                self?.hotkeyManager.setEnabled(enabled)
+            DispatchQueue.main.async {
+                if let enabled = notification.userInfo?["enabled"] as? Bool {
+                    self?.hotkeyManager.setEnabled(enabled)
+                } else {
+                    // Key combo changed or onboarding completed — re-register.
+                    // Delay to let Settings activate the event pipeline first.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        self?.hotkeyManager.reregister()
+                    }
+                }
             }
         }
 
