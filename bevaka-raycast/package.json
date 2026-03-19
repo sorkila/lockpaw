@@ -1,0 +1,58 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "bevaka",
+  "title": "Bevaka",
+  "description": "Control the Bevaka lock screen for AI agents",
+  "icon": "assets/extension-icon.png",
+  "author": "eriknielsen",
+  "categories": ["Productivity", "System"],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "lock",
+      "title": "Lock Screen",
+      "subtitle": "Bevaka",
+      "description": "Activate the Bevaka lock screen overlay",
+      "mode": "no-view",
+      "keywords": ["bevaka", "lock", "privacy", "agent"]
+    },
+    {
+      "name": "unlock",
+      "title": "Unlock Screen",
+      "subtitle": "Bevaka",
+      "description": "Request unlock of the Bevaka lock screen (requires authentication)",
+      "mode": "no-view",
+      "keywords": ["bevaka", "unlock"]
+    },
+    {
+      "name": "unlock-password",
+      "title": "Unlock with Password",
+      "subtitle": "Bevaka",
+      "description": "Unlock the Bevaka lock screen with your Mac password",
+      "mode": "no-view",
+      "keywords": ["bevaka", "password", "unlock"]
+    },
+    {
+      "name": "toggle",
+      "title": "Toggle Lock Screen",
+      "subtitle": "Bevaka",
+      "description": "Toggle the Bevaka lock screen on/off",
+      "mode": "no-view",
+      "keywords": ["bevaka", "toggle"]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.64.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^1.0.8",
+    "@types/node": "20.10.0",
+    "typescript": "^5.3.2"
+  },
+  "scripts": {
+    "build": "ray build --skip-types -e dist -o dist",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint"
+  }
+}
