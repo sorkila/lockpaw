@@ -40,11 +40,12 @@ Lockpaw/
 │   ├── LockController.swift        State machine, lock/unlock orchestration
 │   ├── Authenticator.swift         LAContext (Touch ID / password fallback)
 │   ├── InputBlocker.swift          CGEventTap — blocks keyboard/scroll while locked
-│   ├── HotkeyManager.swift         Carbon RegisterEventHotKey — custom hotkey
+│   ├── HotkeyManager.swift         CGEventTap on background thread — global hotkey
 │   ├── OverlayWindowManager.swift  NSWindow per screen at CGShieldingWindowLevel
 │   └── SleepPreventer.swift        IOKit sleep assertion
 ├── Models/
-│   └── LockState.swift             .unlocked → .locking → .locked → .unlocking
+│   ├── LockState.swift             .unlocked → .locking → .locked → .unlocking
+│   └── HotkeyConfig.swift          Centralized hotkey UserDefaults access + conflict detection
 ├── Views/
 │   ├── LockScreenView.swift        Lock screen — dog, message, time, fallback auth
 │   ├── MenuBarView.swift           Menu bar dropdown
