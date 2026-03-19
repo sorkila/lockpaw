@@ -56,7 +56,7 @@ struct OnboardingView: View {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .fill(canAdvance
                                       ? Color("LockpawTeal")
-                                      : Color.gray.opacity(0.3))
+                                      : Color.gray.opacity(0.4))
                         )
                 }
                 .buttonStyle(.plain)
@@ -122,7 +122,7 @@ struct OnboardingView: View {
 
             Text("Lockpaw is a visual privacy tool, not a security lock. For real security, use your Mac's lock screen (Ctrl+Cmd+Q).")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
@@ -181,7 +181,7 @@ struct OnboardingView: View {
             } else {
                 Text(isRecording ? "Press any modifier + key" : "Click to change")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             }
         }
         .onAppear { setupKeyRecorder() }
@@ -252,10 +252,10 @@ struct OnboardingView: View {
                     VStack(spacing: 4) {
                         Text("Find Lockpaw in the list and toggle it on.")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                         Text("This window will update automatically.")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -275,10 +275,10 @@ struct OnboardingView: View {
                     // Other menu bar icons (generic)
                     Image(systemName: "wifi")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.secondary)
                     Image(systemName: "battery.75percent")
                         .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.secondary)
 
                     // Lockpaw icon — highlighted
                     ZStack {
@@ -297,14 +297,14 @@ struct OnboardingView: View {
                     // Clock
                     Text("11:21")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(.secondary)
 
                     Spacer().frame(width: 8)
                 }
                 .frame(height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(.white.opacity(0.06))
+                        .fill(.primary.opacity(0.06))
                 )
             }
             .frame(width: 220)
@@ -324,7 +324,7 @@ struct OnboardingView: View {
             VStack(spacing: 4) {
                 Text("Your hotkey")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
 
                 Text(recordedKeyDisplay)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))

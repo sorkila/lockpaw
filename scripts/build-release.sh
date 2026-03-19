@@ -21,10 +21,36 @@ xcodebuild -project ${APP_NAME}.xcodeproj \
 
 APP_PATH="build/DerivedData/Build/Products/Release/${APP_NAME}.app"
 
+echo "==> Preparing clean copy for signing..."
+# Copy to /tmp to escape iCloud-managed xattrs that can't be cleared in ~/Documents
+SIGN_DIR=$(mktemp -d /tmp/lockpaw-sign.XXXXXX)
+ditto --norsrc "${APP_PATH}" "${SIGN_DIR}/${APP_NAME}.app"
+APP_PATH="${SIGN_DIR}/${APP_NAME}.app"
+
 echo "==> Signing with Developer ID + hardened runtime..."
-codesign --force --deep --sign "${SIGNING_IDENTITY}" \
-  --options runtime \
-  "${APP_PATH}"
+SPARKLE_FW="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
+SPARKLE_VER="${SPARKLE_FW}/Versions/B"
+
+sign_item() {
+  codesign --force --sign "${SIGNING_IDENTITY}" --options runtime --timestamp "$1"
+}
+
+# Sign inside-out: Sparkle internals → XPC → framework → app
+for xpc in "${SPARKLE_VER}/XPCServices/Downloader.xpc" "${SPARKLE_VER}/XPCServices/Installer.xpc"; do
+  [ -d "${xpc}" ] || continue
+  sign_item "${xpc}/Contents/MacOS/$(basename "${xpc}" .xpc)"
+  sign_item "${xpc}"
+done
+
+[ -f "${SPARKLE_VER}/Autoupdate" ] && sign_item "${SPARKLE_VER}/Autoupdate"
+
+if [ -d "${SPARKLE_VER}/Updater.app" ]; then
+  sign_item "${SPARKLE_VER}/Updater.app/Contents/MacOS/Updater"
+  sign_item "${SPARKLE_VER}/Updater.app"
+fi
+
+sign_item "${SPARKLE_FW}"
+sign_item "${APP_PATH}"
 
 echo "==> Verifying signature..."
 codesign --verify --verbose "${APP_PATH}"
@@ -33,57 +59,25 @@ spctl --assess --type exec "${APP_PATH}" && echo "   Gatekeeper: ACCEPTED" || ec
 echo "==> Creating DMG..."
 DMG_DIR="build/dmg"
 DMG_PATH="build/${APP_NAME}.dmg"
-DMG_TEMP="build/${APP_NAME}-temp.dmg"
-rm -rf "${DMG_DIR}" "${DMG_PATH}" "${DMG_TEMP}"
+rm -rf "${DMG_DIR}" "${DMG_PATH}"
 mkdir -p "${DMG_DIR}"
 cp -R "${APP_PATH}" "${DMG_DIR}/"
-ln -s /Applications "${DMG_DIR}/Applications"
+rm -rf "${SIGN_DIR}"
 
-# Create writable DMG first for layout customization
-hdiutil create -volname "${APP_NAME}" \
-  -srcfolder "${DMG_DIR}" \
-  -ov -format UDRW \
-  "${DMG_TEMP}"
-
-# Mount and customize layout
-MOUNT_DIR=$(hdiutil attach -readwrite -noverify "${DMG_TEMP}" | grep "/Volumes/${APP_NAME}" | awk '{print $NF}')
-echo "   Mounted at: ${MOUNT_DIR}"
-
-# Copy background
-mkdir -p "${MOUNT_DIR}/.background"
-cp scripts/dmg-background.png "${MOUNT_DIR}/.background/background.png"
-cp scripts/dmg-background@2x.png "${MOUNT_DIR}/.background/background@2x.png"
-
-# Apply Finder layout via AppleScript
-osascript <<APPLESCRIPT
-tell application "Finder"
-  tell disk "${APP_NAME}"
-    open
-    set current view of container window to icon view
-    set toolbar visible of container window to false
-    set statusbar visible of container window to false
-    set bounds of container window to {100, 100, 760, 500}
-    set theViewOptions to the icon view options of container window
-    set arrangement of theViewOptions to not arranged
-    set icon size of theViewOptions to 80
-    set background picture of theViewOptions to file ".background:background.png"
-    set position of item "${APP_NAME}.app" of container window to {170, 180}
-    set position of item "Applications" of container window to {490, 180}
-    close
-    open
-    update without registering applications
-    delay 1
-    close
-  end tell
-end tell
-APPLESCRIPT
-
-# Unmount
-hdiutil detach "${MOUNT_DIR}" -quiet
-
-# Convert to compressed read-only DMG
-hdiutil convert "${DMG_TEMP}" -format UDZO -o "${DMG_PATH}"
-rm -f "${DMG_TEMP}"
+create-dmg \
+  --volname "${APP_NAME}" \
+  --volicon "scripts/dmg-volume-icon.icns" \
+  --background "scripts/dmg-background@2x.png" \
+  --window-pos 200 120 \
+  --window-size 660 400 \
+  --icon-size 96 \
+  --text-size 14 \
+  --icon "${APP_NAME}.app" 170 180 \
+  --hide-extension "${APP_NAME}.app" \
+  --app-drop-link 490 180 \
+  --no-internet-enable \
+  "${DMG_PATH}" \
+  "${DMG_DIR}"
 
 echo "==> Notarizing..."
 xcrun notarytool submit "${DMG_PATH}" \
@@ -92,6 +86,14 @@ xcrun notarytool submit "${DMG_PATH}" \
 
 echo "==> Stapling notarization ticket..."
 xcrun stapler staple "${DMG_PATH}"
+
+# Set custom icon on the DMG file itself (visible in Finder before mounting)
+echo "==> Setting DMG file icon..."
+osascript -e '
+use framework "AppKit"
+set theIcon to current application'\''s NSImage'\''s alloc()'\''s initWithContentsOfFile:"'"$(pwd)/scripts/dmg-volume-icon.icns"'"
+current application'\''s NSWorkspace'\''s sharedWorkspace()'\''s setIcon:theIcon forFile:"'"$(pwd)/${DMG_PATH}"'" options:0
+'
 
 echo ""
 echo "==> Done! DMG ready at: ${DMG_PATH}"

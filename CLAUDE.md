@@ -9,7 +9,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **URL scheme:** `lockpaw://`
 - **Website:** getlockpaw.com
 - **Repo:** git@github.com:sorkila/lockpaw.git
-- **Requires:** macOS 14+, Xcode 15+, XcodeGen
+- **Requires:** macOS 14+, Xcode 15+, XcodeGen, create-dmg
 - **Dependencies:** Sparkle (SPM, auto-updates)
 
 ## Build
@@ -38,9 +38,13 @@ xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ./scripts/build-release.sh
 ```
 
-Builds unsigned → signs with Developer ID → creates branded DMG (via `create-dmg`) → notarizes → staples. Output: `build/Lockpaw.dmg`. Requires `lockpaw-notarize` keychain profile (already stored).
+Builds unsigned → copies to `/tmp` for signing → signs with Developer ID → creates branded DMG (via `create-dmg`) → notarizes → staples → sets custom DMG file icon. Output: `build/Lockpaw.dmg`. Requires `lockpaw-notarize` keychain profile (already stored) and `create-dmg` (`brew install create-dmg`).
 
-For signing Sparkle framework components: the build script must use `ditto --norsrc` to strip FinderInfo xattrs, then sign inside-out (Sparkle binaries → framework → app) with `--timestamp` flag.
+**Signing:** The build script copies the app to `/tmp` via `ditto --norsrc` before signing. This is required because the repo lives in iCloud-synced `~/Documents` which adds irremovable `com.apple.FinderInfo` and `com.apple.fileprovider.fpfs#P` xattrs that cause codesign to fail with "resource fork, Finder information, or similar detritus not allowed". Signing is done inside-out with `--timestamp`: XPC service binaries → XPC bundles → Autoupdate → Updater.app binary → Updater.app → Sparkle.framework → main app.
+
+**DMG assets** in `scripts/`:
+- `dmg-background.png` / `dmg-background@2x.png` — dark background with teal arrow (660x400 / 1320x800)
+- `dmg-volume-icon.icns` — dog mascot icon shown on mounted volume and DMG file in Finder
 
 ## Project structure
 

@@ -152,7 +152,7 @@ struct SettingsView: View {
                         Spacer()
                         Text(hotkeyDisplay)
                             .font(.callout.monospaced())
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
