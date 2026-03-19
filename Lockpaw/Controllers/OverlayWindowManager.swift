@@ -12,12 +12,18 @@ class OverlayWindowManager {
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
-    func showOverlay(content: some View) {
+    @discardableResult
+    func showOverlay(content: some View) -> Bool {
         pendingContent = AnyView(content)
         dismissOverlay()
         createWindows()
+        guard !windows.isEmpty else {
+            logger.error("showOverlay failed — no windows created")
+            return false
+        }
         startObservingScreenChanges()
         startObservingSessionChanges()
+        return true
     }
 
     func dismissOverlay(animated: Bool = false) {

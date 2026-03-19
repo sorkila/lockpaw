@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ── Build unsigned release ──────────────────────────────────────────
+      - name: Build release (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild -project Lockpaw.xcodeproj \
+            -scheme Lockpaw \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build 2>&1 | xcbeautify
+
+      # ── Import signing certificate (conditional) ────────────────────────
+      # Requires secrets:
+      #   CERTIFICATE_P12_BASE64  — base64-encoded Developer ID Application .p12
+      #   CERTIFICATE_PASSWORD    — password for the .p12 file
+      #   DEVELOPER_ID_APPLICATION — identity name, e.g. "Developer ID Application: Erik Nielsen (XXXXXXXXXX)"
+      #   NOTARIZE_APPLE_ID       — Apple ID email for notarytool
+      #   NOTARIZE_PASSWORD       — app-specific password for notarytool
+      #   APPLE_TEAM_ID           — 10-char team ID
+      - name: Import signing certificate
+        if: env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          HAS_SIGNING_SECRETS: ${{ secrets.CERTIFICATE_P12_BASE64 != '' }}
+          CERTIFICATE_P12_BASE64: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          # Create a temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 900 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+          rm "$CERT_PATH"
+
+          # Allow codesign to access the keychain
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+      # ── Sign, package DMG, notarize (conditional) ───────────────────────
+      - name: Determine if signing is available
+        id: check-secrets
+        run: |
+          if [ -n "$HAS_SECRETS" ]; then
+            echo "can_sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_sign=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          HAS_SECRETS: ${{ secrets.CERTIFICATE_P12_BASE64 }}
+
+      - name: Sign app with Developer ID
+        if: steps.check-secrets.outputs.can_sign == 'true'
+        env:
+          DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+        run: |
+          APP_PATH="build/DerivedData/Build/Products/Release/Lockpaw.app"
+
+          codesign --force --deep --sign "$DEVELOPER_ID_APPLICATION" \
+            --options runtime \
+            "$APP_PATH"
+
+          codesign --verify --verbose "$APP_PATH"
+
+      - name: Create DMG
+        if: steps.check-secrets.outputs.can_sign == 'true'
+        run: |
+          APP_PATH="build/DerivedData/Build/Products/Release/Lockpaw.app"
+          DMG_DIR="build/dmg"
+          DMG_PATH="build/Lockpaw.dmg"
+
+          mkdir -p "$DMG_DIR"
+          cp -R "$APP_PATH" "$DMG_DIR/"
+          ln -s /Applications "$DMG_DIR/Applications"
+
+          hdiutil create -volname "Lockpaw" \
+            -srcfolder "$DMG_DIR" \
+            -ov -format UDZO \
+            "$DMG_PATH"
+
+      - name: Notarize DMG
+        if: steps.check-secrets.outputs.can_sign == 'true'
+        env:
+          NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
+          NOTARIZE_PASSWORD: ${{ secrets.NOTARIZE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          DMG_PATH="build/Lockpaw.dmg"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$NOTARIZE_APPLE_ID" \
+            --password "$NOTARIZE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$DMG_PATH"
+
+      # ── Create GitHub Release ───────────────────────────────────────────
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CAN_SIGN: ${{ steps.check-secrets.outputs.can_sign }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          RELEASE_ARGS=(
+            "$TAG"
+            --title "$TAG"
+            --generate-notes
+          )
+
+          # Upload DMG if signing/notarization succeeded
+          if [ "$CAN_SIGN" = "true" ] && [ -f "build/Lockpaw.dmg" ]; then
+            RELEASE_ARGS+=("build/Lockpaw.dmg#Lockpaw.dmg")
+          fi
+
+          gh release create "${RELEASE_ARGS[@]}"
+
+      # ── Cleanup keychain ────────────────────────────────────────────────
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH"
+          fi

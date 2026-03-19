@@ -1,4 +1,5 @@
 import SwiftUI
+import Sparkle
 import os.log
 
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "App")
@@ -20,10 +21,9 @@ struct LockpawApp: App {
                     }
                 }
         } label: {
-            Image(systemName: lockController.isAuthenticating
-                  ? "hourglass"
-                  : (lockController.state == .locked ? "lock" : "lock.open"))
-                .symbolRenderingMode(.monochrome)
+            Image("MenuBarIcon")
+                .renderingMode(.template)
+                .opacity(lockController.state == .locked ? 1.0 : 0.55)
         }
 
         Settings {
@@ -35,6 +35,17 @@ struct LockpawApp: App {
         if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             AccessibilityChecker.promptIfNeeded()
         }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    private let hotkeyManager = HotkeyManager()
+    private var hotkeyObserver: Any?
+    private var lastURLSchemeCall: Date = .distantPast
+    private var onboardingWindow: NSWindow?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
         // Apply saved appearance
         let mode = UserDefaults.standard.integer(forKey: "appearanceMode")
         switch mode {
@@ -42,17 +53,8 @@ struct LockpawApp: App {
         case 2: NSApp.appearance = NSAppearance(named: .darkAqua)
         default: NSApp.appearance = nil
         }
-    }
-}
 
-class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hotkeyManager = HotkeyManager()
-    private var hotkeyObserver: Any?
-    private var lastURLSchemeCall: Date = .distantPast
-    private var onboardingWindow: NSWindow?
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        let enabled = UserDefaults.standard.object(forKey: "hotkeyEnabled") as? Bool ?? true
+        let enabled = HotkeyConfig.enabled
         hotkeyManager.setEnabled(enabled)
 
         hotkeyObserver = NotificationCenter.default.addObserver(
@@ -97,7 +99,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         let now = Date()
-        guard now.timeIntervalSince(lastURLSchemeCall) > 0.1 else { return }
+        guard now.timeIntervalSince(lastURLSchemeCall) > Constants.Timing.urlSchemeDebounce else { return }
         lastURLSchemeCall = now
 
         for url in urls {

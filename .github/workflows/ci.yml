@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project Lockpaw.xcodeproj \
+            -scheme Lockpaw \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            build 2>&1 | xcbeautify
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild -project Lockpaw.xcodeproj \
+            -scheme LockpawTests \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            test 2>&1 | xcbeautify

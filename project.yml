@@ -5,10 +5,25 @@ options:
     macOS: "14.0"
   generateEmptyDirectories: true
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.0.0"
+
 settings:
   base:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+schemes:
+  Lockpaw:
+    build:
+      targets:
+        Lockpaw: all
+        LockpawTests: [test]
+    test:
+      targets:
+        - LockpawTests
 
 targets:
   Lockpaw:
@@ -27,3 +42,18 @@ targets:
         LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - package: Sparkle
+  LockpawTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: LockpawTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.eriknielsen.lockpaw.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Lockpaw.app/Contents/MacOS/Lockpaw"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Lockpaw

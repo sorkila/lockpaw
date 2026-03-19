@@ -3,6 +3,9 @@ import os.log
 
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "HotkeyManager")
 
+// NOTE: Carbon RegisterEventHotKey is deprecated but remains the only way to register
+// global hotkeys without Accessibility permission. No modern AppKit/SwiftUI equivalent exists.
+// Monitor for a replacement API in future macOS releases.
 class HotkeyManager {
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
@@ -15,11 +18,8 @@ class HotkeyManager {
             signature: OSType(0x4C4B_5057),
             id: 1
         )
-        let defaults = UserDefaults.standard
-        let savedKeyCode = defaults.object(forKey: "hotkeyKeyCode") as? Int ?? 37
-        let savedModifiers = defaults.object(forKey: "hotkeyModifiers") as? Int ?? (cmdKey | shiftKey)
-        let modifiers: UInt32 = UInt32(savedModifiers)
-        let keyCode: UInt32 = UInt32(savedKeyCode)
+        let modifiers: UInt32 = UInt32(HotkeyConfig.modifiers)
+        let keyCode: UInt32 = UInt32(HotkeyConfig.keyCode)
 
         let status = RegisterEventHotKey(
             keyCode, modifiers, hotKeyID,

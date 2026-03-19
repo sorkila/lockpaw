@@ -1,13 +1,14 @@
 import SwiftUI
 import ServiceManagement
+import Sparkle
 
 struct SettingsView: View {
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
     @AppStorage("showMessage") private var showMessage = true
-    @AppStorage("hotkeyEnabled") private var hotkeyEnabled = true
+    @AppStorage("hotkeyEnabled") private var hotkeyEnabled = HotkeyConfig.defaultEnabled
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
-    @AppStorage("hotkeyDisplay") private var hotkeyDisplay = "Cmd+Shift+L"
+    @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
 
     var body: some View {
         Form {
@@ -41,6 +42,11 @@ struct SettingsView: View {
                         TextField("", text: $message, axis: .vertical)
                             .lineLimit(1...3)
                             .multilineTextAlignment(.trailing)
+                            .onChange(of: message) { _, newValue in
+                                if newValue.count > 120 {
+                                    message = String(newValue.prefix(120))
+                                }
+                            }
                     }
                 }
             }
@@ -92,6 +98,12 @@ struct SettingsView: View {
                 .onChange(of: appearanceMode) { _, mode in
                     applyAppearance(mode)
                 }
+
+                Button("Check for Updates\u{2026}") {
+                    if let appDelegate = NSApp.delegate as? AppDelegate {
+                        appDelegate.updaterController.checkForUpdates(nil)
+                    }
+                }
             }
 
             // Permissions
@@ -133,14 +145,18 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480)
+        .frame(minWidth: 400, idealWidth: 480, maxWidth: 560)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
+            NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 NSApp.keyWindow?.makeFirstResponder(nil)
             }
             applyAppearance(appearanceMode)
+        }
+        .onDisappear {
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 
