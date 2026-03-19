@@ -10,6 +10,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **Website:** getlockpaw.com
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 15+, XcodeGen
+- **Dependencies:** Sparkle (SPM, auto-updates)
 
 ## Build
 
@@ -23,13 +24,23 @@ After each rebuild, reset TCC (binary signature changes invalidate accessibility
 tccutil reset Accessibility com.eriknielsen.lockpaw
 ```
 
+## Test
+
+```bash
+xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
+```
+
+34 unit tests covering LockState transitions, Constants formatting, and HotkeyConfig conflict detection.
+
 ## Release
 
 ```bash
 ./scripts/build-release.sh
 ```
 
-Builds unsigned → signs with Developer ID → creates DMG → notarizes → staples. Output: `build/Lockpaw.dmg`. Requires `lockpaw-notarize` keychain profile (already stored).
+Builds unsigned → signs with Developer ID → creates branded DMG (via `create-dmg`) → notarizes → staples. Output: `build/Lockpaw.dmg`. Requires `lockpaw-notarize` keychain profile (already stored).
+
+For signing Sparkle framework components: the build script must use `ditto --norsrc` to strip FinderInfo xattrs, then sign inside-out (Sparkle binaries → framework → app) with `--timestamp` flag.
 
 ## Project structure
 
@@ -37,34 +48,45 @@ Builds unsigned → signs with Developer ID → creates DMG → notarizes → st
 Lockpaw/
 ├── LockpawApp.swift                Entry point, MenuBarExtra, AppDelegate, onboarding
 ├── Controllers/
-│   ├── LockController.swift        State machine, lock/unlock orchestration
+│   ├── LockController.swift        State machine, lock/unlock orchestration, toggle observer
 │   ├── Authenticator.swift         LAContext (Touch ID / password fallback)
 │   ├── InputBlocker.swift          CGEventTap — blocks keyboard/scroll while locked
-│   ├── HotkeyManager.swift         CGEventTap on background thread — global hotkey
+│   ├── HotkeyManager.swift         CGEventTap on dedicated background thread — global hotkey
 │   ├── OverlayWindowManager.swift  NSWindow per screen at CGShieldingWindowLevel
 │   └── SleepPreventer.swift        IOKit sleep assertion
 ├── Models/
 │   ├── LockState.swift             .unlocked → .locking → .locked → .unlocking
-│   └── HotkeyConfig.swift          Centralized hotkey UserDefaults access + conflict detection
+│   └── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection
 ├── Views/
 │   ├── LockScreenView.swift        Lock screen — dog, message, time, fallback auth
 │   ├── MenuBarView.swift           Menu bar dropdown
-│   ├── SettingsView.swift          Native Form, appearance toggle, hotkey display
+│   ├── SettingsView.swift          Native Form, hotkey recorder, appearance, Sparkle updates
 │   └── OnboardingView.swift        4 steps: welcome, hotkey, accessibility, menu bar
 ├── Utilities/
-│   ├── Constants.swift             App constants, animation presets, time formatting
+│   ├── Constants.swift             App constants, Timing enum, animation presets, formatting
 │   ├── Notifications.swift         All Notification.Name in one place
 │   └── AccessibilityChecker.swift  AXIsProcessTrusted + System Settings opener
-└── Resources/
-    └── Assets.xcassets             App icon, mascot, colors (Teal, Amber, Violet, Error, Success)
+├── Resources/
+│   └── Assets.xcassets             App icon, mascot, menu bar icon (template), colors
+└── LockpawTests/
+    ├── LockStateTests.swift        State transition validation (16 tests)
+    ├── ConstantsTests.swift         Time formatting (11 tests)
+    └── HotkeyConfigTests.swift      System shortcut conflict detection (7 tests)
 ```
 
 ## Architecture decisions
 
 - **Hotkey is the primary unlock** — no auth required. Touch ID / password is the fallback for forgotten hotkeys.
+- **HotkeyManager uses CGEventTap on a dedicated background thread** — Carbon RegisterEventHotKey is unreliable in LSUIElement (menu bar-only) apps because the Carbon event dispatch doesn't activate until user interaction. The background thread with its own CFRunLoop bypasses this entirely.
+- **Toggle observer lives in LockController.init()** — NOT in MenuBarExtra's `.onReceive`. SwiftUI lazily initializes MenuBarExtra content, so the observer wouldn't exist until the user clicks the menu bar icon.
+- **Hotkey not registered until onboarding completes** — CGEventTap requires Accessibility permission. Registering before permission is granted creates a dead tap. OnboardingView posts `lockpawHotkeyPreferenceChanged` on completion, which triggers registration.
+- **After onboarding, Settings opens automatically** — via `@Environment(\.openSettings)`. This activates the SwiftUI event pipeline so the hotkey works immediately.
 - **InputBlocker only blocks keyboard + scroll** — mouse events pass through to the overlay window (SwiftUI buttons need clicks). The fullscreen overlay at CGShieldingWindowLevel blocks mouse access to other apps.
+- **InputBlocker caches hotkey values** — reads HotkeyConfig once on startBlocking(), not per keystroke. Refreshes via notification observer.
 - **Overlay windows drop to .statusBar during auth** — so the system Touch ID dialog can appear above them. Re-shields after auth completes or fails.
-- **Custom hotkeys persist** in UserDefaults: `hotkeyKeyCode`, `hotkeyModifiers`, `hotkeyDisplay`. Read by HotkeyManager and InputBlocker.
+- **Overlay dismiss does NOT call window.close()** — only `orderOut` + clear `contentView`. Calling `close()` during animated dismiss causes EXC_BAD_ACCESS in `_NSWindowTransformAnimation dealloc` (autorelease pool timing).
+- **HotkeyConfig centralizes all hotkey UserDefaults** — private static key constants, computed properties for reads, static methods for writes. Eliminates raw string literals across 5 files.
+- **All timing magic numbers in Constants.Timing** — inputBlockerDelay, unlockSuccessAnim, errorDisplay, authRateLimit, etc.
 - **All notifications consolidated** in `Notifications.swift` — not scattered across files.
 - **@MainActor on LockController and Authenticator** — all Task blocks use explicit `Task { @MainActor [weak self] in }`.
 - **LAContext.evaluatePolicy runs via Task.detached** to avoid MainActor deadlock.
@@ -74,20 +96,34 @@ Lockpaw/
 - **Lock screen is always dark mode** regardless of appearance setting.
 - **Breathing cycle** is 12 seconds (single master phase drives all animation).
 - **Two color pools** only: teal (upper-left) + amber (lower-right). Violet was removed for clarity.
+- **Settings toggles NSApp activation policy** — `.regular` on appear (shows in Cmd+Tab), `.accessory` on disappear.
+- **Hotkey conflict detection** — HotkeyConfig.systemConflict() checks against ~20 common system shortcuts. Shown in both OnboardingView and SettingsView hotkey recorders.
 
 ## Design principles
 
 - Minimal, whisper-quiet aesthetic. Low opacities, light font weights, generous negative space.
 - The dog is the hero. Everything else recedes.
-- Progressive disclosure — lock screen shows chevron + hint, tap reveals fallback auth.
+- Dog + message + time grouped as a tight cohesive unit, positioned at ~40% from top (slightly below center).
+- Progressive disclosure — lock screen shows chevron + hint, tap reveals fallback auth with glass material button.
+- Unlock success animation: dog scales up 1.15x with teal bloom and fades.
 - No information on screen that would help someone bypass the lock (hotkey is not shown).
 - Error states use `LockpawError` (red), not amber. Semibold weight.
 - Settings follow native macOS Form with .formStyle(.grouped). No custom card UI.
+- Onboarding includes security disclaimer ("visual privacy tool, not a security lock").
+- Menu bar icon uses template rendering with opacity change: 100% when locked, 55% when unlocked.
 
 ## Color assets
 
-- `LockpawTeal` — primary brand, shadows, glows, interactive elements
-- `LockpawAmber` — secondary, warm accent in color pool + error state removed
+- `LockpawTeal` — primary brand, shadows, glows, interactive elements (#00D4AA)
+- `LockpawAmber` — secondary, warm accent in color pool (#FF9F43)
 - `LockpawViolet` — removed from lock screen, kept in assets
-- `LockpawError` — auth failures
+- `LockpawError` — auth failures (#FF3B30)
 - `LockpawSuccess` — available but unused currently
+
+## CI / Distribution
+
+- **GitHub Actions CI** — build + 34 tests on push to main and PRs (`.github/workflows/ci.yml`)
+- **Release workflow** — tag `v*` → build → sign → notarize → GitHub Release (`.github/workflows/release.yml`)
+- **Sparkle auto-updates** — appcast at `https://getlockpaw.com/appcast.xml`, SPUStandardUpdaterController in AppDelegate
+- **Homebrew cask** — `homebrew/Casks/lockpaw.rb`, install via `brew tap sorkila/lockpaw`
+- **DMG** — built with `create-dmg`, dark branded background with teal arrow, app icon on volume
