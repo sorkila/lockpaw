@@ -1,7 +1,7 @@
 <p align="center">
   <br>
   <br>
-  <img src="lockpaw-raycast/assets/extension-icon.png" width="128" />
+  <img src="Lockpaw/Resources/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="128" />
   <br>
   <br>
 </p>
@@ -13,7 +13,7 @@
 <p align="center">
   <strong>Your screen's faithful guard.</strong>
   <br>
-  <sub>A macOS menu bar app that watches over your display<br>while AI agents work.</sub>
+  <sub>A macOS menu bar app that watches over your display while AI agents work.</sub>
 </p>
 
 <br>
@@ -34,71 +34,84 @@
 
 > Lock + Paw. Your screen's faithful guard dog.
 
-Lock your screen. A metallic watchdog appears in a pool of breathing teal light. All input stops. Your agents keep working. When you return — Touch ID, and you're back.
+Lock your screen with a hotkey. A metallic watchdog appears in a pool of breathing teal light. All input stops. Your agents keep working. When you return — hotkey or Touch ID — and you're back.
 
 <br>
 
-## ✦ Usage
+## Usage
 
-| | Action | How |
-|---|--------|-----|
-| 🔒 | Lock | `Cmd+Shift+L` |
-| 🔓 | Unlock | Tap → Touch ID |
-| ⌨️ | Password | Tap → *password* |
-| 🎛️ | Settings | Menu bar → Settings… |
+| Action | How |
+|--------|-----|
+| Lock | Your hotkey (default `Cmd+Shift+L`) |
+| Quick unlock | Same hotkey |
+| Fallback unlock | Tap screen → Touch ID or password |
+| Settings | Menu bar → Settings… |
+| Change hotkey | Settings → Shortcuts → click to record |
 
 <br>
 
-## ✦ Install
+## Install
+
+### Download
+
+Grab the latest signed & notarized DMG from [getlockpaw.com](https://getlockpaw.com) or [GitHub Releases](https://github.com/sorkila/lockpaw/releases).
+
+### Homebrew
 
 ```bash
-# Requires Xcode 15+ and XcodeGen
-brew install xcodegen
+brew tap sorkila/lockpaw https://github.com/sorkila/lockpaw
+brew install --cask lockpaw
+```
 
-git clone https://github.com/eriknielsen/lockpaw.git
+### Build from source
+
+```bash
+brew install xcodegen
+git clone https://github.com/sorkila/lockpaw.git
 cd lockpaw
 xcodegen generate
 xcodebuild -scheme Lockpaw -configuration Release build
 ```
 
-On first launch, grant **Accessibility** when prompted.
-That's it. A lock icon appears in your menu bar.
+On first launch, grant **Accessibility** when prompted. A dog icon appears in your menu bar.
 
 <br>
 
-## ✦ Design
+## Design
 
-The lock screen is intentionally minimal. Black canvas. Single radial glow. One element at a time.
+The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow. One element at a time.
 
-**Progressive disclosure** — the screen opens with just the watchdog, your message, and a quiet elapsed timer. A single chevron breathes at the bottom. Tap anywhere. Touch ID fades in. Then password below it. Nothing appears without your intent.
+**Progressive disclosure** — the screen opens with the watchdog, your message, and a quiet elapsed timer. A chevron breathes at the bottom. Tap anywhere to reveal the fallback auth button. Nothing appears without your intent.
 
-**The watchdog** — a metallic origami dog rendered in teal and amber, floating in a pool of light. One shadow. Slow 5-second breathing cycle. The glow moves with it.
+**The watchdog** — a metallic origami dog rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the dog scales up with a teal bloom and fades away.
 
-**Typography** — semibold message at 0.55 opacity. Monospaced timer at 0.2. The word *password* at 0.18, lowercase, 1.5pt tracking. The screen whispers.
+**Typography** — system San Francisco throughout. Regular weight message at 55% white. Monospaced timer at 35%. The screen whispers.
 
-**Animation** — a single 60-second master phase drives everything: the glow radius, the dog's float offset, the chevron's lift. One heartbeat. No competing timers, no visual noise.
-
-**Settings** — hand-built sections with uppercase tracked labels, card backgrounds with hairline borders and 1px shadows. Centered mascot header. Quaternary footer. 380×480, narrower than standard, because the content asked for it.
+**Auth button** — glass material effect with a subtle border. Visible enough to be tappable, quiet enough to stay out of the way.
 
 <br>
 
-## ✦ Under the hood
+## Under the hood
 
-**Input blocking** — `CGEventTap` intercepts all keyboard, mouse, trackpad, and tablet events system-wide. If macOS disables the tap (timeout), it re-enables *synchronously* in the callback — no async dispatch, no gap.
+**Hotkey** — `CGEvent.tapCreate` with `.listenOnly` on a dedicated background thread. Bypasses the LSUIElement activation issue that affects Carbon hotkeys in menu bar apps. Requires Accessibility permission.
 
-**Window level** — `CGShieldingWindowLevel()`, the highest level in the system. Above Spotlight, Notification Center, Siri, screen savers, everything.
+**Input blocking** — separate `CGEventTap` intercepts all keyboard, scroll, and tablet events system-wide while locked. Mouse events pass through to the overlay (SwiftUI buttons need clicks). If macOS disables the tap, it re-enables synchronously in the callback.
 
-**Multi-display** — one overlay window per screen, recreated on hot-plug. Fade in at 0.25s. Fade out at 0.5s with ease-out.
+**Window level** — `CGShieldingWindowLevel()`, the highest level in the system. Above Spotlight, Notification Center, screen savers, everything.
 
-**State machine** — `LockState` enum with explicit valid transitions. Every `transitionTo()` call is validated. State is verified again after async authentication returns.
+**Multi-display** — one overlay window per screen, recreated on hot-plug.
 
-**Sleep prevention** — `IOPMAssertion` keeps the Mac awake. Released on unlock. Released on `deinit`. Logged on failure.
+**State machine** — `LockState` enum with validated transitions. Every `transitionTo()` call is checked. State is verified again after async authentication returns.
 
-**Auth** — `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` for both Touch ID and password. No hacks, no forced biometric failures, no timeout wrappers. The system dialog handles everything.
+**Sleep prevention** — `IOPMAssertion` keeps the Mac awake while locked.
+
+**Auth** — `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` for Touch ID with password fallback. Rate-limited: 30s cooldown after 3 failed attempts.
+
+**Auto-updates** — Sparkle framework checks for updates automatically. Appcast hosted at getlockpaw.com.
 
 <br>
 
-## ✦ Security model
+## Security model
 
 Lockpaw is a **visual privacy tool**, not a security boundary.
 
@@ -109,12 +122,13 @@ It guards against the accidental — a colleague, a cat, your own muscle memory 
 <br>
 
 - Overlay at highest system window level
-- Event tap re-enabled synchronously (no bypass window)
+- Event tap blocks all keyboard/scroll input
 - Fast User Switching cancels auth, keeps lock active
-- Accessibility revocation keeps overlay visible (no auto-unlock)
-- URL scheme rate-limited (1 call / 0.5s)
+- Accessibility revocation detected and handled (force unlock with warning)
+- URL scheme rate-limited (100ms debounce)
 - Debug escape hatch compile-gated (`#if DEBUG`)
 - State machine validates every transition
+- Hotkey conflict detection against system shortcuts
 
 </details>
 
@@ -125,6 +139,7 @@ It guards against the accidental — a colleague, a cat, your own muscle memory 
 - Prevent `pkill Lockpaw`
 - Block synthetic events (AppleScript, Accessibility API)
 - Survive kernel-level access
+- Protect against screen recording during overlay fade-in
 
 For real security: `Ctrl+Cmd+Q`.
 
@@ -132,47 +147,50 @@ For real security: `Ctrl+Cmd+Q`.
 
 <br>
 
-## ✦ Raycast
-
-Four commands. No view. Instant.
+## URL scheme
 
 ```
-Lock Screen           → lockpaw://lock
-Unlock Screen         → lockpaw://unlock
-Unlock with Password  → lockpaw://unlock-password
-Toggle Lock Screen    → lockpaw://toggle
+lockpaw://lock              Lock the screen
+lockpaw://unlock            Unlock with Touch ID
+lockpaw://unlock-password   Unlock with password
+lockpaw://toggle            Toggle lock state
 ```
-
-All unlock commands require authentication.
 
 <br>
 
-## ✦ Architecture
+## Architecture
 
 ```
 Lockpaw/
-│
-├─ LockpawApp                     Entry, menu bar, URL scheme
-│
+├─ LockpawApp                     Entry, MenuBarExtra, AppDelegate, onboarding
 ├─ Controllers/
-│  ├─ LockController            State machine, orchestration
-│  ├─ Authenticator             LAContext · Touch ID · password
-│  ├─ InputBlocker              CGEventTap · system-wide blocking
-│  ├─ OverlayWindowManager      NSWindow · multi-display · fade
-│  ├─ HotkeyManager             Carbon · Cmd+Shift+L
-│  └─ SleepPreventer            IOKit · idle sleep assertion
-│
-├─ Views/
-│  ├─ LockScreenView            Dog · glow · progressive disclosure
-│  ├─ MenuBarView               Dropdown · lock/unlock/quit
-│  └─ SettingsView              Cards · toggles · permissions
-│
+│  ├─ LockController              State machine, lock/unlock orchestration
+│  ├─ Authenticator               LAContext · Touch ID · password fallback
+│  ├─ InputBlocker                CGEventTap · keyboard/scroll blocking
+│  ├─ HotkeyManager              CGEventTap · global hotkey detection
+│  ├─ OverlayWindowManager       NSWindow · multi-display · shielding level
+│  └─ SleepPreventer             IOKit · idle sleep assertion
 ├─ Models/
-│  └─ LockState                 .unlocked → .locking → .locked → .unlocking
-│
+│  ├─ LockState                  .unlocked → .locking → .locked → .unlocking
+│  └─ HotkeyConfig               Centralized hotkey UserDefaults access
+├─ Views/
+│  ├─ LockScreenView             Dog · glow · progressive disclosure
+│  ├─ MenuBarView                Dropdown · lock/unlock/quit
+│  ├─ SettingsView               Native Form · hotkey recorder · appearance
+│  └─ OnboardingView             4-step wizard · hotkey · accessibility
+├─ Utilities/
+│  ├─ Constants                  Timing, animations, formatting
+│  ├─ Notifications              All Notification.Name in one place
+│  └─ AccessibilityChecker       AXIsProcessTrusted + System Settings
 └─ Resources/
-   └─ Assets                    Mascot · teal · amber · app icon
+   └─ Assets                     App icon, mascot, menu bar icon, colors
 ```
+
+<br>
+
+## CI
+
+Pushes to `main` and PRs run build + 34 unit tests via GitHub Actions. Tagged releases (`v*`) build, sign, notarize, and create GitHub Releases with the DMG attached.
 
 <br>
 
@@ -180,9 +198,7 @@ Lockpaw/
 
 <p align="center">
   <sub>
-    Built with care in Stockholm.<br>https://getlockpaw.com
-    <br>
-    The watchdog is always awake.
+    <a href="https://getlockpaw.com">getlockpaw.com</a>
   </sub>
 </p>
 
