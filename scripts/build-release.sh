@@ -59,49 +59,33 @@ spctl --assess --type exec "${APP_PATH}" && echo "   Gatekeeper: ACCEPTED" || ec
 echo "==> Creating DMG..."
 DMG_DIR="build/dmg"
 DMG_PATH="build/${APP_NAME}.dmg"
-rm -rf "${DMG_DIR}" "${DMG_PATH}"
+RW_DMG="build/${APP_NAME}-rw.dmg"
+rm -rf "${DMG_DIR}" "${DMG_PATH}" "${RW_DMG}"
 mkdir -p "${DMG_DIR}"
 cp -R "${APP_PATH}" "${DMG_DIR}/"
 rm -rf "${SIGN_DIR}"
 
-# Create a Finder alias to /Applications instead of a symlink.
-# Symlinks show a broken/generic icon on macOS Sonoma+ when mounted as read-only DMG.
-# Finder aliases always resolve the proper Applications folder icon.
-# Step 1: Let create-dmg build with symlink (it handles positioning)
-create-dmg \
-  --volname "${APP_NAME}" \
-  --volicon "scripts/dmg-volume-icon.icns" \
-  --background "scripts/dmg-background@2x.png" \
-  --window-pos 200 120 \
-  --window-size 660 480 \
-  --icon-size 96 \
-  --text-size 14 \
-  --icon "${APP_NAME}.app" 170 170 \
-  --hide-extension "${APP_NAME}.app" \
-  --app-drop-link 490 170 \
-  --no-internet-enable \
-  "${DMG_PATH}" \
-  "${DMG_DIR}"
-
-# Step 2: Replace symlink with Finder alias (fixes broken icon on Sonoma+)
-# Mount the DMG as read-write, swap the symlink, then convert back
-RW_DMG="${DMG_PATH%.dmg}-rw.dmg"
-hdiutil convert "${DMG_PATH}" -format UDRW -o "${RW_DMG}"
-rm "${DMG_PATH}"
-
+# Build R/W DMG directly — no intermediate conversions that lose metadata
+DMG_SIZE_MB=$(( $(du -sm "${DMG_DIR}" | awk '{print $1}') + 20 ))
+hdiutil create -size ${DMG_SIZE_MB}m -fs HFS+ -volname "${APP_NAME}" -o "${RW_DMG}"
 MOUNT_DIR=$(hdiutil attach "${RW_DMG}" -readwrite -noverify | grep Apple_HFS | awk '{print $3}')
 echo "   Mounted R/W at: ${MOUNT_DIR}"
 
-# Remove symlink, create Finder alias
-rm "${MOUNT_DIR}/Applications"
+# Copy app
+cp -R "${DMG_DIR}/${APP_NAME}.app" "${MOUNT_DIR}/"
+
+# Create Finder alias to /Applications (not a symlink — symlinks show broken icon on Sonoma+)
 osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"${MOUNT_DIR}\" to POSIX file \"/Applications\""
 mv "${MOUNT_DIR}/Applications alias" "${MOUNT_DIR}/Applications" 2>/dev/null || true
 
-# Re-apply Finder window styling after alias creation.
-# The Finder alias step regenerates .DS_Store, resetting all icon positions.
-# This AppleScript re-positions everything: app + Applications in view,
-# all other items pushed far off-screen.
-echo "   Re-applying Finder window layout..."
+# Set up background image
+mkdir -p "${MOUNT_DIR}/.background"
+cp "scripts/dmg-background@2x.png" "${MOUNT_DIR}/.background/"
+
+# Set volume icon
+# Apply Finder window styling via AppleScript
+# NOTE: volume icon is set AFTER this step — AppleScript's "update" deletes it
+echo "   Applying Finder window layout..."
 VOLNAME=$(basename "${MOUNT_DIR}")
 osascript << APPLESCRIPT
 tell application "Finder"
@@ -126,7 +110,6 @@ tell application "Finder"
     try
       set position of item ".fseventsd" to {900, 900}
     end try
-    -- .VolumeIcon.icns must stay — it provides the title bar icon
     try
       set position of item ".DS_Store" to {900, 900}
     end try
@@ -139,11 +122,16 @@ tell application "Finder"
 end tell
 APPLESCRIPT
 
-# Unmount and convert to compressed read-only
+# Set volume icon AFTER AppleScript (the "update" command deletes .VolumeIcon.icns)
+cp "scripts/dmg-volume-icon.icns" "${MOUNT_DIR}/.VolumeIcon.icns"
+SetFile -a C "${MOUNT_DIR}"
+
+# Convert to compressed read-only (single conversion, no metadata loss)
 sync
 hdiutil detach "${MOUNT_DIR}"
 hdiutil convert "${RW_DMG}" -format UDZO -o "${DMG_PATH}"
 rm "${RW_DMG}"
+rm -rf "${DMG_DIR}"
 
 echo "==> Notarizing..."
 xcrun notarytool submit "${DMG_PATH}" \
