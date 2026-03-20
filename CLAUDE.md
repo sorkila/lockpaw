@@ -160,3 +160,29 @@ Lockpaw/
 - **Raycast extension** — `lockpaw-raycast/`, submitted to Raycast store (PR #26497 on `raycast/extensions`). Shared `lockpaw.ts` utility, error handling via `showToast`, dark dog head icon.
 - **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed. Download button points to `https://github.com/sorkila/lockpaw/releases/latest/download/Lockpaw.dmg`.
 - **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
+
+## Repo-level files
+
+- **`LICENSE`** — MIT license
+- **`CONTRIBUTING.md`** — Build, test, and PR guidelines for contributors
+- **`.github/ISSUE_TEMPLATE/`** — Bug report and feature request templates (YAML)
+- **`.github/FUNDING.yml`** — Buy Me a Coffee link
+
+## Awesome list submissions
+
+Lockpaw has been submitted to the following curated lists (PRs pending review, delete forks after merge):
+
+| Repo | PR | Category | Status |
+|---|---|---|---|
+| `serhii-londar/open-source-mac-os-apps` | #1062 | Security + Menubar | Pending |
+| `jaywcjlove/awesome-mac` | #1901 | Security Tools | Pending |
+| `phmullins/awesome-macos` | #158 | Security | Pending |
+| `iCHAIT/awesome-macOS` | #729 | Security | Pending |
+| `jaywcjlove/awesome-swift-macos-apps` | #27 | Security | Pending |
+| `open-saas-directory/awesome-native-macosx-apps` | #47 | Security & Privacy | Pending |
+| `matteocrippa/awesome-swift` | #1899 | Security | Pending (needs 15+ stars) |
+| `SKaplanOfficial/Mac-Menubar-Megalist` | #10 | Security | Pending |
+| `Wolg/awesome-swift` | #283 | Security | Pending |
+| `xyNNN/awesome-mac` | #29 | Security | Pending |
+| `milanaryal/awesome-macos` | #7 | Utilities | Pending |
+| `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Closed (project too new) |
