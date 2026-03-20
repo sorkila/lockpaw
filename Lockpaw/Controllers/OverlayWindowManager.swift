@@ -77,20 +77,34 @@ class OverlayWindowManager {
         }
 
         for screen in NSScreen.screens {
+            let frame = screen.frame
+            logger.info("Creating overlay — screen: \(screen.localizedName), frame: \(frame.debugDescription), scale: \(screen.backingScaleFactor)")
             let window = NSWindow(
-                contentRect: screen.frame,
+                contentRect: frame,
                 styleMask: .borderless,
                 backing: .buffered,
                 defer: false,
                 screen: screen
             )
+            window.setFrame(frame, display: true)
             window.level = shieldLevel
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.isOpaque = false
             window.backgroundColor = .clear
             window.ignoresMouseEvents = false
             window.hasShadow = false
-            window.contentView = NSHostingView(rootView: content)
+
+            // NSHostingView defaults to autoresizingMask=0 (no flex), which can cause
+            // the SwiftUI content to not fill the window on external/scaled displays.
+            let hostingView = NSHostingView(rootView: content)
+            hostingView.autoresizingMask = [.width, .height]
+            hostingView.frame = window.contentLayoutRect
+            window.contentView = hostingView
+
+            if hostingView.frame.size != frame.size {
+                logger.warning("Content view size mismatch — expected \(frame.size.debugDescription), got \(hostingView.frame.size.debugDescription)")
+            }
+
             window.alphaValue = 0
             window.orderFrontRegardless()
 
@@ -112,15 +126,16 @@ class OverlayWindowManager {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            DispatchQueue.main.async {
-                // Clean up old windows
+            // Debounce: NSScreen.screens may not be fully updated at notification time
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self else { return }
+                logger.info("Screen parameters changed — recreating overlay windows")
                 for window in self.windows {
                     window.orderOut(nil)
                     window.contentView = nil
                     window.close()
                 }
                 self.windows.removeAll()
-                // Recreate from stored content — no closure capture leak
                 self.createWindows()
             }
         }
