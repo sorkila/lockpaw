@@ -3,7 +3,7 @@
   "name": "lockpaw",
   "title": "Lockpaw",
   "description": "Control the Lockpaw lock screen for AI agents",
-  "icon": "assets/extension-icon.png",
+  "icon": "extension-icon.png",
   "author": "eriknielsen",
   "categories": ["Productivity", "System"],
   "license": "MIT",
