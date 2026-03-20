@@ -1,11 +1,5 @@
-import { open, showHUD } from "@raycast/api";
-import { showFailureToast } from "@raycast/utils";
+import { runLockpawCommand } from "./lockpaw";
 
 export default async function Command() {
-  try {
-    await open("lockpaw://toggle");
-    await showHUD("Lockpaw toggled");
-  } catch {
-    await showFailureToast("Failed to toggle. Is Lockpaw running?");
-  }
+  await runLockpawCommand("toggle", "Lock toggled");
 }

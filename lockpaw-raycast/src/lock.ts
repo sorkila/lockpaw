@@ -1,11 +1,5 @@
-import { open, showHUD } from "@raycast/api";
-import { showFailureToast } from "@raycast/utils";
+import { runLockpawCommand } from "./lockpaw";
 
 export default async function Command() {
-  try {
-    await open("lockpaw://lock");
-    await showHUD("Lockpaw locked");
-  } catch {
-    await showFailureToast("Failed to lock. Is Lockpaw running?");
-  }
+  await runLockpawCommand("lock", "Screen locked");
 }
