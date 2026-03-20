@@ -20,10 +20,9 @@
   <img src="https://img.shields.io/github/stars/sorkila/lockpaw?style=flat-square&color=111&labelColor=111" alt="Stars">
 </p>
 
-<!-- TODO: Add demo.gif — record 8-15s lock/unlock flow at 800x500, <5MB -->
-<!-- <p align="center">
+<p align="center">
   <img src="assets/demo.gif" alt="LockPaw demo — lock and unlock with a hotkey" width="600">
-</p> -->
+</p>
 
 ---
 
