@@ -62,7 +62,7 @@ Grab the latest signed & notarized DMG from [getlockpaw.com](https://getlockpaw.
 ### Homebrew
 
 ```bash
-brew tap sorkila/lockpaw https://github.com/sorkila/lockpaw
+brew tap sorkila/lockpaw
 brew install --cask lockpaw
 ```
 
