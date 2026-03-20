@@ -137,7 +137,7 @@ Lockpaw/
 - **GitHub Actions CI** — build + 34 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`)
 - **Release workflow** — tag `v*` → build → conditional sign/notarize → GitHub Release (`.github/workflows/release.yml`). Uses `macos-15` runners. Creates temporary keychain for CI signing. Uploads DMG if signing secrets are configured.
 - **Sparkle auto-updates** — appcast at `https://getlockpaw.com/appcast.xml`, SPUStandardUpdaterController in AppDelegate
-- **Homebrew cask** — `homebrew/Casks/lockpaw.rb`, install via `brew tap sorkila/lockpaw https://github.com/sorkila/lockpaw && brew install --cask lockpaw`
+- **Homebrew cask** — tap repo at `sorkila/homebrew-lockpaw`, install via `brew tap sorkila/lockpaw && brew install --cask lockpaw`
 - **Raycast extension** — `lockpaw-raycast/`, controls app via URL scheme, 4 commands (lock, unlock, unlock-password, toggle)
 - **DMG** — built locally with `create-dmg` (branded background, teal arrow, volume icon). CI uses `hdiutil` for simpler unsigned builds.
 - **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
