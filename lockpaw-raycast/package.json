@@ -3,7 +3,7 @@
   "name": "lockpaw",
   "version": "1.0.0",
   "title": "Lockpaw",
-  "description": "Control the Lockpaw lock screen for AI agents",
+  "description": "Guard your Mac screen with a hotkey while AI agents keep running. Touch ID to unlock.",
   "icon": "extension-icon.png",
   "author": "eriknielsen",
   "categories": ["Productivity", "System"],
@@ -12,35 +12,35 @@
   "commands": [
     {
       "name": "lock",
-      "title": "Lock Screen",
+      "title": "Guard Screen",
       "subtitle": "Lockpaw",
-      "description": "Activate the Lockpaw lock screen overlay",
+      "description": "Let the watchdog guard your screen while agents work",
       "mode": "no-view",
-      "keywords": ["lockpaw", "lock", "privacy", "agent"]
+      "keywords": ["lockpaw", "lock", "guard", "privacy", "agent"]
     },
     {
       "name": "unlock",
-      "title": "Unlock Screen",
+      "title": "Call off Guard",
       "subtitle": "Lockpaw",
-      "description": "Request unlock of the Lockpaw lock screen (requires authentication)",
+      "description": "Unlock with Touch ID — the watchdog stands down",
       "mode": "no-view",
-      "keywords": ["lockpaw", "unlock"]
+      "keywords": ["lockpaw", "unlock", "touchid"]
     },
     {
       "name": "unlock-password",
-      "title": "Unlock with Password",
+      "title": "Call off Guard (Password)",
       "subtitle": "Lockpaw",
-      "description": "Unlock the Lockpaw lock screen with your Mac password",
+      "description": "Unlock with your Mac password",
       "mode": "no-view",
       "keywords": ["lockpaw", "password", "unlock"]
     },
     {
       "name": "toggle",
-      "title": "Toggle Lock Screen",
+      "title": "Toggle Guard",
       "subtitle": "Lockpaw",
-      "description": "Toggle the Lockpaw lock screen on/off",
+      "description": "Toggle the watchdog on or off",
       "mode": "no-view",
-      "keywords": ["lockpaw", "toggle"]
+      "keywords": ["lockpaw", "toggle", "guard"]
     }
   ],
   "dependencies": {
