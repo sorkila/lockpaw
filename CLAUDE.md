@@ -9,7 +9,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **URL scheme:** `lockpaw://`
 - **Website:** getlockpaw.com
 - **Repo:** git@github.com:sorkila/lockpaw.git
-- **Requires:** macOS 14+, Xcode 15+, XcodeGen, create-dmg
+- **Requires:** macOS 14+, Xcode 16+, XcodeGen, create-dmg
 - **Dependencies:** Sparkle (SPM, auto-updates)
 
 ## Build
@@ -78,6 +78,14 @@ Lockpaw/
     └── HotkeyConfigTests.swift      System shortcut conflict detection (7 tests)
 ```
 
+## Repo-level directories
+
+- **`assets/`** — `demo.gif` hero GIF for README (lock/unlock flow, 800px wide)
+- **`scripts/`** — `build-release.sh`, DMG background PNGs, volume icon
+- **`homebrew/`** — Homebrew tap with `Casks/lockpaw.rb`
+- **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands: lock, unlock, unlock-password, toggle via URL scheme)
+- **`website/`** — getlockpaw.com marketing site (untracked)
+
 ## Architecture decisions
 
 - **Hotkey is the primary unlock** — no auth required. Touch ID / password is the fallback for forgotten hotkeys.
@@ -126,8 +134,10 @@ Lockpaw/
 
 ## CI / Distribution
 
-- **GitHub Actions CI** — build + 34 tests on push to main and PRs (`.github/workflows/ci.yml`)
-- **Release workflow** — tag `v*` → build → sign → notarize → GitHub Release (`.github/workflows/release.yml`)
+- **GitHub Actions CI** — build + 34 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`)
+- **Release workflow** — tag `v*` → build → conditional sign/notarize → GitHub Release (`.github/workflows/release.yml`). Uses `macos-15` runners. Creates temporary keychain for CI signing. Uploads DMG if signing secrets are configured.
 - **Sparkle auto-updates** — appcast at `https://getlockpaw.com/appcast.xml`, SPUStandardUpdaterController in AppDelegate
-- **Homebrew cask** — `homebrew/Casks/lockpaw.rb`, install via `brew tap sorkila/lockpaw`
-- **DMG** — built with `create-dmg`, dark branded background with teal arrow, app icon on volume
+- **Homebrew cask** — `homebrew/Casks/lockpaw.rb`, install via `brew tap sorkila/lockpaw https://github.com/sorkila/lockpaw && brew install --cask lockpaw`
+- **Raycast extension** — `lockpaw-raycast/`, controls app via URL scheme, 4 commands (lock, unlock, unlock-password, toggle)
+- **DMG** — built locally with `create-dmg` (branded background, teal arrow, volume icon). CI uses `hdiutil` for simpler unsigned builds.
+- **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
