@@ -1,10 +1,10 @@
 <p align="center">
   <br>
-  <img src="Lockpaw/Resources/Assets.xcassets/Mascot.imageset/Mascot.png" alt="LockPaw mascot" width="200" />
+  <img src="Lockpaw/Resources/Assets.xcassets/Mascot.imageset/Mascot.png" alt="Lockpaw mascot" width="200" />
   <br>
 </p>
 
-<h1 align="center">LockPaw</h1>
+<h1 align="center">Lockpaw</h1>
 
 <p align="center">
   <strong>Cover your screen with a hotkey. AI agents keep running. Touch ID to unlock.</strong><br>
@@ -13,15 +13,16 @@
 
 <p align="center">
   <a href="https://getlockpaw.com"><img src="https://img.shields.io/badge/Download-Free-00D4AA?style=flat-square&logo=apple&logoColor=fff" alt="Download"></a>
+  <a href="https://github.com/sorkila/lockpaw/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/sorkila/lockpaw/ci.yml?branch=main&style=flat-square&label=CI&logo=github&logoColor=fff" alt="CI"></a>
+  <a href="https://github.com/sorkila/lockpaw/releases/latest"><img src="https://img.shields.io/github/v/release/sorkila/lockpaw?style=flat-square&color=111&labelColor=111&label=Release" alt="Release"></a>
   <img src="https://img.shields.io/badge/macOS%2014+-111?style=flat-square&logo=apple&logoColor=fff" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/3.4%20MB-111?style=flat-square" alt="3.4 MB">
   <img src="https://img.shields.io/badge/Swift%205.9-111?style=flat-square&logo=swift&logoColor=F05138" alt="Swift 5.9">
   <img src="https://img.shields.io/badge/MIT-111?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/github/stars/sorkila/lockpaw?style=flat-square&color=111&labelColor=111" alt="Stars">
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="LockPaw demo — lock and unlock with a hotkey" width="600">
+  <img src="assets/demo.gif" alt="Lockpaw demo — lock and unlock with a hotkey" width="600">
 </p>
 
 ---
