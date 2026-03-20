@@ -6,10 +6,16 @@ Control [Lockpaw](https://getlockpaw.com) — the macOS menu bar screen guard �
 
 | Command | Description |
 |---------|-------------|
-| **Lock Screen** | Activate the lock screen overlay (with confirmation) |
+| **Lock Screen** | Activate the lock screen overlay |
 | **Unlock Screen** | Unlock via Touch ID |
 | **Unlock with Password** | Unlock via macOS password |
 | **Toggle Lock Screen** | Toggle lock on/off |
+
+## Assign custom hotkeys
+
+The main reason to use this extension: Raycast lets you assign a hotkey to any command. Go to the extension settings and bind your preferred shortcuts — giving you additional global hotkeys beyond Lockpaw's built-in one.
+
+For example, set `Ctrl+L` for lock and `Ctrl+U` for unlock, or use a single `Hyper+L` for toggle.
 
 ## Requirements
 
