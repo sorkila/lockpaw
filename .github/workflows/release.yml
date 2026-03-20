@@ -126,7 +126,9 @@ jobs:
           cp -R "$APP_PATH" "$DMG_DIR/"
 
           # Finder alias instead of symlink — symlinks show broken icon on Sonoma+
-          osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"$(cd "$DMG_DIR" && pwd)\" to POSIX file \"/Applications\""
+          DMG_DIR_ABS="$(cd "$DMG_DIR" && pwd)"
+          osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"${DMG_DIR_ABS}\" to POSIX file \"/Applications\""
+          mv "$DMG_DIR/Applications alias" "$DMG_DIR/Applications" 2>/dev/null || true
 
           create-dmg \
             --volname "Lockpaw" \

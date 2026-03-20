@@ -67,22 +67,83 @@ rm -rf "${SIGN_DIR}"
 # Create a Finder alias to /Applications instead of a symlink.
 # Symlinks show a broken/generic icon on macOS Sonoma+ when mounted as read-only DMG.
 # Finder aliases always resolve the proper Applications folder icon.
-osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"$(cd "${DMG_DIR}" && pwd)\" to POSIX file \"/Applications\""
-
+# Step 1: Let create-dmg build with symlink (it handles positioning)
 create-dmg \
   --volname "${APP_NAME}" \
   --volicon "scripts/dmg-volume-icon.icns" \
   --background "scripts/dmg-background@2x.png" \
   --window-pos 200 120 \
-  --window-size 660 400 \
+  --window-size 660 480 \
   --icon-size 96 \
   --text-size 14 \
-  --icon "${APP_NAME}.app" 170 180 \
+  --icon "${APP_NAME}.app" 170 170 \
   --hide-extension "${APP_NAME}.app" \
-  --icon "Applications" 490 180 \
+  --app-drop-link 490 170 \
   --no-internet-enable \
   "${DMG_PATH}" \
   "${DMG_DIR}"
+
+# Step 2: Replace symlink with Finder alias (fixes broken icon on Sonoma+)
+# Mount the DMG as read-write, swap the symlink, then convert back
+RW_DMG="${DMG_PATH%.dmg}-rw.dmg"
+hdiutil convert "${DMG_PATH}" -format UDRW -o "${RW_DMG}"
+rm "${DMG_PATH}"
+
+MOUNT_DIR=$(hdiutil attach "${RW_DMG}" -readwrite -noverify | grep Apple_HFS | awk '{print $3}')
+echo "   Mounted R/W at: ${MOUNT_DIR}"
+
+# Remove symlink, create Finder alias
+rm "${MOUNT_DIR}/Applications"
+osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"${MOUNT_DIR}\" to POSIX file \"/Applications\""
+mv "${MOUNT_DIR}/Applications alias" "${MOUNT_DIR}/Applications" 2>/dev/null || true
+
+# Re-apply Finder window styling after alias creation.
+# The Finder alias step regenerates .DS_Store, resetting all icon positions.
+# This AppleScript re-positions everything: app + Applications in view,
+# all other items pushed far off-screen.
+echo "   Re-applying Finder window layout..."
+VOLNAME=$(basename "${MOUNT_DIR}")
+osascript << APPLESCRIPT
+tell application "Finder"
+  tell disk "${VOLNAME}"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set bounds of container window to {200, 120, 860, 600}
+    set theViewOptions to icon view options of container window
+    set arrangement of theViewOptions to not arranged
+    set icon size of theViewOptions to 96
+    set text size of theViewOptions to 14
+    set background picture of theViewOptions to file ".background:dmg-background@2x.png"
+    -- Position only the two items we want visible
+    set position of item "${APP_NAME}.app" to {170, 170}
+    set position of item "Applications" to {490, 170}
+    -- Push everything else off-screen
+    try
+      set position of item ".background" to {900, 900}
+    end try
+    try
+      set position of item ".fseventsd" to {900, 900}
+    end try
+    -- .VolumeIcon.icns must stay — it provides the title bar icon
+    try
+      set position of item ".DS_Store" to {900, 900}
+    end try
+    close
+    open
+    update without registering applications
+    delay 2
+    close
+  end tell
+end tell
+APPLESCRIPT
+
+# Unmount and convert to compressed read-only
+sync
+hdiutil detach "${MOUNT_DIR}"
+hdiutil convert "${RW_DMG}" -format UDZO -o "${DMG_PATH}"
+rm "${RW_DMG}"
 
 echo "==> Notarizing..."
 xcrun notarytool submit "${DMG_PATH}" \
