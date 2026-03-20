@@ -7,10 +7,11 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **App name:** Lockpaw
 - **Bundle ID:** `com.eriknielsen.lockpaw`
 - **URL scheme:** `lockpaw://`
-- **Website:** getlockpaw.com
+- **Website:** getlockpaw.com (hosted on Inleed, deployed via FTP from `sorkila/lockpaw-web`)
 - **Repo:** git@github.com:sorkila/lockpaw.git
-- **Requires:** macOS 14+, Xcode 16+, XcodeGen, create-dmg
-- **Dependencies:** Sparkle (SPM, auto-updates)
+- **Requires:** macOS 14+, Xcode 16+, XcodeGen
+- **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
+- **Current version:** 1.0.2
 
 ## Build
 
@@ -38,13 +39,29 @@ xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ./scripts/build-release.sh
 ```
 
-Builds unsigned → copies to `/tmp` for signing → signs with Developer ID → creates branded DMG (via `create-dmg`) → notarizes → staples → sets custom DMG file icon. Output: `build/Lockpaw.dmg`. Requires `lockpaw-notarize` keychain profile (already stored) and `create-dmg` (`brew install create-dmg`).
+Builds unsigned → copies to `/tmp` for signing → signs with Developer ID → creates DMG → notarizes → staples → sets custom DMG file icon. Output: `build/Lockpaw.dmg`.
+
+**Requires:** `lockpaw-notarize` keychain profile (already stored), Sparkle EdDSA signing key in Keychain.
 
 **Signing:** The build script copies the app to `/tmp` via `ditto --norsrc` before signing. This is required because the repo lives in iCloud-synced `~/Documents` which adds irremovable `com.apple.FinderInfo` and `com.apple.fileprovider.fpfs#P` xattrs that cause codesign to fail with "resource fork, Finder information, or similar detritus not allowed". Signing is done inside-out with `--timestamp`: XPC service binaries → XPC bundles → Autoupdate → Updater.app binary → Updater.app → Sparkle.framework → main app.
 
+**DMG pipeline:** Builds a R/W DMG via `hdiutil`, copies app + Finder alias (not symlink) to `/Applications`, applies AppleScript window styling (background, icon positions, hide dotfiles), copies volume icon AFTER AppleScript (the `update` command deletes `.VolumeIcon.icns`), then converts once to compressed UDZO. No intermediate conversions.
+
+**After building a release:**
+1. Tag: `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`
+2. Create GitHub Release with DMG: `gh release create vX.Y.Z build/Lockpaw.dmg#Lockpaw.dmg --repo sorkila/lockpaw`
+3. Update appcast: `generate_appcast build/appcast/` → fix download URL to GitHub Releases → push `appcast.xml` to `sorkila/lockpaw-web`
+4. Update Homebrew cask SHA256 in both `sorkila/homebrew-lockpaw` and `homebrew/Casks/lockpaw.rb`
+
 **DMG assets** in `scripts/`:
-- `dmg-background.png` / `dmg-background@2x.png` — dark background with teal arrow (660x400 / 1320x800)
+- `dmg-background.png` / `dmg-background@2x.png` — light background with teal arrow (660x480 / 1320x960)
 - `dmg-volume-icon.icns` — dog mascot icon shown on mounted volume and DMG file in Finder
+
+**DMG design notes:**
+- Uses Finder alias (not symlink) for Applications — symlinks show broken icon on Sonoma+
+- AppleScript's `update without registering applications` deletes `.VolumeIcon.icns` — must copy icon AFTER AppleScript
+- Dotfiles (`.background`, `.fseventsd`) pushed off-screen via AppleScript positioning
+- Light background for readable dark text labels in Finder light mode
 
 ## Project structure
 
@@ -82,8 +99,8 @@ Lockpaw/
 
 - **`assets/`** — `demo.gif` hero GIF for README (lock/unlock flow, 800px wide)
 - **`scripts/`** — `build-release.sh`, DMG background PNGs, volume icon
-- **`homebrew/`** — Homebrew tap with `Casks/lockpaw.rb`
-- **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands: lock, unlock, unlock-password, toggle via URL scheme)
+- **`homebrew/`** — Local copy of Homebrew cask (canonical version in `sorkila/homebrew-lockpaw`)
+- **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands: Lock Screen, Unlock with Touch ID, Unlock with Password, Toggle Lock)
 - **`website/`** — getlockpaw.com marketing site (untracked)
 
 ## Architecture decisions
@@ -97,6 +114,8 @@ Lockpaw/
 - **InputBlocker caches hotkey values** — reads HotkeyConfig once on startBlocking(), not per keystroke. Refreshes via notification observer.
 - **Overlay windows drop to .statusBar during auth** — so the system Touch ID dialog can appear above them. Re-shields after auth completes or fails.
 - **Overlay dismiss does NOT call window.close()** — only `orderOut` + clear `contentView`. Calling `close()` during animated dismiss causes EXC_BAD_ACCESS in `_NSWindowTransformAnimation dealloc` (autorelease pool timing).
+- **NSHostingView requires explicit autoresizingMask** — defaults to 0 (no flex), which causes SwiftUI content to not fill the window on external/scaled displays. Must set `[.width, .height]` and `frame = window.contentLayoutRect`.
+- **Screen change handler is debounced 300ms** — `NSScreen.screens` may return stale data at `didChangeScreenParametersNotification` time.
 - **HotkeyConfig centralizes all hotkey UserDefaults** — private static key constants, computed properties for reads, static methods for writes. Eliminates raw string literals across 5 files.
 - **All timing magic numbers in Constants.Timing** — inputBlockerDelay, unlockSuccessAnim, errorDisplay, authRateLimit, etc.
 - **All notifications consolidated** in `Notifications.swift` — not scattered across files.
@@ -135,9 +154,9 @@ Lockpaw/
 ## CI / Distribution
 
 - **GitHub Actions CI** — build + 34 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`)
-- **Release workflow** — tag `v*` → build → conditional sign/notarize → GitHub Release (`.github/workflows/release.yml`). Uses `macos-15` runners. Creates temporary keychain for CI signing. Uploads DMG if signing secrets are configured.
-- **Sparkle auto-updates** — appcast at `https://getlockpaw.com/appcast.xml`, SPUStandardUpdaterController in AppDelegate
+- **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Uses `macos-15` runners.
+- **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. SPUStandardUpdaterController in AppDelegate. EdDSA public key in Info.plist, private key in Keychain.
 - **Homebrew cask** — tap repo at `sorkila/homebrew-lockpaw`, install via `brew tap sorkila/lockpaw && brew install --cask lockpaw`
-- **Raycast extension** — `lockpaw-raycast/`, controls app via URL scheme, 4 commands (lock, unlock, unlock-password, toggle)
-- **DMG** — built locally with `create-dmg` (branded background, teal arrow, volume icon). CI uses `hdiutil` for simpler unsigned builds.
+- **Raycast extension** — `lockpaw-raycast/`, submitted to Raycast store (PR #26497 on `raycast/extensions`). Shared `lockpaw.ts` utility, error handling via `showToast`, dark dog head icon.
+- **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed. Download button points to `https://github.com/sorkila/lockpaw/releases/latest/download/Lockpaw.dmg`.
 - **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
