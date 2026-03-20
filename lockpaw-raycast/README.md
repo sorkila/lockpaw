@@ -1,21 +1,34 @@
 # Lockpaw for Raycast
 
+Guard your Mac screen with a hotkey while AI agents keep running. Touch ID to unlock.
+
 Control [Lockpaw](https://getlockpaw.com) — the macOS menu bar screen guard — directly from Raycast.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| **Lock Screen** | Activate the lock screen overlay |
-| **Unlock Screen** | Unlock via Touch ID |
-| **Unlock with Password** | Unlock via macOS password |
-| **Toggle Lock Screen** | Toggle lock on/off |
+| **Guard Screen** | Let the watchdog guard your screen while agents work |
+| **Call off Guard** | Unlock with Touch ID — the watchdog stands down |
+| **Call off Guard (Password)** | Unlock with your Mac password |
+| **Toggle Guard** | Toggle the watchdog on or off |
 
 ## Assign custom hotkeys
 
 The main reason to use this extension: Raycast lets you assign a hotkey to any command. Go to the extension settings and bind your preferred shortcuts — giving you additional global hotkeys beyond Lockpaw's built-in one.
 
-For example, set `Ctrl+L` for lock and `Ctrl+U` for unlock, or use a single `Hyper+L` for toggle.
+For example, set `Ctrl+L` to guard your screen and `Ctrl+U` to call off the guard.
+
+## Deeplinks
+
+Trigger commands from scripts, other extensions, or the terminal:
+
+```
+raycast://extensions/eriknielsen/lockpaw/lock
+raycast://extensions/eriknielsen/lockpaw/unlock
+raycast://extensions/eriknielsen/lockpaw/unlock-password
+raycast://extensions/eriknielsen/lockpaw/toggle
+```
 
 ## Requirements
 
