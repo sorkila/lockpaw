@@ -64,6 +64,11 @@ mkdir -p "${DMG_DIR}"
 cp -R "${APP_PATH}" "${DMG_DIR}/"
 rm -rf "${SIGN_DIR}"
 
+# Create a Finder alias to /Applications instead of a symlink.
+# Symlinks show a broken/generic icon on macOS Sonoma+ when mounted as read-only DMG.
+# Finder aliases always resolve the proper Applications folder icon.
+osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"$(cd "${DMG_DIR}" && pwd)\" to POSIX file \"/Applications\""
+
 create-dmg \
   --volname "${APP_NAME}" \
   --volicon "scripts/dmg-volume-icon.icns" \
@@ -74,7 +79,7 @@ create-dmg \
   --text-size 14 \
   --icon "${APP_NAME}.app" 170 180 \
   --hide-extension "${APP_NAME}.app" \
-  --app-drop-link 490 180 \
+  --icon "Applications" 490 180 \
   --no-internet-enable \
   "${DMG_PATH}" \
   "${DMG_DIR}"

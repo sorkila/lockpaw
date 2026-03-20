@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: brew install xcodegen xcbeautify
+        run: brew install xcodegen xcbeautify create-dmg
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -89,12 +89,31 @@ jobs:
           DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
         run: |
           APP_PATH="build/DerivedData/Build/Products/Release/Lockpaw.app"
+          SPARKLE_FW="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
+          SPARKLE_VER="${SPARKLE_FW}/Versions/B"
 
-          codesign --force --deep --sign "$DEVELOPER_ID_APPLICATION" \
-            --options runtime \
-            "$APP_PATH"
+          sign_item() {
+            codesign --force --sign "$DEVELOPER_ID_APPLICATION" --options runtime --timestamp "$1"
+          }
 
-          codesign --verify --verbose "$APP_PATH"
+          # Sign inside-out: Sparkle internals → XPC → framework → app
+          for xpc in "${SPARKLE_VER}/XPCServices/Downloader.xpc" "${SPARKLE_VER}/XPCServices/Installer.xpc"; do
+            [ -d "${xpc}" ] || continue
+            sign_item "${xpc}/Contents/MacOS/$(basename "${xpc}" .xpc)"
+            sign_item "${xpc}"
+          done
+
+          [ -f "${SPARKLE_VER}/Autoupdate" ] && sign_item "${SPARKLE_VER}/Autoupdate"
+
+          if [ -d "${SPARKLE_VER}/Updater.app" ]; then
+            sign_item "${SPARKLE_VER}/Updater.app/Contents/MacOS/Updater"
+            sign_item "${SPARKLE_VER}/Updater.app"
+          fi
+
+          sign_item "${SPARKLE_FW}"
+          sign_item "${APP_PATH}"
+
+          codesign --verify --verbose "${APP_PATH}"
 
       - name: Create DMG
         if: steps.check-secrets.outputs.can_sign == 'true'
@@ -105,12 +124,24 @@ jobs:
 
           mkdir -p "$DMG_DIR"
           cp -R "$APP_PATH" "$DMG_DIR/"
-          ln -s /Applications "$DMG_DIR/Applications"
 
-          hdiutil create -volname "Lockpaw" \
-            -srcfolder "$DMG_DIR" \
-            -ov -format UDZO \
-            "$DMG_PATH"
+          # Finder alias instead of symlink — symlinks show broken icon on Sonoma+
+          osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"$(cd "$DMG_DIR" && pwd)\" to POSIX file \"/Applications\""
+
+          create-dmg \
+            --volname "Lockpaw" \
+            --volicon "scripts/dmg-volume-icon.icns" \
+            --background "scripts/dmg-background@2x.png" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 96 \
+            --text-size 14 \
+            --icon "Lockpaw.app" 170 180 \
+            --hide-extension "Lockpaw.app" \
+            --icon "Applications" 490 180 \
+            --no-internet-enable \
+            "$DMG_PATH" \
+            "$DMG_DIR"
 
       - name: Notarize DMG
         if: steps.check-secrets.outputs.can_sign == 'true'
