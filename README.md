@@ -7,8 +7,8 @@
 <h1 align="center">Lockpaw</h1>
 
 <p align="center">
-  <strong>Cover your screen with a hotkey. AI agents keep running. Touch ID to unlock.</strong><br>
-  <em>Think Tesla Dog Mode — but for your Mac.</em>
+  <strong>One hotkey covers your screen. One hotkey uncovers it. Everything keeps running.</strong><br>
+  <em>No sleep. No display disconnect. No process interruption. Touch ID when you're back.</em>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 
 ---
 
-> Lock + Paw. Your screen's faithful guard dog.
+> You could set up Amphetamine, configure Hot Corners, tweak energy settings, and adjust your screen saver. Or you could press ⌘⇧L.
 
 ## Features
 

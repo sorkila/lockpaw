@@ -170,19 +170,25 @@ Lockpaw/
 
 ## Awesome list submissions
 
-Lockpaw has been submitted to the following curated lists (PRs pending review, delete forks after merge):
+Lockpaw has been submitted to the following curated lists (delete forks after merge):
 
 | Repo | PR | Category | Status |
 |---|---|---|---|
-| `serhii-londar/open-source-mac-os-apps` | #1062 | Security + Menubar | Pending |
-| `jaywcjlove/awesome-mac` | #1901 | Security Tools | Pending |
+| `jaywcjlove/awesome-mac` | #1901 | Security Tools | Merged |
+| `jaywcjlove/awesome-swift-macos-apps` | #27 | Security | Merged |
+| `xyNNN/awesome-mac` | #29 | Security | Merged |
 | `phmullins/awesome-macos` | #158 | Security | Pending |
-| `iCHAIT/awesome-macOS` | #729 | Security | Pending |
-| `jaywcjlove/awesome-swift-macos-apps` | #27 | Security | Pending |
-| `open-saas-directory/awesome-native-macosx-apps` | #47 | Security & Privacy | Pending |
-| `matteocrippa/awesome-swift` | #1899 | Security | Pending (needs 15+ stars) |
-| `SKaplanOfficial/Mac-Menubar-Megalist` | #10 | Security | Pending |
-| `Wolg/awesome-swift` | #283 | Security | Pending |
-| `xyNNN/awesome-mac` | #29 | Security | Pending |
 | `milanaryal/awesome-macos` | #7 | Utilities | Pending |
-| `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Closed (project too new) |
+| `iCHAIT/awesome-macOS` | #731 | Security | Pending (superseded #729) |
+| `open-saas-directory/awesome-native-macosx-apps` | #48 | Security & Privacy | Pending (superseded #47) |
+| `SKaplanOfficial/Mac-Menubar-Megalist` | #11 | Security | Pending (superseded #10) |
+| `ashishb/osx-and-ios-security-awesome` | #48 | macOS Security | Pending |
+| `jeffreyjackson/mac-apps` | #79 | Mac Interface Exclusives | Pending |
+| `kai5263499/osx-security-awesome` | #24 | Useful tools and guides | Pending |
+| `drduh/macOS-Security-and-Privacy-Guide` | #523 | Related software | Pending |
+| `tonnoz/super-awesome-mac` | #3 | Utils | Pending |
+| `guyzyl/awesome-macos-apps` | #19 | Utilities | Pending |
+| `serhii-londar/open-source-mac-os-apps` | #1062 | Security + Menubar | Closed |
+| `matteocrippa/awesome-swift` | #1899 | Security | Rejected (libraries only) |
+| `Wolg/awesome-swift` | #283 | Security | Closed |
+| `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Rejected (project too new) |
