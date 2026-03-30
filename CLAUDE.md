@@ -81,7 +81,7 @@ Lockpaw/
 ├── Views/
 │   ├── LockScreenView.swift        Lock screen — dog, message, time, fallback auth
 │   ├── MenuBarView.swift           Menu bar dropdown
-│   ├── SettingsView.swift          Native Form, hotkey recorder, appearance, Sparkle updates
+│   ├── SettingsView.swift          Native Form, hotkey recorder, appearance, UpdateCheckViewModel
 │   └── OnboardingView.swift        4 steps: welcome, hotkey, accessibility, menu bar
 ├── Utilities/
 │   ├── Constants.swift             App constants, Timing enum, animation presets, formatting
@@ -113,9 +113,9 @@ Lockpaw/
 - **InputBlocker only blocks keyboard + scroll** — mouse events pass through to the overlay window (SwiftUI buttons need clicks). The fullscreen overlay at CGShieldingWindowLevel blocks mouse access to other apps.
 - **InputBlocker caches hotkey values** — reads HotkeyConfig once on startBlocking(), not per keystroke. Refreshes via notification observer.
 - **Overlay windows drop to .statusBar during auth** — so the system Touch ID dialog can appear above them. Re-shields after auth completes or fails.
-- **Overlay dismiss does NOT call window.close()** — only `orderOut` + clear `contentView`. Calling `close()` during animated dismiss causes EXC_BAD_ACCESS in `_NSWindowTransformAnimation dealloc` (autorelease pool timing).
+- **Overlay dismiss does NOT call window.close()** — only `orderOut` + clear `contentView`. Calling `close()` during animated dismiss causes EXC_BAD_ACCESS in `_NSWindowTransformAnimation dealloc` (autorelease pool timing). This applies everywhere: animated dismiss, screen change recreation, etc.
 - **NSHostingView requires explicit autoresizingMask** — defaults to 0 (no flex), which causes SwiftUI content to not fill the window on external/scaled displays. Must set `[.width, .height]` and `frame = window.contentLayoutRect`.
-- **Screen change handler is debounced 300ms** — `NSScreen.screens` may return stale data at `didChangeScreenParametersNotification` time.
+- **Screen change handler uses true debounce** — cancels pending `DispatchWorkItem` before scheduling a new one, so only the last `didChangeScreenParametersNotification` in a burst triggers window recreation. 300ms delay for `NSScreen.screens` to settle.
 - **HotkeyConfig centralizes all hotkey UserDefaults** — private static key constants, computed properties for reads, static methods for writes. Eliminates raw string literals across 5 files.
 - **All timing magic numbers in Constants.Timing** — inputBlockerDelay, unlockSuccessAnim, errorDisplay, authRateLimit, etc.
 - **All notifications consolidated** in `Notifications.swift` — not scattered across files.
@@ -129,6 +129,8 @@ Lockpaw/
 - **Two color pools** only: teal (upper-left) + amber (lower-right). Violet was removed for clarity.
 - **Settings toggles NSApp activation policy** — `.regular` on appear (shows in Cmd+Tab), `.accessory` on disappear.
 - **Hotkey conflict detection** — HotkeyConfig.systemConflict() checks against ~20 common system shortcuts. Shown in both OnboardingView and SettingsView hotkey recorders.
+- **Sparkle updater deferred to applicationDidFinishLaunching** — `SPUStandardUpdaterController` created with `startingUpdater: false`, then `updater.start()` called manually in `applicationDidFinishLaunching` with error logging. Starting during property init (before app launch) can silently fail.
+- **Sparkle uses inline update UI** — `UpdateCheckViewModel` (SPUUpdaterDelegate) in SettingsView shows spinner, checkmark, or error inline. Sparkle's standard dialogs don't surface in LSUIElement (menu bar) apps because they appear behind other windows.
 
 ## Design principles
 
@@ -155,7 +157,7 @@ Lockpaw/
 
 - **GitHub Actions CI** — build + 34 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`)
 - **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Uses `macos-15` runners.
-- **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. SPUStandardUpdaterController in AppDelegate. EdDSA public key in Info.plist, private key in Keychain.
+- **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. SPUStandardUpdaterController in AppDelegate with deferred start. UpdateCheckViewModel is the SPUUpdaterDelegate, providing inline UI for user-initiated checks. EdDSA public key in Info.plist, private key in Keychain.
 - **Homebrew cask** — tap repo at `sorkila/homebrew-lockpaw`, install via `brew tap sorkila/lockpaw && brew install --cask lockpaw`
 - **Raycast extension** — `lockpaw-raycast/`, submitted to Raycast store (PR #26497 on `raycast/extensions`). Shared `lockpaw.ts` utility, error handling via `showToast`, dark dog head icon.
 - **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed. Download button points to `https://github.com/sorkila/lockpaw/releases/latest/download/Lockpaw.dmg`.
@@ -165,6 +167,7 @@ Lockpaw/
 
 - **`LICENSE`** — MIT license
 - **`CONTRIBUTING.md`** — Build, test, and PR guidelines for contributors
+- **`CHANGELOG.md`** — Version history and release notes
 - **`.github/ISSUE_TEMPLATE/`** — Bug report and feature request templates (YAML)
 - **`.github/FUNDING.yml`** — Buy Me a Coffee link
 
