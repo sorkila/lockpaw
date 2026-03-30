@@ -6,8 +6,7 @@ import Carbon
 final class UpdateCheckViewModel: ObservableObject {
     @Published var canCheckForUpdates = false
 
-    init(updater: SPUUpdater?) {
-        guard let updater else { return }
+    init(updater: SPUUpdater) {
         updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
     }
@@ -21,17 +20,16 @@ struct SettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
 
-    @ObservedObject private var updateCheckViewModel: UpdateCheckViewModel
-    private let updater: SPUUpdater?
+    @StateObject private var updateCheckViewModel: UpdateCheckViewModel
+    private let updater: SPUUpdater
 
     @State private var isRecording = false
     @State private var hotkeyConflict: String?
     @State private var keyMonitor: Any?
 
-    init() {
-        let u = (NSApp.delegate as? AppDelegate)?.updaterController.updater
-        self.updater = u
-        self.updateCheckViewModel = UpdateCheckViewModel(updater: u)
+    init(updater: SPUUpdater) {
+        self.updater = updater
+        self._updateCheckViewModel = StateObject(wrappedValue: UpdateCheckViewModel(updater: updater))
     }
 
     var body: some View {
@@ -139,7 +137,7 @@ struct SettingsView: View {
                 }
 
                 Button("Check for Updates\u{2026}") {
-                    updater?.checkForUpdates()
+                    updater.checkForUpdates()
                 }
                 .disabled(!updateCheckViewModel.canCheckForUpdates)
             }
