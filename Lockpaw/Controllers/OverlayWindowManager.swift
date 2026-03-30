@@ -9,6 +9,7 @@ class OverlayWindowManager {
     private var screenObserver: Any?
     private var sessionObserver: Any?
     private var pendingContent: AnyView?
+    private var screenChangeWork: DispatchWorkItem?
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
@@ -126,18 +127,24 @@ class OverlayWindowManager {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            // Debounce: NSScreen.screens may not be fully updated at notification time
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            // Cancel any pending recreation — true debounce so only the last
+            // notification in a burst triggers work.
+            self.screenChangeWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 logger.info("Screen parameters changed — recreating overlay windows")
+                // Do NOT call window.close() — closing during a fade-in animation
+                // causes EXC_BAD_ACCESS in _NSWindowTransformAnimation dealloc.
                 for window in self.windows {
+                    window.animator().alphaValue = 0
                     window.orderOut(nil)
                     window.contentView = nil
-                    window.close()
                 }
                 self.windows.removeAll()
                 self.createWindows()
             }
+            self.screenChangeWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
     }
 

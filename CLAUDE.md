@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.0.2
+- **Current version:** 1.0.3
 
 ## Build
 
@@ -192,3 +192,10 @@ Lockpaw has been submitted to the following curated lists (delete forks after me
 | `matteocrippa/awesome-swift` | #1899 | Security | Rejected (libraries only) |
 | `Wolg/awesome-swift` | #283 | Security | Closed |
 | `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Rejected (project too new) |
+
+## Directory listings
+
+| Site | Category | Status |
+|---|---|---|
+| MacUpdate | Utilities | Submitted |
+| AlternativeTo | Screen Lock | Submitted |
