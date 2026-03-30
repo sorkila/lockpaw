@@ -9,7 +9,7 @@ struct AccessibilityChecker {
     /// Prompts the user to grant Accessibility permission if not already granted.
     static func promptIfNeeded() {
         guard !isEnabled else { return }
-        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
     }
 

@@ -26,7 +26,9 @@ struct LockpawApp: App {
 
     init() {
         if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
-            AccessibilityChecker.promptIfNeeded()
+            if !AccessibilityChecker.isEnabled {
+                logger.warning("Accessibility permission not granted — hotkey and input blocking will not work until re-granted")
+            }
         }
     }
 }

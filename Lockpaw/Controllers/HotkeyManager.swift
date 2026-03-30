@@ -25,9 +25,15 @@ class HotkeyManager {
             place: .headInsertEventTap,
             options: .listenOnly,
             eventsOfInterest: 1 << CGEventType.keyDown.rawValue,
-            callback: { _, type, event, _ -> Unmanaged<CGEvent>? in
-                // Re-enable if the tap gets disabled
+            callback: { _, type, event, refcon -> Unmanaged<CGEvent>? in
+                // Re-enable if the tap gets disabled by the system
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    if let refcon {
+                        let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
+                        if let tap = manager.eventTap {
+                            CGEvent.tapEnable(tap: tap, enable: true)
+                        }
+                    }
                     return Unmanaged.passUnretained(event)
                 }
 
@@ -53,7 +59,7 @@ class HotkeyManager {
 
                 return Unmanaged.passUnretained(event)
             },
-            userInfo: nil
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
         )
 
         guard let eventTap else {
