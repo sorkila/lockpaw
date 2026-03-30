@@ -20,7 +20,7 @@ struct LockpawApp: App {
         }
 
         Settings {
-            SettingsView(updater: appDelegate.updaterController.updater)
+            SettingsView(viewModel: appDelegate.updateCheckViewModel)
         }
     }
 
@@ -32,7 +32,10 @@ struct LockpawApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    let updaterController = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
+    let updateCheckViewModel = UpdateCheckViewModel()
+    lazy var updaterController: SPUStandardUpdaterController = {
+        SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: updateCheckViewModel, userDriverDelegate: nil)
+    }()
     private let hotkeyManager = HotkeyManager()
     private var hotkeyObserver: Any?
     private var lastURLSchemeCall: Date = .distantPast
@@ -40,6 +43,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Start Sparkle after app is fully launched
+        updateCheckViewModel.bind(to: updaterController.updater)
         do {
             try updaterController.updater.start()
         } catch {

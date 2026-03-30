@@ -3,12 +3,54 @@ import ServiceManagement
 import Sparkle
 import Carbon
 
-final class UpdateCheckViewModel: ObservableObject {
+final class UpdateCheckViewModel: NSObject, ObservableObject, SPUUpdaterDelegate {
     @Published var canCheckForUpdates = false
+    @Published var isChecking = false
+    @Published var updateStatus: UpdateStatus?
 
-    init(updater: SPUUpdater) {
+    enum UpdateStatus {
+        case upToDate
+        case available(String)
+        case error(String)
+    }
+
+    weak var updater: SPUUpdater?
+    private var userInitiated = false
+
+    func bind(to updater: SPUUpdater) {
+        self.updater = updater
         updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
+    }
+
+    func checkForUpdates() {
+        guard let updater else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        userInitiated = true
+        isChecking = true
+        updateStatus = nil
+        updater.checkForUpdates()
+    }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        guard userInitiated else { return }
+        userInitiated = false
+        isChecking = false
+        updateStatus = .available(item.displayVersionString)
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        guard userInitiated else { return }
+        userInitiated = false
+        isChecking = false
+        updateStatus = .upToDate
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        guard userInitiated else { return }
+        userInitiated = false
+        isChecking = false
+        updateStatus = .error(error.localizedDescription)
     }
 }
 
@@ -20,16 +62,14 @@ struct SettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
 
-    @StateObject private var updateCheckViewModel: UpdateCheckViewModel
-    private let updater: SPUUpdater
+    @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
 
     @State private var isRecording = false
     @State private var hotkeyConflict: String?
     @State private var keyMonitor: Any?
 
-    init(updater: SPUUpdater) {
-        self.updater = updater
-        self._updateCheckViewModel = StateObject(wrappedValue: UpdateCheckViewModel(updater: updater))
+    init(viewModel: UpdateCheckViewModel) {
+        self.updateCheckViewModel = viewModel
     }
 
     var body: some View {
@@ -136,10 +176,36 @@ struct SettingsView: View {
                     applyAppearance(mode)
                 }
 
-                Button("Check for Updates\u{2026}") {
-                    updater.checkForUpdates()
+                Button {
+                    updateCheckViewModel.checkForUpdates()
+                } label: {
+                    if updateCheckViewModel.isChecking {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Checking\u{2026}")
+                        }
+                    } else {
+                        Text("Check for Updates\u{2026}")
+                    }
                 }
-                .disabled(!updateCheckViewModel.canCheckForUpdates)
+                .disabled(!updateCheckViewModel.canCheckForUpdates || updateCheckViewModel.isChecking)
+
+                if let status = updateCheckViewModel.updateStatus {
+                    switch status {
+                    case .upToDate:
+                        Label("You\u{2019}re up to date", systemImage: "checkmark.circle.fill")
+                            .font(.callout)
+                            .foregroundStyle(Color("LockpawTeal"))
+                    case .available(let version):
+                        Label("Version \(version) available", systemImage: "arrow.down.circle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.blue)
+                    case .error(let message):
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(Color("LockpawError"))
+                    }
+                }
             }
 
             // Permissions
