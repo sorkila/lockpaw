@@ -3,6 +3,16 @@ import ServiceManagement
 import Sparkle
 import Carbon
 
+final class UpdateCheckViewModel: ObservableObject {
+    @Published var canCheckForUpdates = false
+
+    init(updater: SPUUpdater?) {
+        guard let updater else { return }
+        updater.publisher(for: \.canCheckForUpdates)
+            .assign(to: &$canCheckForUpdates)
+    }
+}
+
 struct SettingsView: View {
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
     @AppStorage("showMessage") private var showMessage = true
@@ -11,9 +21,18 @@ struct SettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
 
+    @ObservedObject private var updateCheckViewModel: UpdateCheckViewModel
+    private let updater: SPUUpdater?
+
     @State private var isRecording = false
     @State private var hotkeyConflict: String?
     @State private var keyMonitor: Any?
+
+    init() {
+        let u = (NSApp.delegate as? AppDelegate)?.updaterController.updater
+        self.updater = u
+        self.updateCheckViewModel = UpdateCheckViewModel(updater: u)
+    }
 
     var body: some View {
         Form {
@@ -120,10 +139,9 @@ struct SettingsView: View {
                 }
 
                 Button("Check for Updates\u{2026}") {
-                    if let appDelegate = NSApp.delegate as? AppDelegate {
-                        appDelegate.updaterController.checkForUpdates(nil)
-                    }
+                    updater?.checkForUpdates()
                 }
+                .disabled(!updateCheckViewModel.canCheckForUpdates)
             }
 
             // Permissions
