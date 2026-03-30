@@ -32,13 +32,20 @@ struct LockpawApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    let updaterController = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
     private let hotkeyManager = HotkeyManager()
     private var hotkeyObserver: Any?
     private var lastURLSchemeCall: Date = .distantPast
     private var onboardingWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Start Sparkle after app is fully launched
+        do {
+            try updaterController.updater.start()
+        } catch {
+            logger.error("Sparkle updater failed to start: \(error.localizedDescription)")
+        }
+
         // Apply saved appearance
         let mode = UserDefaults.standard.integer(forKey: "appearanceMode")
         switch mode {
