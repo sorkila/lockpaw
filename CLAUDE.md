@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.0.4
+- **Current version:** 1.0.5
 
 ## Build
 
@@ -131,6 +131,9 @@ Lockpaw/
 - **Hotkey conflict detection** — HotkeyConfig.systemConflict() checks against ~20 common system shortcuts. Shown in both OnboardingView and SettingsView hotkey recorders.
 - **Sparkle updater deferred to applicationDidFinishLaunching** — `SPUStandardUpdaterController` created with `startingUpdater: false`, then `updater.start()` called manually in `applicationDidFinishLaunching` with error logging. Starting during property init (before app launch) can silently fail.
 - **Sparkle uses inline update UI** — `UpdateCheckViewModel` (SPUUpdaterDelegate) in SettingsView shows spinner, checkmark, or error inline. Sparkle's standard dialogs don't surface in LSUIElement (menu bar) apps because they appear behind other windows.
+- **HotkeyManager re-enables its event tap** when the system disables it (tapDisabledByTimeout / tapDisabledByUserInput). Uses `userInfo` to pass `self` to the C callback, matching InputBlocker's pattern.
+- **Accessibility prompt only on lock attempt** — NOT on app launch. Prompting on launch caused an infinite dialog loop when the TCC entry was stale (toggle ON but trust invalidated after binary change). The `lock()` method handles prompting when the user actually tries to lock.
+- **AccessibilityChecker uses `takeUnretainedValue()`** on `kAXTrustedCheckOptionPrompt` — it's a global CF constant (not a +1 return), so `takeRetainedValue()` would over-release it.
 
 ## Design principles
 
