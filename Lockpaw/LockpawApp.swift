@@ -20,7 +20,7 @@ struct LockpawApp: App {
         }
 
         Settings {
-            SettingsView()
+            SettingsView(updater: appDelegate.updaterController.updater)
         }
     }
 
