@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4] - 2026-03-30
+
+### Fixed
+
+- Fixed "Check for Updates" button not responding. Sparkle's standard update dialogs don't surface in menu bar (LSUIElement) apps. Replaced with inline feedback: spinner while checking, green checkmark for up-to-date, version badge for available updates, and error display.
+- Deferred Sparkle updater startup to `applicationDidFinishLaunching` to prevent silent initialization failures.
+
 ## [1.0.3] - 2026-03-30
 
 ### Fixed

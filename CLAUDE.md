@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.0.3
+- **Current version:** 1.0.4
 
 ## Build
 
