@@ -8,14 +8,14 @@ class OverlayWindowManager {
     private var windows: [NSWindow] = []
     private var screenObserver: Any?
     private var sessionObserver: Any?
-    private var pendingContent: AnyView?
+    private var contentFactory: ((Int, Bool) -> AnyView)?
     private var screenChangeWork: DispatchWorkItem?
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
     @discardableResult
-    func showOverlay(content: some View) -> Bool {
-        pendingContent = AnyView(content)
+    func showOverlay(contentFactory factory: @escaping (Int, Bool) -> AnyView) -> Bool {
+        contentFactory = factory
         dismissOverlay()
         createWindows()
         guard !windows.isEmpty else {
@@ -68,18 +68,21 @@ class OverlayWindowManager {
     }
 
     private func createWindows() {
-        guard let content = pendingContent else {
-            logger.error("No content to display in overlay")
+        guard let factory = contentFactory else {
+            logger.error("No content factory to display in overlay")
             return
         }
-        guard !NSScreen.screens.isEmpty else {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else {
             logger.critical("No screens available — cannot create overlay")
             return
         }
 
-        for screen in NSScreen.screens {
+        for (index, screen) in screens.enumerated() {
+            let isPrimary = (index == 0)
+            let content = factory(index, isPrimary)
             let frame = screen.frame
-            logger.info("Creating overlay — screen: \(screen.localizedName), frame: \(frame.debugDescription), scale: \(screen.backingScaleFactor)")
+            logger.info("Creating overlay — screen: \(screen.localizedName), role: \(isPrimary ? "primary" : "ambient"), frame: \(frame.debugDescription), scale: \(screen.backingScaleFactor)")
             let window = NSWindow(
                 contentRect: frame,
                 styleMask: .borderless,
@@ -92,7 +95,7 @@ class OverlayWindowManager {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.isOpaque = false
             window.backgroundColor = .clear
-            window.ignoresMouseEvents = false
+            window.ignoresMouseEvents = !isPrimary
             window.hasShadow = false
 
             // NSHostingView defaults to autoresizingMask=0 (no flex), which can cause
