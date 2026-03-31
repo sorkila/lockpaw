@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.0.6
+- **Current version:** 1.0.7
 
 ## Build
 
@@ -80,6 +80,7 @@ Lockpaw/
 │   └── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection
 ├── Views/
 │   ├── LockScreenView.swift        Lock screen — dog, message, time, fallback auth
+│   ├── AmbientScreenView.swift     Secondary display — morphing gradient blobs
 │   ├── MenuBarView.swift           Menu bar dropdown
 │   ├── SettingsView.swift          Native Form, hotkey recorder, appearance, UpdateCheckViewModel
 │   └── OnboardingView.swift        4 steps: welcome, hotkey, accessibility, menu bar
@@ -136,6 +137,9 @@ Lockpaw/
 - **AccessibilityChecker uses `takeUnretainedValue()`** on `kAXTrustedCheckOptionPrompt` — it's a global CF constant (not a +1 return), so `takeRetainedValue()` would over-release it.
 - **HotkeyManager guards on AXIsProcessTrusted() before creating event tap** — `CGEvent.tapCreate` returns non-nil even without Accessibility, creating a dead tap. The guard prevents registration and sets `isRegistered = false` so future attempts can retry. If a tap was previously registered but Accessibility was revoked, it tears down the dead tap first.
 - **AppDelegate polls for Accessibility after failed hotkey registration** — when the app launches with stale/revoked TCC (e.g., after update changes binary signature), a 2-second polling timer checks `AXIsProcessTrusted()` and calls `reregister()` when granted. Avoids requiring app restart.
+- **Multi-display: primary vs ambient screens** — `OverlayWindowManager.showOverlay` takes a content factory `(Int, Bool) -> AnyView` instead of a single view. Primary screen (index 0) shows full lock screen; secondary screens show `AmbientScreenView` (morphing gradient blobs). Configurable in Settings: "Ambient on secondary" (default) or "Same on all screens".
+- **AmbientScreenView uses 5 morphing gradient blobs** — ellipses with solid fills at low opacity (0.06-0.13), heavy blur (90-140pt), on independent orbital paths driven by `osc()` helper (sin/cos with unique frequencies and offsets). 3-second fade-in from black. Vignette overlay darkens edges. `accessibilityReduceMotion` shows static version.
+- **Secondary screen windows have `ignoresMouseEvents = true`** — no interaction needed on ambient screens; all auth UI is on the primary screen.
 
 ## Design principles
 

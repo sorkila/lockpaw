@@ -60,6 +60,7 @@ struct SettingsView: View {
     @AppStorage("hotkeyEnabled") private var hotkeyEnabled = HotkeyConfig.defaultEnabled
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
+    @AppStorage("multiDisplayMode") private var multiDisplayMode = 0 // 0=Ambient, 1=Mirror
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
@@ -97,6 +98,11 @@ struct SettingsView: View {
 
             // Lock Screen
             Section("Lock Screen") {
+                Picker("Multi-display", selection: $multiDisplayMode) {
+                    Text("Ambient on secondary").tag(0)
+                    Text("Same on all screens").tag(1)
+                }
+
                 Toggle("Show message", isOn: $showMessage)
 
                 if showMessage {

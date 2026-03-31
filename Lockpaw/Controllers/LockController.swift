@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AppKit
+import SwiftUI
 import os.log
 
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "LockController")
@@ -131,8 +132,21 @@ class LockController: ObservableObject {
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
         sleepPreventer.preventSleep()
 
-        let lockView = LockScreenView(controller: self)
-        guard overlayManager.showOverlay(content: lockView) else {
+        let mirrorAll = UserDefaults.standard.integer(forKey: "multiDisplayMode") == 1
+        guard overlayManager.showOverlay(contentFactory: { [weak self] index, isPrimary in
+            guard let self else { return AnyView(Color.black) }
+            if isPrimary || mirrorAll {
+                return AnyView(LockScreenView(
+                    controller: self,
+                    screenRole: .primary,
+                    phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15
+                ))
+            } else {
+                return AnyView(AmbientScreenView(
+                    phaseOffset: CGFloat(index) * 0.15
+                ))
+            }
+        }) else {
             logger.error("Lock failed — no screens available for overlay")
             sleepPreventer.allowSleep()
             transitionTo(.unlocked)

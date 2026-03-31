@@ -1,7 +1,14 @@
 import SwiftUI
 
+enum ScreenRole {
+    case primary
+    case ambient
+}
+
 struct LockScreenView: View {
     @ObservedObject var controller: LockController
+    var screenRole: ScreenRole = .primary
+    var phaseOffset: CGFloat = 0
 
     @AppStorage("showMessage") private var showMessage = true
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
@@ -15,8 +22,8 @@ struct LockScreenView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var breathe: CGFloat { reduceMotion ? 0 : sin(phase * .pi * 2 * 0.2) }
-    private var drift: CGFloat { reduceMotion ? 0 : sin(phase * .pi * 2 * 0.05) }
+    private var breathe: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.2) }
+    private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
 
     var body: some View {
         GeometryReader { geo in
@@ -210,9 +217,11 @@ struct LockScreenView: View {
             withAnimation(reduceMotion ? .none : .easeOut(duration: 0.5)) { appeared = true }
             guard !reduceMotion else { return }
             withAnimation(Constants.Anim.breathe) { phase = 1 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.autoShowHelpDelay) {
-                if !showingHelp && !controller.isAuthenticating {
-                    withAnimation(Constants.Anim.gentle) { showingHelp = true }
+            if screenRole == .primary {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.autoShowHelpDelay) {
+                    if !showingHelp && !controller.isAuthenticating {
+                        withAnimation(Constants.Anim.gentle) { showingHelp = true }
+                    }
                 }
             }
         }
