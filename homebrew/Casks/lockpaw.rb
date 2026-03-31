@@ -1,6 +1,6 @@
 cask "lockpaw" do
-  version "1.0.6"
-  sha256 "c8b073c04fe1c4e0f7b992ea2d50f5b1149d183cd9bdb11fb6ae4d486f9a8068"
+  version "1.0.7"
+  sha256 "c4af376d581b366f62832b8214ddfc04d5ba711e313d30e6d73b17ae7154525f"
 
   url "https://github.com/sorkila/lockpaw/releases/download/v#{version}/Lockpaw.dmg"
   name "Lockpaw"
