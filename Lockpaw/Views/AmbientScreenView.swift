@@ -118,6 +118,6 @@ struct AmbientScreenView: View {
 
     private func osc(_ phase: CGFloat, freq: CGFloat, cos useCos: Bool = false, offset: CGFloat = 0) -> CGFloat {
         let angle = (phase + offset) * .pi * 2 * freq
-        return useCos ? Foundation.cos(angle) : sin(angle)
+        return useCos ? Foundation.cos(angle) : Foundation.sin(angle)
     }
 }
