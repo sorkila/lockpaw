@@ -40,6 +40,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     private let hotkeyManager = HotkeyManager()
     private var hotkeyObserver: Any?
+    private var accessibilityPollTimer: Timer?
     private var lastURLSchemeCall: Date = .distantPast
     private var onboardingWindow: NSWindow?
 
@@ -65,6 +66,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             let enabled = HotkeyConfig.enabled
             hotkeyManager.setEnabled(enabled)
+
+            // If Accessibility isn't granted yet (e.g., TCC invalidated after update),
+            // poll until it's restored and then register the hotkey.
+            if enabled && !hotkeyManager.isRegistered {
+                startAccessibilityPoll()
+            }
         }
 
         hotkeyObserver = NotificationCenter.default.addObserver(
@@ -113,6 +120,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func startAccessibilityPoll() {
+        accessibilityPollTimer?.invalidate()
+        accessibilityPollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            if AXIsProcessTrusted() {
+                timer.invalidate()
+                self.accessibilityPollTimer = nil
+                logger.info("Accessibility granted — registering hotkey")
+                self.hotkeyManager.reregister()
+            }
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

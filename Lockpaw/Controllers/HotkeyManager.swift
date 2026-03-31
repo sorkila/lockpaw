@@ -15,7 +15,17 @@ class HotkeyManager {
     private(set) var isRegistered = false
 
     func registerHotkey() {
-        guard !isRegistered else { return }
+        if isRegistered {
+            guard !AXIsProcessTrusted() else { return }
+            // Accessibility was revoked (dead tap) — tear down and re-register
+            logger.info("registerHotkey: tap registered but Accessibility revoked — re-registering")
+            unregisterHotkey()
+        }
+
+        guard AXIsProcessTrusted() else {
+            logger.warning("registerHotkey: skipped — Accessibility not granted")
+            return
+        }
 
         logger.info("registerHotkey: accessibility=\(AXIsProcessTrusted())")
 

@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.0.5
+- **Current version:** 1.0.6
 
 ## Build
 
@@ -134,6 +134,8 @@ Lockpaw/
 - **HotkeyManager re-enables its event tap** when the system disables it (tapDisabledByTimeout / tapDisabledByUserInput). Uses `userInfo` to pass `self` to the C callback, matching InputBlocker's pattern.
 - **Accessibility prompt only on lock attempt** — NOT on app launch. Prompting on launch caused an infinite dialog loop when the TCC entry was stale (toggle ON but trust invalidated after binary change). The `lock()` method handles prompting when the user actually tries to lock.
 - **AccessibilityChecker uses `takeUnretainedValue()`** on `kAXTrustedCheckOptionPrompt` — it's a global CF constant (not a +1 return), so `takeRetainedValue()` would over-release it.
+- **HotkeyManager guards on AXIsProcessTrusted() before creating event tap** — `CGEvent.tapCreate` returns non-nil even without Accessibility, creating a dead tap. The guard prevents registration and sets `isRegistered = false` so future attempts can retry. If a tap was previously registered but Accessibility was revoked, it tears down the dead tap first.
+- **AppDelegate polls for Accessibility after failed hotkey registration** — when the app launches with stale/revoked TCC (e.g., after update changes binary signature), a 2-second polling timer checks `AXIsProcessTrusted()` and calls `reregister()` when granted. Avoids requiring app restart.
 
 ## Design principles
 
@@ -198,6 +200,13 @@ Lockpaw has been submitted to the following curated lists (delete forks after me
 | `matteocrippa/awesome-swift` | #1899 | Security | Rejected (libraries only) |
 | `Wolg/awesome-swift` | #283 | Security | Closed |
 | `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Rejected (project too new) |
+| `pluja/awesome-privacy` | #731 | Desktop | Pending |
+| `onmyway133/awesome-swiftui` | #29 | Open source apps > macOS | Pending |
+| `linsa-io/macos-apps` | #40 | Utilities | Pending |
+| `johnjago/awesome-free-software` | #100 | Utilities | Pending |
+| `unicodeveloper/awesome-opensource-apps` | #162 | Swift | Pending |
+| `sbilly/awesome-security` | #471 | Endpoint > Authentication | Pending |
+| `ishanvyas22/awesome-open-source-systems` | #16 | Security | Pending |
 
 ## Directory listings
 

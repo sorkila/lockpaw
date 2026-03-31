@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: brew install xcodegen xcbeautify create-dmg
@@ -163,24 +163,22 @@ jobs:
           xcrun stapler staple "$DMG_PATH"
 
       # ── Create GitHub Release ───────────────────────────────────────────
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           CAN_SIGN: ${{ steps.check-secrets.outputs.can_sign }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          RELEASE_ARGS=(
-            "$TAG"
-            --title "$TAG"
-            --generate-notes
-          )
+
+          # Create release if it doesn't exist yet
+          if ! gh release view "$TAG" &>/dev/null; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
 
           # Upload DMG if signing/notarization succeeded
           if [ "$CAN_SIGN" = "true" ] && [ -f "build/Lockpaw.dmg" ]; then
-            RELEASE_ARGS+=("build/Lockpaw.dmg#Lockpaw.dmg")
+            gh release upload "$TAG" "build/Lockpaw.dmg#Lockpaw.dmg" --clobber
           fi
-
-          gh release create "${RELEASE_ARGS[@]}"
 
       # ── Cleanup keychain ────────────────────────────────────────────────
       - name: Cleanup keychain
