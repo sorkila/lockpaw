@@ -15,6 +15,7 @@ enum Constants {
         static let authRateLimitCooldown: TimeInterval = 30.0         // seconds
         static let maxAuthAttempts = 3
         static let urlSchemeDebounce: TimeInterval = 0.1              // seconds
+        static let userActivityRefreshInterval: TimeInterval = 30     // seconds; defeats screensaver idle timer while locked
     }
 
     enum Anim {
