@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ServiceManagement
 import Sparkle
 import Carbon
@@ -54,6 +55,8 @@ final class UpdateCheckViewModel: NSObject, ObservableObject, SPUUpdaterDelegate
     }
 }
 
+private let buyMeACoffeeURL = URL(string: "https://www.buymeacoffee.com/eriknielsen")!
+
 struct SettingsView: View {
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
     @AppStorage("showMessage") private var showMessage = true
@@ -62,6 +65,7 @@ struct SettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
     @AppStorage("multiDisplayMode") private var multiDisplayMode = 0 // 0=Ambient, 1=Mirror
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
+    @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
 
@@ -153,6 +157,8 @@ struct SettingsView: View {
                         .foregroundStyle(Color("LockpawError"))
                 }
 
+                Toggle("Require Touch ID or password to unlock", isOn: $requiresAuthenticationToUnlock)
+
                 Toggle("Global hotkey enabled", isOn: $hotkeyEnabled)
                     .onChange(of: hotkeyEnabled) { _, enabled in
                         NotificationCenter.default.post(
@@ -206,11 +212,17 @@ struct SettingsView: View {
                         Label("Version \(version) available", systemImage: "arrow.down.circle.fill")
                             .font(.callout)
                             .foregroundStyle(.blue)
-                    case .error(let message):
-                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                    case .error(let msg):
+                        Label(msg, systemImage: "exclamationmark.triangle.fill")
                             .font(.callout)
                             .foregroundStyle(Color("LockpawError"))
                     }
+                }
+
+                Button {
+                    NSWorkspace.shared.open(buyMeACoffeeURL)
+                } label: {
+                    Label("Buy Me a Coffee", systemImage: "heart.fill")
                 }
             }
 
