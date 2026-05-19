@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.8] - 2026-05-19
+
+### Added
+
+- Added a setting to require Touch ID or password when unlocking from the hotkey.
+- Added a Buy Me a Coffee button in Settings.
+
+### Fixed
+
+- Fixed display sleep, screensaver, and macOS lock activating behind Lockpaw while the screen is covered.
+
 ## [1.0.4] - 2026-03-30
 
 ### Fixed
