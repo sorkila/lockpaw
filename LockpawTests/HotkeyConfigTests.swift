@@ -3,6 +3,29 @@ import AppKit
 @testable import Lockpaw
 
 final class HotkeyConfigTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: HotkeyConfig.requireAuthenticationToUnlockKey)
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: HotkeyConfig.requireAuthenticationToUnlockKey)
+        super.tearDown()
+    }
+
+    // MARK: - Unlock authentication preference
+
+    func testRequiresAuthenticationToUnlockDefaultsToFalse() {
+        XCTAssertFalse(HotkeyConfig.requiresAuthenticationToUnlock)
+    }
+
+    func testRequiresAuthenticationToUnlockPersists() {
+        HotkeyConfig.saveRequireAuthenticationToUnlock(true)
+        XCTAssertTrue(HotkeyConfig.requiresAuthenticationToUnlock)
+
+        HotkeyConfig.saveRequireAuthenticationToUnlock(false)
+        XCTAssertFalse(HotkeyConfig.requiresAuthenticationToUnlock)
+    }
 
     // MARK: - System conflict detection
 

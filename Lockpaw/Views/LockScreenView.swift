@@ -12,6 +12,7 @@ struct LockScreenView: View {
 
     @AppStorage("showMessage") private var showMessage = true
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
+    @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
 
     @State private var phase: CGFloat = 0
     @State private var appeared = false
@@ -146,7 +147,7 @@ struct LockScreenView: View {
                             .transition(.opacity)
                         } else if showingHelp {
                             VStack(spacing: 16) {
-                                Text("Use your hotkey to unlock, or")
+                                Text(requiresAuthenticationToUnlock ? "Authentication required to unlock" : "Use your hotkey to unlock, or")
                                     .font(.system(size: 12, weight: .light))
                                     .foregroundStyle(.white.opacity(0.35))
                                     .tracking(0.3)
@@ -155,7 +156,7 @@ struct LockScreenView: View {
                                     NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
                                     controller.requestUnlock()
                                 } label: {
-                                    Text("Authenticate with Touch ID")
+                                    Text(requiresAuthenticationToUnlock ? "Authenticate to Unlock" : "Authenticate with Touch ID")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundStyle(.white.opacity(hoveringAuth ? 0.6 : 0.4))
                                         .tracking(0.3)

@@ -6,11 +6,13 @@ struct HotkeyConfig {
     private static let modifiersKey = "hotkeyModifiers"
     private static let displayKey = "hotkeyDisplay"
     private static let enabledKey = "hotkeyEnabled"
+    static let requireAuthenticationToUnlockKey = "requireAuthenticationToUnlock"
 
     static let defaultKeyCode = 37
     static let defaultModifiers = cmdKey | shiftKey
     static let defaultDisplay = "Cmd+Shift+L"
     static let defaultEnabled = true
+    static let defaultRequireAuthenticationToUnlock = false
 
     static var keyCode: Int {
         UserDefaults.standard.object(forKey: keyCodeKey) as? Int ?? defaultKeyCode
@@ -28,6 +30,10 @@ struct HotkeyConfig {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? defaultEnabled
     }
 
+    static var requiresAuthenticationToUnlock: Bool {
+        UserDefaults.standard.object(forKey: requireAuthenticationToUnlockKey) as? Bool ?? defaultRequireAuthenticationToUnlock
+    }
+
     static func saveKeyCode(_ value: Int) {
         UserDefaults.standard.set(value, forKey: keyCodeKey)
     }
@@ -42,6 +48,10 @@ struct HotkeyConfig {
 
     static func saveEnabled(_ value: Bool) {
         UserDefaults.standard.set(value, forKey: enabledKey)
+    }
+
+    static func saveRequireAuthenticationToUnlock(_ value: Bool) {
+        UserDefaults.standard.set(value, forKey: requireAuthenticationToUnlockKey)
     }
 
     // MARK: - System Shortcut Conflict Detection
