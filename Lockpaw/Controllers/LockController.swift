@@ -43,7 +43,11 @@ class LockController: ObservableObject {
                 if self.state == .unlocked {
                     self.lock()
                 } else if self.state == .locked {
-                    self.quickUnlock()
+                    if HotkeyConfig.requiresAuthenticationToUnlock {
+                        self.requestUnlock()
+                    } else {
+                        self.quickUnlock()
+                    }
                 }
             }
         }
