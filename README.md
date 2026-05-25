@@ -194,7 +194,7 @@ Lockpaw/
 
 ## CI
 
-Pushes to `main` and PRs run build + 34 unit tests via GitHub Actions. Tagged releases (`v*`) build, sign, notarize, and create GitHub Releases with the DMG attached.
+Pushes to `main` and PRs run build + 44 unit tests via GitHub Actions. Tagged releases (`v*`) build, sign, notarize, and create GitHub Releases with the DMG attached.
 
 <br>
 
