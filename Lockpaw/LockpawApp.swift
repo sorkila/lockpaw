@@ -85,12 +85,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     // Delay to let Settings activate the event pipeline first.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         self?.hotkeyManager.reregister()
+                        // If registration still failed (TCC not yet updated), poll for it
+                        if let self, !self.hotkeyManager.isRegistered {
+                            self.startAccessibilityPoll()
+                        }
                     }
                 }
             }
         }
 
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+            showOnboarding()
+        } else if !AccessibilityChecker.isEnabled {
+            // TCC was reset (e.g., after update) — re-show onboarding to guide re-granting
+            logger.notice("Accessibility revoked — re-showing onboarding")
+            UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
             showOnboarding()
         }
     }

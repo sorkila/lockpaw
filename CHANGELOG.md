@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.9] - 2026-05-25
+
+### Added
+
+- Added a cat mascot option for the lock screen takeover.
+
+### Changed
+
+- Refined Settings with a cleaner macOS-native layout, consistent controls, improved light/dark appearance, and clearer release/update metadata.
+
 ## [1.0.8] - 2026-05-19
 
 ### Added

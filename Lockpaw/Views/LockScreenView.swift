@@ -12,6 +12,7 @@ struct LockScreenView: View {
 
     @AppStorage("showMessage") private var showMessage = true
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
+    @AppStorage(Mascot.storageKey) private var selectedMascot = Mascot.defaultValue
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
 
     @State private var phase: CGFloat = 0
@@ -25,12 +26,13 @@ struct LockScreenView: View {
 
     private var breathe: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.2) }
     private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
+    private var mascotAssetName: String { Mascot.resolved(from: selectedMascot).assetName }
 
     var body: some View {
         GeometryReader { geo in
             let compact = geo.size.height < 700
-            let dogSize = min(geo.size.width * 0.2, geo.size.height * 0.3)
-            let unit = dogSize * 0.12
+            let mascotSize = min(geo.size.width * 0.2, geo.size.height * 0.3)
+            let unit = mascotSize * 0.12
 
             ZStack {
                 background(geo: geo)
@@ -40,18 +42,18 @@ struct LockScreenView: View {
                     Spacer().frame(minHeight: 0)
                         .frame(height: geo.size.height * 0.32)
 
-                    // Dog + message + time as a tight cohesive group
+                    // Mascot + message + time as a tight cohesive group
                     VStack(spacing: unit * 1.2) {
 
-                        // Dog
+                        // Mascot
                         ZStack {
                             if controller.unlockSucceeded {
-                                // Success animation: dog scales up and fades
-                                Image("Mascot")
+                                // Success animation: mascot scales up and fades
+                                Image(mascotAssetName)
                                     .resizable()
                                     .interpolation(.high)
                                     .scaledToFit()
-                                    .frame(width: dogSize, height: dogSize)
+                                    .frame(width: mascotSize, height: mascotSize)
                                     .scaleEffect(successScale)
                                     .opacity(2.0 - Double(successScale))
                                     .shadow(color: Color("LockpawTeal").opacity(0.3), radius: 50, y: 0)
@@ -59,15 +61,15 @@ struct LockScreenView: View {
                                 ZStack {
                                     Ellipse()
                                         .fill(Color("LockpawTeal").opacity(0.02 + breathe * 0.02))
-                                        .frame(width: dogSize * 0.45, height: dogSize * 0.1)
+                                        .frame(width: mascotSize * 0.45, height: mascotSize * 0.1)
                                         .blur(radius: 12)
-                                        .offset(y: dogSize * 0.45)
+                                        .offset(y: mascotSize * 0.45)
 
-                                    Image("Mascot")
+                                    Image(mascotAssetName)
                                         .resizable()
                                         .interpolation(.high)
                                         .scaledToFit()
-                                        .frame(width: dogSize, height: dogSize)
+                                        .frame(width: mascotSize, height: mascotSize)
                                         .shadow(color: Color("LockpawTeal").opacity(0.15 + breathe * 0.08), radius: 35 + breathe * 8, y: 10)
                                         .shadow(color: .black.opacity(0.15), radius: 45, y: 30)
                                         .offset(y: breathe * 4)

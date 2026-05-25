@@ -56,6 +56,48 @@ final class UpdateCheckViewModel: NSObject, ObservableObject, SPUUpdaterDelegate
 }
 
 private let buyMeACoffeeURL = URL(string: "https://www.buymeacoffee.com/eriknielsen")!
+private let creatorURL = URL(string: "https://sorkila.com")!
+private let settingsAccentColor = Color("LockpawTeal")
+
+private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
+    case lockScreen
+    case shortcuts
+    case general
+    case permissions
+    case about
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .lockScreen: return "Lock Screen"
+        case .shortcuts: return "Shortcuts"
+        case .general: return "General"
+        case .permissions: return "Permissions"
+        case .about: return "About"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .lockScreen: return "lock.display"
+        case .shortcuts: return "command"
+        case .general: return "gearshape"
+        case .permissions: return "hand.raised"
+        case .about: return "info.circle"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .lockScreen: return "Mascot, displays, and lock message"
+        case .shortcuts: return "Hotkey and unlock options"
+        case .general: return "Startup, appearance, and updates"
+        case .permissions: return "System access"
+        case .about: return "Version, credits, and security note"
+        }
+    }
+}
 
 struct SettingsView: View {
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
@@ -64,56 +106,131 @@ struct SettingsView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("appearanceMode") private var appearanceMode = 0 // 0=System, 1=Light, 2=Dark
     @AppStorage("multiDisplayMode") private var multiDisplayMode = 0 // 0=Ambient, 1=Mirror
+    @AppStorage(Mascot.storageKey) private var selectedMascot = Mascot.defaultValue
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
 
+    @State private var selectedSection: SettingsSection = .lockScreen
     @State private var isRecording = false
     @State private var hotkeyConflict: String?
     @State private var keyMonitor: Any?
+    @State private var accessibilityGranted = AccessibilityChecker.isEnabled
 
     init(viewModel: UpdateCheckViewModel) {
         self.updateCheckViewModel = viewModel
     }
 
     var body: some View {
-        Form {
-            // Header
-            Section {
-                HStack(spacing: 14) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 64, height: 64)
-                        .accessibilityHidden(true)
+        VStack(spacing: 0) {
+            SettingsTabBar(selection: $selectedSection)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lockpaw")
-                            .font(.title3.weight(.semibold))
-                        Text("Screen guard for when your computer is working and you're not")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(.vertical, 4)
+            selectedSettingsPage
+        }
+        .tint(settingsAccentColor)
+        .accentColor(settingsAccentColor)
+        .frame(minWidth: 760, idealWidth: 820, minHeight: 720, idealHeight: 740)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                configureSettingsWindow()
+                NSApp.keyWindow?.makeFirstResponder(nil)
             }
+            applyAppearance(appearanceMode)
+            refreshAccessibilityStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshAccessibilityStatus()
+        }
+        .onDisappear {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
 
-            // Lock Screen
-            Section("Lock Screen") {
-                Picker("Multi-display", selection: $multiDisplayMode) {
-                    Text("Ambient on secondary").tag(0)
-                    Text("Same on all screens").tag(1)
+    @ViewBuilder
+    private var selectedSettingsPage: some View {
+        switch selectedSection {
+        case .lockScreen:
+            settingsPage(.lockScreen) { lockScreenSettings }
+        case .shortcuts:
+            settingsPage(.shortcuts) { shortcutSettings }
+        case .general:
+            settingsPage(.general) { generalSettings }
+        case .permissions:
+            settingsPage(.permissions) { permissionSettings }
+        case .about:
+            settingsPage(.about) { aboutSettings }
+        }
+    }
+
+    private func settingsPage<Content: View>(_ section: SettingsSection, @ViewBuilder content: () -> Content) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                detailHeader(for: section)
+                content()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 24)
+            .frame(maxWidth: 820, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .top)
+        }
+        .scrollIndicators(.automatic)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func detailHeader(for section: SettingsSection) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(section.title)
+                .font(.system(size: 22, weight: .semibold))
+            Text(section.subtitle)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var lockScreenSettings: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            mascotPreview
+
+            SettingsPanel {
+                SettingsRow("Mascot") {
+                    SettingsSegmentedControl(
+                        selection: $selectedMascot,
+                        options: Mascot.allCases.map { ($0.displayName, $0.rawValue) }
+                    )
                 }
 
-                Toggle("Show message", isOn: $showMessage)
+                SettingsDivider()
+
+                SettingsRow("Secondary displays", subtitle: "Choose what appears on additional screens.") {
+                    SettingsSegmentedControl(
+                        selection: $multiDisplayMode,
+                        options: [("Ambient", 0), ("Mirror", 1)],
+                        width: 220
+                    )
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Show lock message", subtitle: "Display a short line beneath the mascot.") {
+                    SettingsCheckbox(isOn: $showMessage)
+                }
 
                 if showMessage {
-                    LabeledContent("Text") {
-                        TextField("", text: $message, axis: .vertical)
+                    SettingsDivider()
+
+                    SettingsRow("Message") {
+                        TextField("Lock message", text: $message, axis: .vertical)
                             .lineLimit(1...3)
-                            .multilineTextAlignment(.trailing)
+                            .multilineTextAlignment(.leading)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 420)
                             .onChange(of: message) { _, newValue in
                                 if newValue.count > 120 {
                                     message = String(newValue.prefix(120))
@@ -123,43 +240,116 @@ struct SettingsView: View {
                 }
             }
 
-            // Shortcuts
-            Section("Shortcuts") {
-                LabeledContent("Lock / Unlock") {
+            SettingsPanel {
+                SettingsRow("Lock now", subtitle: "Start the lock screen immediately.") {
                     Button {
-                        if isRecording {
-                            stopRecording()
-                        } else {
-                            startRecording()
-                        }
+                        NotificationCenter.default.post(name: .lockpawLock, object: nil)
                     } label: {
-                        Text(isRecording ? "Press shortcut…" : hotkeyDisplay)
-                            .font(.callout.monospaced())
-                            .foregroundStyle(isRecording ? Color("LockpawTeal") : .secondary)
+                        Text("Lock Now")
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .fill(isRecording ? Color("LockpawTeal").opacity(0.1) : Color(.controlBackgroundColor))
-                                    .shadow(color: .primary.opacity(0.06), radius: 0.5, y: 0.5)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .strokeBorder(isRecording ? Color("LockpawTeal").opacity(0.4) : Color(.separatorColor), lineWidth: 0.5)
-                            )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
                 }
+            }
+        }
+    }
 
-                if let conflict = hotkeyConflict {
-                    Text(conflict)
-                        .font(.caption)
-                        .foregroundStyle(Color("LockpawError"))
+    private var mascotPreview: some View {
+        let mascot = Mascot.resolved(from: selectedMascot)
+
+        return HStack(spacing: 18) {
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.03, green: 0.035, blue: 0.045),
+                        Color(red: 0.01, green: 0.012, blue: 0.018)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: [Color("LockpawTeal").opacity(0.18), .clear],
+                    center: .bottomLeading,
+                    startRadius: 4,
+                    endRadius: 120
+                )
+
+                Image(mascot.assetName)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .padding(18)
+            }
+            .frame(width: 132, height: 104)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+            )
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("\(mascot.displayName) takeover")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Shown on the primary display while Lockpaw is active.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var shortcutSettings: some View {
+        SettingsPanel {
+            SettingsRow("Lock / Unlock", subtitle: "Use one shortcut to lock or unlock.") {
+                Button {
+                    if isRecording {
+                        stopRecording()
+                    } else {
+                        startRecording()
+                    }
+                } label: {
+                    Text(isRecording ? "Press shortcut…" : hotkeyDisplay)
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .foregroundStyle(isRecording ? Color("LockpawTeal") : .primary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(isRecording ? Color("LockpawTeal").opacity(0.12) : Color(.controlBackgroundColor))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(isRecording ? Color("LockpawTeal").opacity(0.45) : Color(.separatorColor), lineWidth: 0.5)
+                        )
                 }
+                .buttonStyle(.plain)
+            }
 
-                Toggle("Require Touch ID or password to unlock", isOn: $requiresAuthenticationToUnlock)
+            if let conflict = hotkeyConflict {
+                Text(conflict)
+                    .font(.caption)
+                    .foregroundStyle(Color("LockpawError"))
+            }
 
-                Toggle("Global hotkey enabled", isOn: $hotkeyEnabled)
+            SettingsDivider()
+
+            SettingsRow("Require authentication", subtitle: "Ask for Touch ID or your Mac password before unlocking.") {
+                SettingsCheckbox(isOn: $requiresAuthenticationToUnlock)
+            }
+
+            SettingsDivider()
+
+            SettingsRow("Global hotkey", subtitle: "Keep the shortcut active while Lockpaw is running.") {
+                SettingsCheckbox(isOn: $hotkeyEnabled)
                     .onChange(of: hotkeyEnabled) { _, enabled in
                         NotificationCenter.default.post(
                             name: .lockpawHotkeyPreferenceChanged,
@@ -168,115 +358,184 @@ struct SettingsView: View {
                         )
                     }
             }
+        }
+    }
 
-            // General
-            Section("General") {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        do {
-                            if enabled { try SMAppService.mainApp.register() }
-                            else { try SMAppService.mainApp.unregister() }
-                        } catch { launchAtLogin = !enabled }
-                    }
-
-                Picker("Appearance", selection: $appearanceMode) {
-                    Text("System").tag(0)
-                    Text("Light").tag(1)
-                    Text("Dark").tag(2)
-                }
-                .onChange(of: appearanceMode) { _, mode in
-                    applyAppearance(mode)
-                }
-
-                Button {
-                    updateCheckViewModel.checkForUpdates()
-                } label: {
-                    if updateCheckViewModel.isChecking {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("Checking\u{2026}")
+    private var generalSettings: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsPanel {
+                SettingsRow("Launch at login", subtitle: "Open Lockpaw automatically when you sign in.") {
+                    SettingsCheckbox(isOn: $launchAtLogin)
+                        .onChange(of: launchAtLogin) { _, enabled in
+                            do {
+                                if enabled { try SMAppService.mainApp.register() }
+                                else { try SMAppService.mainApp.unregister() }
+                            } catch {
+                                launchAtLogin = !enabled
+                            }
                         }
-                    } else {
-                        Text("Check for Updates\u{2026}")
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Appearance") {
+                    SettingsSegmentedControl(
+                        selection: $appearanceMode,
+                        options: [("System", 0), ("Light", 1), ("Dark", 2)],
+                        width: 240
+                    )
+                    .onChange(of: appearanceMode) { _, mode in
+                        applyAppearance(mode)
                     }
                 }
-                .disabled(!updateCheckViewModel.canCheckForUpdates || updateCheckViewModel.isChecking)
+            }
+
+            SettingsPanel {
+                SettingsRow("Software updates", subtitle: "Check for signed updates from Lockpaw.") {
+                    Button {
+                        updateCheckViewModel.checkForUpdates()
+                    } label: {
+                        if updateCheckViewModel.isChecking {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("Checking\u{2026}")
+                            }
+                            .padding(.horizontal, 8)
+                        } else {
+                            Text("Check Now")
+                                .padding(.horizontal, 8)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!updateCheckViewModel.canCheckForUpdates || updateCheckViewModel.isChecking)
+                }
 
                 if let status = updateCheckViewModel.updateStatus {
-                    switch status {
-                    case .upToDate:
-                        Label("You\u{2019}re up to date", systemImage: "checkmark.circle.fill")
-                            .font(.callout)
-                            .foregroundStyle(Color("LockpawTeal"))
-                    case .available(let version):
-                        Label("Version \(version) available", systemImage: "arrow.down.circle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.blue)
-                    case .error(let msg):
-                        Label(msg, systemImage: "exclamationmark.triangle.fill")
-                            .font(.callout)
-                            .foregroundStyle(Color("LockpawError"))
-                    }
-                }
-
-                Button {
-                    NSWorkspace.shared.open(buyMeACoffeeURL)
-                } label: {
-                    Label("Buy Me a Coffee", systemImage: "heart.fill")
+                    SettingsDivider()
+                    updateStatusView(status)
                 }
             }
 
-            // Permissions
-            Section("Permissions") {
-                LabeledContent("Accessibility") {
-                    if AccessibilityChecker.isEnabled {
-                        Label("Granted", systemImage: "checkmark.circle.fill")
-                            .font(.callout)
-                            .foregroundStyle(Color("LockpawTeal"))
-                    } else {
-                        Button("Grant Access") {
+        }
+    }
+
+    @ViewBuilder
+    private func updateStatusView(_ status: UpdateCheckViewModel.UpdateStatus) -> some View {
+        switch status {
+        case .upToDate:
+            Label("You\u{2019}re up to date", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(Color("LockpawTeal"))
+        case .available(let version):
+            Label("Version \(version) available", systemImage: "arrow.down.circle.fill")
+                .foregroundStyle(.blue)
+        case .error(let msg):
+            Label(msg, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color("LockpawError"))
+        }
+    }
+
+    private var permissionSettings: some View {
+        SettingsPanel {
+            SettingsRow(
+                "Accessibility",
+                subtitle: accessibilityGranted ? "Granted" : "Required to block keyboard input while locked."
+            ) {
+                HStack(spacing: 10) {
+                    Label(
+                        accessibilityGranted ? "Granted" : "Required",
+                        systemImage: accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(accessibilityGranted ? Color("LockpawTeal") : Color("LockpawAmber"))
+
+                    if !accessibilityGranted {
+                        Button {
                             AccessibilityChecker.openSystemSettings()
+                        } label: {
+                            Text("Grant Access")
+                                .padding(.horizontal, 8)
                         }
-                        .controlSize(.small)
+                        .buttonStyle(.bordered)
                     }
                 }
             }
+        }
+    }
 
-            // Lock now
-            Section {
-                Button {
-                    NotificationCenter.default.post(name: .lockpawLock, object: nil)
-                } label: {
-                    HStack {
-                        Label("Lock Screen Now", systemImage: "lock.fill")
-                        Spacer()
-                        Text(hotkeyDisplay)
-                            .font(.callout.monospaced())
+    private var aboutSettings: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsPanel {
+                HStack(spacing: 14) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 46, height: 46)
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Lockpaw")
+                            .font(.system(size: 17, weight: .semibold))
+                        Text(appVersionText)
+                            .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }
                 }
+                .padding(.vertical, 2)
             }
 
-            // About
-            Section("About") {
-                Text("Lockpaw is a visual privacy tool — it prevents accidental input while your screen is guarded. For real security, use your Mac's lock screen (Ctrl+Cmd+Q).")
-                    .font(.caption)
+            SettingsPanel {
+                SettingsRow("Made by Erik Nielsen") {
+                    Link("sorkila.com", destination: creatorURL)
+                        .buttonStyle(.link)
+                }
+
+                SettingsDivider()
+
+                Text("Lockpaw is a visual privacy tool. It helps prevent accidental input while your screen is guarded. For security, use your Mac's lock screen (Ctrl+Cmd+Q).")
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                SettingsDivider()
+
+                SettingsRow("Support Lockpaw") {
+                    Button {
+                        NSWorkspace.shared.open(buyMeACoffeeURL)
+                    } label: {
+                        Text("Buy Me a Coffee")
+                            .padding(.horizontal, 8)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
             }
         }
-        .formStyle(.grouped)
-        .frame(minWidth: 400, idealWidth: 480, maxWidth: 560)
-        .fixedSize(horizontal: false, vertical: true)
-        .onAppear {
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NSApp.keyWindow?.makeFirstResponder(nil)
-            }
-            applyAppearance(appearanceMode)
+    }
+
+    private var appVersionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        switch (version, build) {
+        case let (.some(version), .some(build)): return "Version \(version) (\(build))"
+        case let (.some(version), .none): return "Version \(version)"
+        case let (.none, .some(build)): return "Build \(build)"
+        default: return "Version unknown"
         }
-        .onDisappear {
-            NSApp.setActivationPolicy(.accessory)
+    }
+
+    private func refreshAccessibilityStatus() {
+        accessibilityGranted = AccessibilityChecker.isEnabled
+    }
+
+    private func configureSettingsWindow() {
+        guard let window = NSApp.keyWindow else { return }
+        window.title = "Lockpaw Settings"
+        window.minSize = NSSize(width: 760, height: 720)
+
+        let targetSize = NSSize(width: 820, height: 740)
+        let contentSize = window.contentView?.frame.size ?? .zero
+        if contentSize.width < targetSize.width || contentSize.height < targetSize.height {
+            window.setContentSize(targetSize)
+            window.center()
         }
     }
 
@@ -339,5 +598,209 @@ struct SettingsView: View {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
         }
+    }
+}
+
+private struct SettingsPanel<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content
+        }
+        .font(.system(size: 14))
+        .controlSize(.regular)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+private struct SettingsTabBar: View {
+    @Binding var selection: SettingsSection
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text("Lockpaw Settings")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.top, 7)
+
+            HStack(alignment: .center, spacing: 12) {
+                ForEach(SettingsSection.allCases) { section in
+                    SettingsTabButton(
+                        section: section,
+                        isSelected: selection == section
+                    ) {
+                        selection = section
+                    }
+                }
+            }
+            .padding(.bottom, 9)
+            .padding(.horizontal, 14)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+private struct SettingsTabButton: View {
+    let section: SettingsSection
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: section.systemImage)
+                    .font(.system(size: 22, weight: .regular))
+                    .frame(height: 26)
+
+                Text(section.title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(isSelected ? settingsAccentColor : .secondary)
+            .padding(.horizontal, 8)
+            .frame(width: 90, height: 56)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(settingsAccentColor.opacity(0.10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(settingsAccentColor.opacity(0.22), lineWidth: 1)
+                        )
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(section.title)
+    }
+}
+
+private struct SettingsRow<Control: View>: View {
+    private let title: String
+    private let subtitle: String?
+    private let control: Control
+
+    init(_ title: String, subtitle: String? = nil, @ViewBuilder control: () -> Control) {
+        self.title = title
+        self.subtitle = subtitle
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.primary)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 18)
+
+            control
+                .frame(minWidth: 280, alignment: .trailing)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: subtitle == nil ? 32 : 44)
+    }
+}
+
+private struct SettingsSegmentedControl<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(title: String, value: Value)]
+    var width: CGFloat = 190
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options.indices, id: \.self) { index in
+                let option = options[index]
+                let isSelected = option.value == selection
+
+                Button {
+                    selection = option.value
+                } label: {
+                    Text(option.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(isSelected ? selectedTextColor : Color.secondary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(settingsAccentColor)
+                    }
+                }
+            }
+        }
+        .padding(2)
+        .frame(width: width)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var selectedTextColor: Color { .black }
+}
+
+private struct SettingsCheckbox: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isOn ? settingsAccentColor : Color(nsColor: .controlBackgroundColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(isOn ? 0 : 0.14), lineWidth: 1)
+                    )
+
+                if isOn {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.black)
+                }
+            }
+            .frame(width: 20, height: 20)
+            .padding(4)
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isOn ? "On" : "Off")
+        .accessibilityAddTraits(isOn ? [.isSelected] : [])
+    }
+}
+
+private struct SettingsDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.leading, 0)
     }
 }
