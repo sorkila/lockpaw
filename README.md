@@ -38,7 +38,8 @@
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
 - 📦 **3.4 MB** — native Swift, no Electron, no frameworks
 - 🚫 **No analytics** — no data leaves your Mac, no accounts, no internet required
-- 🐕 **The watchdog** — a metallic origami dog in breathing teal light guards your screen
+- 🐕🐈 **Dog or cat mode** — choose the metallic origami dog or cat for the lock screen
+- ⚙️ **Native Settings** — lock screen, shortcuts, updates, permissions, and about in one quiet window
 
 <br>
 
@@ -51,6 +52,7 @@
 | Fallback unlock | Tap screen → Touch ID or password |
 | Settings | Menu bar → Settings… |
 | Change hotkey | Settings → Shortcuts → click to record |
+| Change mascot | Settings → Lock Screen → Mascot |
 
 <br>
 
@@ -77,7 +79,7 @@ xcodegen generate
 xcodebuild -scheme Lockpaw -configuration Release build
 ```
 
-On first launch, grant **Accessibility** when prompted. A dog icon appears in your menu bar.
+On first launch, grant **Accessibility** when prompted. The Lockpaw icon appears in your menu bar.
 
 <br>
 
@@ -85,9 +87,9 @@ On first launch, grant **Accessibility** when prompted. A dog icon appears in yo
 
 The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow. One element at a time.
 
-**Progressive disclosure** — the screen opens with the watchdog, your message, and a quiet elapsed timer. A chevron breathes at the bottom. Tap anywhere to reveal the fallback auth button. Nothing appears without your intent.
+**Progressive disclosure** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer. A chevron breathes at the bottom. Tap anywhere to reveal the fallback auth button. Nothing appears without your intent.
 
-**The watchdog** — a metallic origami dog rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the dog scales up with a teal bloom and fades away.
+**Mascots** — a metallic origami dog or cat rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the mascot scales up with a teal bloom and fades away.
 
 **Typography** — system San Francisco throughout. Regular weight message at 55% white. Monospaced timer at 35%. The screen whispers.
 
@@ -176,11 +178,13 @@ Lockpaw/
 │  └─ SleepPreventer             IOKit · idle sleep assertion
 ├─ Models/
 │  ├─ LockState                  .unlocked → .locking → .locked → .unlocking
-│  └─ HotkeyConfig               Centralized hotkey UserDefaults access
+│  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
+│  └─ Mascot                     Dog/cat lock screen preference
 ├─ Views/
-│  ├─ LockScreenView             Dog · glow · progressive disclosure
+│  ├─ LockScreenView             Dog/cat mascot · glow · progressive disclosure
+│  ├─ AmbientScreenView          Secondary display gradient animation
 │  ├─ MenuBarView                Dropdown · lock/unlock/quit
-│  ├─ SettingsView               Native Form · hotkey recorder · appearance
+│  ├─ SettingsView               Native tabs · hotkey recorder · updates
 │  └─ OnboardingView             4-step wizard · hotkey · accessibility
 ├─ Utilities/
 │  ├─ Constants                  Timing, animations, formatting
