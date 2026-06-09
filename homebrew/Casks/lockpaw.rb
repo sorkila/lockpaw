@@ -1,13 +1,13 @@
 cask "lockpaw" do
-  version "1.0.9"
-  sha256 "48cfa87be14eef13491ef3093bca85c4005cff47ed7c06feb87d27481635a960"
+  version "1.1.0"
+  sha256 "c485c1c477077ed174ff2663877cfdf8ec86f54f1b427e3f6b1973177b89f566"
 
   url "https://github.com/sorkila/lockpaw/releases/download/v#{version}/Lockpaw.dmg"
   name "Lockpaw"
   desc "Cover your Mac screen while AI agents keep running"
   homepage "https://getlockpaw.com"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Lockpaw.app"
 
