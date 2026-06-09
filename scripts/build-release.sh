@@ -50,6 +50,10 @@ if [ -d "${SPARKLE_VER}/Updater.app" ]; then
 fi
 
 sign_item "${SPARKLE_FW}"
+
+# Sign the embedded lockpaw CLI before the outer app (inside-out)
+[ -f "${APP_PATH}/Contents/SharedSupport/lockpaw" ] && sign_item "${APP_PATH}/Contents/SharedSupport/lockpaw"
+
 sign_item "${APP_PATH}"
 
 echo "==> Verifying signature..."

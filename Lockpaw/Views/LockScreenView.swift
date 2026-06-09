@@ -21,6 +21,7 @@ struct LockScreenView: View {
     @State private var hoveringAuth = false
     @State private var shakeOffset: CGFloat = 0
     @State private var successScale: CGFloat = 1.0
+    @State private var pingGlow: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -77,6 +78,7 @@ struct LockScreenView: View {
                                 .opacity(controller.isAuthenticating ? 0.5 : 1)
                             }
                         }
+                        .scaleEffect(appeared ? 1 : 0.94)
                         .opacity(appeared ? 1 : 0)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
@@ -217,9 +219,9 @@ struct LockScreenView: View {
         }
         .environment(\.colorScheme, .dark)
         .onAppear {
-            withAnimation(reduceMotion ? .none : .easeOut(duration: 0.5)) { appeared = true }
+            withAnimation(reduceMotion ? .none : .timingCurve(0.16, 1, 0.3, 1, duration: 0.6)) { appeared = true }
             guard !reduceMotion else { return }
-            withAnimation(Constants.Anim.breathe) { phase = 1 }
+            withAnimation(Constants.Anim.breathe) { phase = Constants.Anim.breathePhaseTarget }
             if screenRole == .primary {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.autoShowHelpDelay) {
                     if !showingHelp && !controller.isAuthenticating {
@@ -241,6 +243,21 @@ struct LockScreenView: View {
                 withAnimation(.easeOut(duration: 0.35)) { successScale = 1.15 }
             }
         }
+        .onChange(of: controller.pingPulse) { _, _ in
+            triggerPingGlow()
+        }
+    }
+
+    /// One-shot attention glow: ramp up fast, hold at peak, then ease away.
+    /// Only the primary screen glows (secondary displays show the ambient view).
+    private func triggerPingGlow() {
+        guard screenRole == .primary else { return }
+        let rise = reduceMotion ? Constants.Anim.standard : Constants.Anim.pingGlowIn
+        let fall = reduceMotion ? Constants.Anim.gentle : Constants.Anim.pingGlowOut
+        withAnimation(rise) { pingGlow = 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(Constants.Timing.pingGlowHoldNs) / 1_000_000_000) {
+            withAnimation(fall) { pingGlow = 0 }
+        }
     }
 
     // MARK: - Background
@@ -258,6 +275,19 @@ struct LockScreenView: View {
             ).ignoresSafeArea().allowsHitTesting(false)
 
             if !reduceMotion { colorPools(geo: geo) }
+
+            // Attention glow — fires on an agent ping. Bright and full-screen so it
+            // reads from across a room while the screen stays covered.
+            if pingGlow > 0 {
+                RadialGradient(
+                    colors: [Color("LockpawTeal").opacity(0.28 * pingGlow), .clear],
+                    center: .center, startRadius: 0,
+                    endRadius: max(geo.size.width, geo.size.height) * 0.8
+                )
+                .ignoresSafeArea()
+                .blendMode(.plusLighter)
+                .allowsHitTesting(false)
+            }
         }
     }
 
