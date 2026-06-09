@@ -9,4 +9,6 @@ extension Notification.Name {
     static let lockpawSessionLost = Notification.Name("lockpawSessionLost")
     static let toggleLockpaw = Notification.Name("toggleLockpaw")
     static let lockpawHotkeyPreferenceChanged = Notification.Name("lockpawHotkeyPreferenceChanged")
+    /// Posted when an AI agent pings (bridged from the distributed notification, or fired by the in-app test button).
+    static let lockpawPing = Notification.Name("lockpawPing")
 }

@@ -109,6 +109,7 @@ struct SettingsView: View {
     @AppStorage(Mascot.storageKey) private var selectedMascot = Mascot.defaultValue
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
+    @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
 
@@ -117,6 +118,8 @@ struct SettingsView: View {
     @State private var hotkeyConflict: String?
     @State private var keyMonitor: Any?
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
+    @State private var accessibilityTimer: Timer?
+    @State private var copiedItem: String?
 
     init(viewModel: UpdateCheckViewModel) {
         self.updateCheckViewModel = viewModel
@@ -126,7 +129,14 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             SettingsTabBar(selection: $selectedSection)
 
-            selectedSettingsPage
+            // Cross-fade between sections (motion echo of the shared ease-out language).
+            ZStack {
+                selectedSettingsPage
+                    .id(selectedSection)
+                    .transition(.opacity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.2), value: selectedSection)
         }
         .tint(settingsAccentColor)
         .accentColor(settingsAccentColor)
@@ -140,12 +150,14 @@ struct SettingsView: View {
                 NSApp.keyWindow?.makeFirstResponder(nil)
             }
             applyAppearance(appearanceMode)
-            refreshAccessibilityStatus()
+            startAccessibilityPolling()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshAccessibilityStatus()
         }
         .onDisappear {
+            accessibilityTimer?.invalidate()
+            accessibilityTimer = nil
             NSApp.setActivationPolicy(.accessory)
         }
     }
@@ -361,6 +373,64 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Agent setup (clipboard-based; the app never edits your config files)
+
+    private var cliURL: URL? {
+        Bundle.main.sharedSupportURL?.appendingPathComponent("lockpaw")
+    }
+
+    private func agentLabel(_ tool: String) -> String {
+        switch tool {
+        case "claude": return "Claude"
+        case "codex": return "Codex"
+        case "gemini": return "Gemini"
+        default: return tool
+        }
+    }
+
+    private func copyToPasteboard(_ string: String, mark: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
+        copiedItem = mark
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            if copiedItem == mark { copiedItem = nil }
+        }
+    }
+
+    private func copyInstallCommand() {
+        guard let cli = cliURL else { return }
+        copyToPasteboard("\"\(cli.path)\" install-cli", mark: "cli")
+    }
+
+    private func copyHook(for tool: String) {
+        copyToPasteboard(hookSnippet(for: tool), mark: tool)
+    }
+
+    /// Source the snippet from the bundled CLI (`install-hook <tool> --print`) so it
+    /// never drifts from the tool; fall back to a literal if the CLI can't be run.
+    private func hookSnippet(for tool: String) -> String {
+        if let cli = cliURL, FileManager.default.isExecutableFile(atPath: cli.path) {
+            let process = Process()
+            process.executableURL = cli
+            process.arguments = ["install-hook", tool, "--print"]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+            if (try? process.run()) != nil {
+                process.waitUntilExit()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let out = String(data: data, encoding: .utf8) ?? ""
+                if !out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return out }
+            }
+        }
+        switch tool {
+        case "codex": return "notify = [\"lockpaw\", \"ping\"]"
+        case "gemini": return "Add a hook running `lockpaw ping` in ~/.gemini/settings.json — see https://geminicli.com/docs/hooks/"
+        default: return "\"hooks\": {\n  \"Notification\": [{ \"hooks\": [{ \"type\": \"command\", \"command\": \"lockpaw ping\" }] }],\n  \"Stop\": [{ \"hooks\": [{ \"type\": \"command\", \"command\": \"lockpaw ping\" }] }]\n}"
+        }
+    }
+
     private var generalSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsPanel {
@@ -386,6 +456,52 @@ struct SettingsView: View {
                     )
                     .onChange(of: appearanceMode) { _, mode in
                         applyAppearance(mode)
+                    }
+                }
+            }
+
+            SettingsPanel {
+                SettingsRow("Play a sound on agent ping", subtitle: "Off by default for shared spaces. The locked screen always glows.") {
+                    SettingsCheckbox(isOn: $agentPingSound)
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Test agent ping", subtitle: "Send a sample notification to confirm alerts work.") {
+                    Button {
+                        AgentNotifier.shared.notify(withSound: agentPingSound)
+                    } label: {
+                        Text("Send")
+                            .padding(.horizontal, 8)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Command-line tool", subtitle: "Adds lockpaw to your PATH so agents can ping. Paste in Terminal.") {
+                    Button {
+                        copyInstallCommand()
+                    } label: {
+                        Text(copiedItem == "cli" ? "Copied ✓" : "Copy command")
+                            .padding(.horizontal, 8)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Connect your agent", subtitle: "Copy the hook for your CLI agent, then paste it into its config.") {
+                    HStack(spacing: 8) {
+                        ForEach(["claude", "codex", "gemini"], id: \.self) { tool in
+                            Button {
+                                copyHook(for: tool)
+                            } label: {
+                                Text(copiedItem == tool ? "Copied ✓" : agentLabel(tool))
+                                    .padding(.horizontal, 4)
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
                 }
             }
@@ -524,6 +640,19 @@ struct SettingsView: View {
 
     private func refreshAccessibilityStatus() {
         accessibilityGranted = AccessibilityChecker.isEnabled
+    }
+
+    private func startAccessibilityPolling() {
+        accessibilityTimer?.invalidate()
+        refreshAccessibilityStatus()
+
+        let timer = Timer(timeInterval: 0.5, repeats: true) { _ in
+            DispatchQueue.main.async {
+                refreshAccessibilityStatus()
+            }
+        }
+        accessibilityTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func configureSettingsWindow() {
@@ -740,7 +869,7 @@ private struct SettingsSegmentedControl<Value: Hashable>: View {
                 } label: {
                     Text(option.title)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isSelected ? selectedTextColor : Color.secondary)
+                        .foregroundStyle(isSelected ? settingsAccentColor : Color.secondary)
                         .lineLimit(1)
                         .padding(.horizontal, 12)
                         .frame(maxWidth: .infinity, minHeight: 24)
@@ -750,7 +879,11 @@ private struct SettingsSegmentedControl<Value: Hashable>: View {
                 .background {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(settingsAccentColor)
+                            .fill(settingsAccentColor.opacity(0.15))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(settingsAccentColor.opacity(0.4), lineWidth: 1)
+                            )
                     }
                 }
             }
@@ -763,8 +896,6 @@ private struct SettingsSegmentedControl<Value: Hashable>: View {
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
     }
-
-    private var selectedTextColor: Color { .black }
 }
 
 private struct SettingsCheckbox: View {

@@ -1,14 +1,12 @@
 <p align="center">
-  <br>
-  <img src="Lockpaw/Resources/Assets.xcassets/Mascot.imageset/Mascot.png" alt="Lockpaw mascot" width="200" />
-  <br>
+  <img src="assets/hero.png" alt="Lockpaw — lock your screen, agents keep working" width="840" />
 </p>
 
 <h1 align="center">Lockpaw</h1>
 
 <p align="center">
   <strong>One hotkey covers your screen. One hotkey uncovers it. Everything keeps running.</strong><br>
-  <em>No sleep. No display disconnect. No process interruption. Touch ID when you're back.</em>
+  <em>No sleep. No display disconnect. No process interruption. The screen glows when your agent needs you.</em>
 </p>
 
 <p align="center">
@@ -35,6 +33,7 @@
 - 🔒 **Touch ID unlock** — or password fallback, just like your Mac
 - 🖥️ **Every screen covered** — all displays, auto-detects new monitors
 - 🤖 **Agents keep running** — AI coding tools, builds, downloads, SSH sessions
+- 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, or Gemini needs you
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
 - 📦 **3.4 MB** — native Swift, no Electron, no frameworks
 - 🚫 **No analytics** — no data leaves your Mac, no accounts, no internet required
@@ -53,6 +52,33 @@
 | Settings | Menu bar → Settings… |
 | Change hotkey | Settings → Shortcuts → click to record |
 | Change mascot | Settings → Lock Screen → Mascot |
+
+<br>
+
+## Agent alerts
+
+Lock your screen and walk away — when your AI agent pauses for permission or finishes,
+the locked screen **glows from across the room** and a notification fires. You stay
+covered (and private) until *you* unlock. The glow is always silent; turn on a sound in
+**Settings → General** if you want one (off by default for shared offices).
+
+Lockpaw ships a tiny `lockpaw` command-line tool that any agent can call. Install it once:
+
+```bash
+lockpaw install-cli          # symlinks lockpaw into ~/.local/bin
+```
+
+Then wire up your agent (writes the config for you; add `--print` to just see the snippet):
+
+| Agent | Setup | What it hooks |
+|-------|-------|---------------|
+| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` hooks in `~/.claude/settings.json` |
+| **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` |
+| **Gemini CLI** | `lockpaw install-hook gemini` | prints a hook snippet for `~/.gemini/settings.json` |
+| **Anything else** | append `; lockpaw ping` to your command | runs after your agent finishes |
+
+Under the hood, `lockpaw ping` posts a local notification that Lockpaw listens for — it
+never launches the app if it isn't already running.
 
 <br>
 
