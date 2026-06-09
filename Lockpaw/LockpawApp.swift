@@ -43,8 +43,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var accessibilityPollTimer: Timer?
     private var lastURLSchemeCall: Date = .distantPast
     private var onboardingWindow: NSWindow?
+    private var pingDistributedObserver: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Instantiate AgentNotifier now so it registers as the notification-center
+        // delegate before launch completes (required for foreground banner presentation).
+        _ = AgentNotifier.shared
+
         // Start Sparkle after app is fully launched
         updateCheckViewModel.bind(to: updaterController.updater)
         do {
@@ -94,6 +99,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // Bridge agent pings (posted by the `lockpaw` CLI via DistributedNotificationCenter)
+        // into a local notification. Using the distributed center — not the lockpaw:// URL
+        // scheme — means a background ping never launches the app when it isn't running.
+        pingDistributedObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(Constants.pingDistributedName), object: nil, queue: .main
+        ) { _ in
+            NotificationCenter.default.post(name: .lockpawPing, object: nil)
+        }
+
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             showOnboarding()
         } else if !AccessibilityChecker.isEnabled {
@@ -133,15 +147,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startAccessibilityPoll() {
         accessibilityPollTimer?.invalidate()
-        accessibilityPollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] timer in
             guard let self else { timer.invalidate(); return }
-            if AXIsProcessTrusted() {
+            if AccessibilityChecker.isEnabled {
                 timer.invalidate()
                 self.accessibilityPollTimer = nil
                 logger.info("Accessibility granted — registering hotkey")
                 self.hotkeyManager.reregister()
             }
         }
+        accessibilityPollTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -163,5 +179,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     deinit {
         if let obs = hotkeyObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = pingDistributedObserver { DistributedNotificationCenter.default().removeObserver(obs) }
     }
 }

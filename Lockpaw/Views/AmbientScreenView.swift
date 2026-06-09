@@ -30,7 +30,7 @@ struct AmbientScreenView: View {
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.easeIn(duration: 3.0)) { appeared = true }
-            withAnimation(Constants.Anim.breathe) { phase = 1 }
+            withAnimation(Constants.Anim.breathe) { phase = Constants.Anim.breathePhaseTarget }
         }
     }
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0] - 2026-06-09
+
+### Added
+
+- **Agent alerts** — the locked screen glows (and, optionally, a sound plays) when an AI coding agent needs you. Works with Claude Code, Codex, Gemini, or any CLI agent.
+- A bundled `lockpaw` command-line tool (`ping`, `install-cli`, `install-hook`) so agents can signal Lockpaw.
+- Settings: a "Play a sound on agent ping" toggle (off by default for shared spaces), a test-ping button, and one-click copy of the CLI command and per-agent hook snippets.
+- Onboarding: a breathing mascot welcome and a step previewing agent alerts.
+
+### Changed
+
+- Unified motion across the app and website (shared easing curves), a smoother lock-screen mascot entrance, and cross-fading Settings sections.
+- Restyled onboarding buttons and Settings segmented controls for one coherent look.
+
+### Fixed
+
+- Fixed the lock-screen mascot drifting upward every 12 seconds (the breathing animation no longer resets at its loop boundary).
+- Agent notification banners now appear even when Lockpaw is the frontmost app.
+
 ## [1.0.9] - 2026-05-25
 
 ### Added

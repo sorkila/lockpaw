@@ -15,6 +15,9 @@ class LockController: ObservableObject {
     @Published var lastError: String?
     @Published private(set) var unlockSucceeded = false
     @Published private(set) var failCount = 0
+    /// Incremented on each agent ping that should pulse the lock screen. The lock
+    /// screen watches this token to trigger a one-shot attention glow.
+    @Published private(set) var pingPulse: Int = 0
 
     private let overlayManager = OverlayWindowManager()
     private let inputBlocker = InputBlocker()
@@ -29,9 +32,11 @@ class LockController: ObservableObject {
     private var accessibilityCheckTimer: Timer?
     private var errorClearTask: Task<Void, Never>?
     private var toggleObserver: Any?
+    private var pingObserver: Any?
     private var authenticationInProgress = false
     private var sessionWasLost = false
     private var lastAuthFailTime: Date?
+    private var lastPingTime: Date?
 
     init() {
         toggleObserver = NotificationCenter.default.addObserver(
@@ -110,6 +115,15 @@ class LockController: ObservableObject {
                 self.forceUnlock()
             }
         }
+
+        pingObserver = NotificationCenter.default.addObserver(
+            forName: .lockpawPing, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                self?.handlePing()
+            }
+        }
     }
 
     deinit {
@@ -121,6 +135,7 @@ class LockController: ObservableObject {
         if let obs = sessionLostObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = sessionActiveObserver { NSWorkspace.shared.notificationCenter.removeObserver(obs) }
         if let obs = inputBlockerFailedObserver { NotificationCenter.default.removeObserver(obs) }
+        if let obs = pingObserver { NotificationCenter.default.removeObserver(obs) }
     }
 
     // MARK: - Public
@@ -287,6 +302,19 @@ class LockController: ObservableObject {
     }
 
     // MARK: - Private
+
+    /// React to an agent ping. Debounces chatty agents, then pulses the lock screen
+    /// and/or posts a notification per `PingDecision` (no-op when unlocked).
+    private func handlePing() {
+        let now = Date()
+        if let last = lastPingTime, now.timeIntervalSince(last) < Constants.Timing.pingDebounce { return }
+        lastPingTime = now
+
+        let soundEnabled = UserDefaults.standard.bool(forKey: Constants.agentPingSoundKey)
+        let decision = PingDecision.make(state: state, soundEnabled: soundEnabled)
+        if decision.shouldPulse { pingPulse &+= 1 }
+        if decision.shouldNotify { AgentNotifier.shared.notify(withSound: decision.withSound) }
+    }
 
     private func handleAuthFailure() {
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)

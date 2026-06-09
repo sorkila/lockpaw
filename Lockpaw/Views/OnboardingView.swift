@@ -10,8 +10,12 @@ struct OnboardingView: View {
     @State private var accessibilityTimer: Timer?
     @State private var hotkeyConflict: String?
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(Mascot.storageKey) private var selectedMascot = Mascot.defaultValue
+    @State private var mascotBreath = false
+    @State private var pulse: CGFloat = 0
 
-    private let totalSteps = 4
+    private let totalSteps = 5
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,7 +26,8 @@ struct OnboardingView: View {
                 case 0: welcomeStep
                 case 1: hotkeyStep
                 case 2: accessibilityStep
-                case 3: readyStep
+                case 3: agentAlertsStep
+                case 4: readyStep
                 default: EmptyView()
                 }
             }
@@ -49,23 +54,23 @@ struct OnboardingView: View {
                 } label: {
                     Text(buttonLabel)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(canAdvance
-                                      ? Color("LockpawTeal")
-                                      : Color.gray.opacity(0.4))
-                        )
                 }
-                .buttonStyle(.plain)
+                .controlSize(.large)
+                .buttonStyle(.bordered)
+                .tint(Color("LockpawTeal"))
                 .disabled(!canAdvance)
             }
             .padding(.horizontal, 40)
             .padding(.bottom, 32)
         }
         .frame(width: 420, height: 500)
+        .onAppear {
+            accessibilityGranted = AccessibilityChecker.isEnabled
+            if step == 2 && !accessibilityGranted {
+                startAccessibilityPolling()
+            }
+        }
         .onDisappear {
             accessibilityTimer?.invalidate()
         }
@@ -79,7 +84,7 @@ struct OnboardingView: View {
     private var buttonLabel: String {
         switch step {
         case 2 where !accessibilityGranted: return "Waiting for access…"
-        case 3: return "Get Started"
+        case 4: return "Get Started"
         default: return "Continue"
         }
     }
@@ -104,10 +109,7 @@ struct OnboardingView: View {
 
     private var welcomeStep: some View {
         VStack(spacing: 20) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80, height: 80)
+            mascotHero(size: 96)
 
             VStack(spacing: 8) {
                 Text("Welcome to Lockpaw")
@@ -126,6 +128,32 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
+        }
+    }
+
+    /// The mascot in a breathing pool of light — the app's hero, reused across steps.
+    private func mascotHero(size: CGFloat) -> some View {
+        ZStack {
+            Ellipse()
+                .fill(Color("LockpawTeal").opacity(0.05))
+                .frame(width: size * 0.9, height: size * 0.25)
+                .blur(radius: 18)
+                .offset(y: size * 0.5)
+
+            Image(Mascot.resolved(from: selectedMascot).assetName)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .shadow(color: Color("LockpawTeal").opacity(0.18), radius: 24, y: 8)
+                .scaleEffect(mascotBreath ? 1.03 : 1.0)
+                .offset(y: mascotBreath ? -3 : 0)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                mascotBreath = true
+            }
         }
     }
 
@@ -239,15 +267,10 @@ struct OnboardingView: View {
                             Text("Open System Settings")
                                 .font(.system(size: 13, weight: .medium))
                         }
-                        .foregroundStyle(Color("LockpawTeal"))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color("LockpawTeal").opacity(0.1))
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .controlSize(.regular)
+                    .buttonStyle(.bordered)
+                    .tint(Color("LockpawTeal"))
 
                     VStack(spacing: 4) {
                         Text("Find Lockpaw in the list and toggle it on.")
@@ -262,7 +285,57 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Step 4: Ready
+    // MARK: - Step 4: Agent alerts
+
+    private var agentAlertsStep: some View {
+        VStack(spacing: 20) {
+            // Mini lock-screen preview, pulsing teal — the "it needs you" moment.
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.black)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(.white.opacity(0.06), lineWidth: 1)
+                    )
+
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(RadialGradient(
+                        colors: [Color("LockpawTeal").opacity(0.55 * pulse), .clear],
+                        center: .center, startRadius: 0, endRadius: 95))
+                    .blendMode(.plusLighter)
+
+                Image(Mascot.resolved(from: selectedMascot).assetName)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 46, height: 46)
+            }
+            .frame(width: 156, height: 104)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                    pulse = 1
+                }
+            }
+
+            VStack(spacing: 8) {
+                Text("Lockpaw taps you")
+                    .font(.title2.weight(.semibold))
+
+                Text("Lock your screen and walk away. When Claude Code,\nCodex, or Gemini needs you, the screen glows.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+
+            Text("Set it up anytime in Settings — works with any CLI agent.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Step 5: Ready
 
     private var readyStep: some View {
         VStack(spacing: 20) {
@@ -389,10 +462,18 @@ struct OnboardingView: View {
 
     private func startAccessibilityPolling() {
         accessibilityTimer?.invalidate()
-        accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+        accessibilityGranted = AccessibilityChecker.isEnabled
+
+        let timer = Timer(timeInterval: 0.5, repeats: true) { timer in
             DispatchQueue.main.async {
                 accessibilityGranted = AccessibilityChecker.isEnabled
+                if accessibilityGranted {
+                    timer.invalidate()
+                    accessibilityTimer = nil
+                }
             }
         }
+        accessibilityTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 }
