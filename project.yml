@@ -64,6 +64,10 @@ targets:
     settings:
       base:
         PRODUCT_NAME: lockpaw
+        # Module name must NOT case-collide with the app's `Lockpaw` module — on a
+        # case-insensitive filesystem `lockpaw.swiftmodule` and `Lockpaw.swiftmodule`
+        # clash and break `@testable import Lockpaw`. Executable stays `lockpaw`.
+        PRODUCT_MODULE_NAME: LockpawCLI
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         SKIP_INSTALL: YES
