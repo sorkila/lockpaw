@@ -116,7 +116,7 @@ On first launch, grant **Accessibility** when prompted. The Lockpaw icon appears
 
 The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow. One element at a time.
 
-**Progressive disclosure** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer. A chevron breathes at the bottom. Tap anywhere to reveal the fallback auth button. Nothing appears without your intent.
+**Calm by default** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer; the pointer slips away after a moment of stillness. The fallback auth button waits quietly at the bottom — always there, never loud. When an agent pings, the screen breathes two slow waves of green, then keeps a soft "your agent needs you" hint until you return.
 
 **Mascots** — a metallic origami dog or cat rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the mascot scales up with a teal bloom and fades away.
 
@@ -210,7 +210,7 @@ Lockpaw/
 │  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
 │  └─ Mascot                     Dog/cat lock screen preference
 ├─ Views/
-│  ├─ LockScreenView             Dog/cat mascot · glow · progressive disclosure
+│  ├─ LockScreenView             Dog/cat mascot · agent-ping glow · fallback auth
 │  ├─ AmbientScreenView          Secondary display gradient animation
 │  ├─ MenuBarView                Dropdown · lock/unlock/quit
 │  ├─ SettingsView               Native tabs · hotkey recorder · updates

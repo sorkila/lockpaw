@@ -45,6 +45,12 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// Remove our delivered banners from Notification Center. Called on unlock —
+    /// "your agent needs you" is stale once the user is back at the machine.
+    func clearDelivered() {
+        center.removeAllDeliveredNotifications()
+    }
+
     private func post(withSound: Bool) {
         let content = UNMutableNotificationContent()
         content.title = "Lockpaw"

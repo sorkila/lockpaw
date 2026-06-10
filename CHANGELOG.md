@@ -1,13 +1,23 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.1] - 2026-06-10
 
 ### Added
 
-- Settings: one-click agent setup — Install the CLI and connect Claude Code or Codex with a single button (Gemini still copies a snippet). Failures show the reason inline instead of pretending it worked.
+- Settings: one-click agent setup — connect Claude Code or Codex with a single button, with a proper loading state and inline error messages (Gemini still copies a snippet). The CLI installs automatically when you connect an agent.
+- Lock screen: after the agent-ping glow finishes its breaths, a quiet "Your agent needs you" hint (with a faint resting glow) stays on screen until you unlock.
+
+### Changed
+
+- The agent-ping glow is now two slow breaths in saturated brand green, instead of one quick pale flash.
+- The mouse pointer hides while the screen is locked — it reappears when you move the mouse and slips away again after a few seconds of stillness.
+- The fallback Touch ID / password button is always visible on the lock screen (the "Tap for help" disclosure is gone).
+- Lock-screen typography consolidated to the four roles of the design system (body / label / caption / mono).
+- Removed the redundant "Lockpaw Settings" heading inside the Settings window.
 
 ### Fixed
 
+- Agent notifications are cleared from Notification Center when you unlock — no stale "Your agent needs you" banners.
 - `lockpaw install-hook` is now self-contained: it installs the `~/.local/bin/lockpaw` symlink itself and writes hooks that reference it by path, so agent pings no longer fail silently when `install-cli` was skipped or `~/.local/bin` isn't on PATH. Re-running upgrades older hook entries in place.
 - `lockpaw install-hook claude` honors `$CLAUDE_CONFIG_DIR`, so multi-profile Claude Code setups get the hook in the right `settings.json`.
 

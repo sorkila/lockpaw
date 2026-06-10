@@ -377,6 +377,7 @@ struct SettingsView: View {
     // MARK: - Agent setup (one-click; runs the bundled CLI, which backs up configs)
 
     private enum AgentSetupResult {
+        case running
         case success
         case failure(String)
     }
@@ -390,10 +391,13 @@ struct SettingsView: View {
     /// exit 0 (e.g. Codex already has a foreign `notify`) is surfaced as a failure
     /// so the button doesn't claim success for a write that didn't happen.
     private func runAgentSetup(_ arguments: [String], mark: String, treatWarningAsFailure: Bool = true) {
+        if case .running = agentSetupResults[mark] { return }
         guard let cli = cliURL, FileManager.default.isExecutableFile(atPath: cli.path) else {
             agentSetupResults[mark] = .failure("The bundled lockpaw tool is missing — reinstall Lockpaw.")
             return
         }
+        agentSetupResults[mark] = .running
+        let startedAt = Date()
         Task.detached {
             let process = Process()
             process.executableURL = cli
@@ -419,22 +423,47 @@ struct SettingsView: View {
             } catch {
                 result = .failure(error.localizedDescription)
             }
+            // The CLI finishes in milliseconds; hold the spinner briefly so the
+            // success state registers as an event rather than an instant flicker.
+            let elapsed = Date().timeIntervalSince(startedAt)
+            if elapsed < Constants.Timing.agentSetupMinSpin {
+                try? await Task.sleep(nanoseconds: UInt64((Constants.Timing.agentSetupMinSpin - elapsed) * 1_000_000_000))
+            }
             await MainActor.run {
                 agentSetupResults[mark] = result
+                // install-hook installs the CLI as a side effect — mirror that.
+                if mark != "cli", case .success = result {
+                    agentSetupResults["cli"] = .success
+                }
             }
         }
     }
 
-    private func agentButtonTitle(for tool: String) -> String {
-        switch agentSetupResults[tool] {
-        case .success: return "\(agentLabel(tool)) ✓"
-        case .failure: return "\(agentLabel(tool)) ⚠︎"
-        case nil: return agentLabel(tool)
+    private func isSetupRunning(_ mark: String) -> Bool {
+        if case .running = agentSetupResults[mark] { return true }
+        return false
+    }
+
+    @ViewBuilder
+    private func setupButtonLabel(mark: String, idle: String, done: String) -> some View {
+        switch agentSetupResults[mark] {
+        case .running:
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.mini)
+                Text(idle)
+            }
+            .padding(.horizontal, 4)
+        case .success:
+            Text(done).padding(.horizontal, 4)
+        case .failure:
+            Text("\(idle) ⚠︎").padding(.horizontal, 4)
+        case nil:
+            Text(idle).padding(.horizontal, 4)
         }
     }
 
     private var agentSetupFailureMessage: String? {
-        for tool in ["claude", "codex"] {
+        for tool in ["claude", "codex", "cli"] {
             if case .failure(let message) = agentSetupResults[tool], !message.isEmpty {
                 return message
             }
@@ -537,25 +566,7 @@ struct SettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow("Command-line tool", subtitle: "Installs the lockpaw command into ~/.local/bin.") {
-                    Button {
-                        runAgentSetup(["install-cli"], mark: "cli", treatWarningAsFailure: false)
-                    } label: {
-                        Text({
-                            switch agentSetupResults["cli"] {
-                            case .success: return "Installed ✓"
-                            case .failure: return "Failed ⚠︎"
-                            case nil: return "Install"
-                            }
-                        }())
-                        .padding(.horizontal, 8)
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                SettingsDivider()
-
-                SettingsRow("Connect your agent", subtitle: "One click wires the ping hook into the agent's config (a .bak backup is kept). Gemini copies a snippet to paste.") {
+                SettingsRow("Connect your agent", subtitle: "One click sets up everything — the command-line tool and the agent's ping hook (a .bak backup is kept). Gemini copies a snippet to paste.") {
                     HStack(spacing: 8) {
                         ForEach(["claude", "codex", "gemini"], id: \.self) { tool in
                             Button {
@@ -565,12 +576,29 @@ struct SettingsView: View {
                                     runAgentSetup(["install-hook", tool], mark: tool)
                                 }
                             } label: {
-                                Text(tool == "gemini" && copiedItem == tool ? "Copied ✓" : agentButtonTitle(for: tool))
-                                    .padding(.horizontal, 4)
+                                if tool == "gemini" {
+                                    Text(copiedItem == tool ? "Copied ✓" : agentLabel(tool))
+                                        .padding(.horizontal, 4)
+                                } else {
+                                    setupButtonLabel(mark: tool, idle: agentLabel(tool), done: "\(agentLabel(tool)) ✓")
+                                }
                             }
                             .buttonStyle(.bordered)
+                            .disabled(isSetupRunning(tool))
                         }
                     }
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Command-line tool", subtitle: "Optional — connecting an agent installs this automatically. Puts lockpaw in ~/.local/bin for your own scripts.") {
+                    Button {
+                        runAgentSetup(["install-cli"], mark: "cli", treatWarningAsFailure: false)
+                    } label: {
+                        setupButtonLabel(mark: "cli", idle: "Install", done: "Installed ✓")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isSetupRunning("cli"))
                 }
 
                 if let failure = agentSetupFailureMessage {
@@ -833,25 +861,19 @@ private struct SettingsTabBar: View {
     @Binding var selection: SettingsSection
 
     var body: some View {
-        VStack(spacing: 6) {
-            Text("Lockpaw Settings")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.top, 7)
-
-            HStack(alignment: .center, spacing: 12) {
-                ForEach(SettingsSection.allCases) { section in
-                    SettingsTabButton(
-                        section: section,
-                        isSelected: selection == section
-                    ) {
-                        selection = section
-                    }
+        // The window titlebar already says "Lockpaw Settings" — no in-content title.
+        HStack(alignment: .center, spacing: 12) {
+            ForEach(SettingsSection.allCases) { section in
+                SettingsTabButton(
+                    section: section,
+                    isSelected: selection == section
+                ) {
+                    selection = section
                 }
             }
-            .padding(.bottom, 9)
-            .padding(.horizontal, 14)
         }
+        .padding(.vertical, 9)
+        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
     }

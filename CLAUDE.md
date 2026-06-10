@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.1.0
+- **Current version:** 1.1.1
 
 ## Build
 
@@ -117,7 +117,9 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Purpose** — when an AI agent (Claude Code, Codex, Gemini) pauses for permission or finishes while the screen is locked, the lock screen glows + a notification fires. Stays locked; you unlock when ready.
 - **Transport is DistributedNotificationCenter, NOT `lockpaw://`** — `open lockpaw://ping` would launch the app when it isn't running (wrong for a background ping). The CLI posts `com.eriknielsen.lockpaw.ping`; `AppDelegate` bridges it to a local `.lockpawPing`. The URL scheme stays for `lock`/`unlock` only.
 - **`PingDecision.make(state:soundEnabled:)` is pure** — locked → pulse + notify; any other state → no-op. Unit-tested directly (no UNUserNotificationCenter mocking). `LockController.handlePing()` debounces (`Timing.pingDebounce`) then applies the decision; `pingPulse` is a counter the lock screen watches via `.onChange`.
-- **Glow is the hero, not the banner** — `LockScreenView` ramps a bright teal full-screen radial bloom (peak ~0.28, `.plusLighter`) so it reads across a room; notification is secondary. Sound is opt-in (`Constants.agentPingSoundKey`, default off, for shared offices).
+- **Glow is the hero, not the banner** — on ping, `LockScreenView` breathes a saturated teal full-screen radial bloom (`pingPulseCount` breaths of `pingPulsePeriod`, mid-stop gradient + `.plusLighter`), then settles to a faint resting glow (`pingGlowRest`) with a standing "Your agent needs you" caption (`LockController.agentAttention`) until unlock. A generation counter cancels a stale pulse chain if a new ping lands mid-sequence. Notification is secondary; delivered banners are cleared on unlock (`AgentNotifier.clearDelivered()`). Sound is opt-in (`Constants.agentPingSoundKey`, default off, for shared offices).
+- **Cursor hides while locked** — `OverlayWindowManager` activates the app, makes the primary overlay key (`OverlayWindow` subclass: borderless windows refuse key status by default), then `NSCursor.setHiddenUntilMouseMoves(true)` — which is a no-op unless the app is active. Mouse-move monitors + an idle timer (`Timing.cursorIdleHide`) re-hide after stillness. Never `NSCursor.hide()` — an unbalanced hide would leave the pointer invisible over the auth button.
+- **Lock-screen type uses four tokens** — `Font.lockBody/lockLabel/lockCaption/lockMono` in Constants.swift map to the DESIGN.md §2 scale; differentiate captions with opacity, never new sizes.
 - **The CLI lives in `Contents/SharedSupport/`, NOT `Contents/MacOS/`** — `lockpaw` would collide with the app binary `Lockpaw` on case-insensitive filesystems (DMG/Applications). `install-cli` symlinks it into `~/.local/bin`.
 - **The CLI target sets `PRODUCT_MODULE_NAME: LockpawCLI`** (executable stays `lockpaw`) — its Swift module would otherwise be `lockpaw`, which case-collides with the app's `Lockpaw` module and breaks `@testable import Lockpaw` on a clean build (`unable to resolve module dependency: 'Lockpaw'`). This only surfaces on a clean build (CI), not incremental local ones.
 - **CLI resolves `$HOME`, not `homeDirectoryForCurrentUser`** — the latter ignores `$HOME`; agent CLIs locate their own configs via `$HOME`, so `install-hook` must too. Writers back up (`.bak`), are idempotent, and never clobber a foreign `notify`/hook.
@@ -147,7 +149,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 - Minimal, whisper-quiet aesthetic. Low opacities, light font weights, generous negative space.
 - The mascot (dog or cat) is the hero in normal mode. Everything else recedes.
-- Progressive disclosure — lock screen shows chevron + hint, tap reveals fallback auth.
+- The fallback auth button is always visible at the bottom of the lock screen (quiet, material-backed; no tap-to-reveal).
 - Color as signal — teal (safe) → amber (caution) → red (danger). Everything uses the same proximity-based gradient.
 - No information on screen that would help someone bypass the lock (hotkey is not shown).
 - Settings has five focused tabs (Lock Screen, Shortcuts, General, Permissions, About) via `SettingsTabBar`; tabs cross-fade. Keep each tab tight — don't turn Settings into a dashboard. The full design system (tokens, motion, coherence) lives in `DESIGN.md`.

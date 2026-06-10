@@ -19,13 +19,17 @@ enum Constants {
         static let unlockSuccessAnimNs: UInt64 = 400_000_000          // 400ms
         static let errorDisplayBeforeForceUnlockNs: UInt64 = 1_500_000_000 // 1.5s
         static let errorAutoClearNs: UInt64 = 5_000_000_000           // 5s
-        static let autoShowHelpDelay: TimeInterval = 5.0              // seconds
         static let authRateLimitCooldown: TimeInterval = 30.0         // seconds
         static let maxAuthAttempts = 3
         static let urlSchemeDebounce: TimeInterval = 0.1              // seconds
         static let userActivityRefreshInterval: TimeInterval = 30     // seconds; defeats screensaver idle timer while locked
         static let pingDebounce: TimeInterval = 2.0                   // seconds; collapse chatty agent pings into one
-        static let pingGlowHoldNs: UInt64 = 450_000_000               // 450ms; hold the glow at peak before fading
+        static let pingPulseCount = 2                                 // breaths per agent ping
+        static let pingPulsePeriod: TimeInterval = 2.2                // seconds per full breath (rise + fall)
+        static let pingPulseFloor: CGFloat = 0.30                     // glow level between breaths (never fully dark mid-pulse)
+        static let pingGlowRest: CGFloat = 0.08                       // faint glow held after the breaths until unlock — paired with the "agent needs you" hint
+        static let cursorIdleHide: TimeInterval = 3.0                 // seconds of stillness before the pointer hides again while locked
+        static let agentSetupMinSpin: TimeInterval = 1.2              // seconds; floor on the Settings connect-spinner so success registers
     }
 
     enum Anim {
@@ -42,8 +46,6 @@ enum Constants {
         /// Animate `phase` to `breathePhaseTarget` (not 1) with this curve.
         static let breathePhaseTarget: CGFloat = 100_000
         static let breathe: Animation = .linear(duration: 12 * Double(breathePhaseTarget)).repeatForever(autoreverses: false)
-        static let pingGlowIn: Animation = .easeOut(duration: 0.45)
-        static let pingGlowOut: Animation = .easeInOut(duration: 1.6)
     }
 
     static func formatElapsedTime(_ interval: TimeInterval) -> String {
@@ -63,4 +65,14 @@ enum Constants {
         if minutes > 0 { return "\(minutes) minute\(minutes == 1 ? "" : "s") \(seconds) second\(seconds == 1 ? "" : "s")" }
         return "\(seconds) second\(seconds == 1 ? "" : "s")"
     }
+}
+
+/// Lock-screen type roles — the four rows of the DESIGN.md §2 scale. Every piece of
+/// text on the lock screen uses one of these; differentiate with opacity, not size.
+/// Tracking pairs: body 0.35, label 0.3, caption/mono 0.5.
+extension Font {
+    static func lockBody(compact: Bool) -> Font { .system(size: compact ? 14 : 16, weight: .regular) }
+    static let lockLabel: Font = .system(size: 13, weight: .medium)
+    static let lockCaption: Font = .system(size: 12, weight: .light)
+    static let lockMono: Font = .system(size: 12, weight: .regular, design: .monospaced)
 }

@@ -4,12 +4,21 @@ import os.log
 
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "OverlayWindow")
 
+/// Borderless windows refuse key status by default; the primary overlay must be able
+/// to become key so the app can be activated while locked — cursor concealment
+/// (`NSCursor.setHiddenUntilMouseMoves`) only works while the app is active.
+private final class OverlayWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+}
+
 class OverlayWindowManager {
     private var windows: [NSWindow] = []
     private var screenObserver: Any?
     private var sessionObserver: Any?
     private var contentFactory: ((Int, Bool) -> AnyView)?
     private var screenChangeWork: DispatchWorkItem?
+    private var mouseMoveMonitors: [Any] = []
+    private var cursorRehideTimer: Timer?
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
@@ -24,12 +33,14 @@ class OverlayWindowManager {
         }
         startObservingScreenChanges()
         startObservingSessionChanges()
+        startCursorConcealment()
         return true
     }
 
     func dismissOverlay(animated: Bool = false) {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
+        stopCursorConcealment()
 
         if animated {
             let windowsToClose = windows
@@ -83,7 +94,7 @@ class OverlayWindowManager {
             let content = factory(index, isPrimary)
             let frame = screen.frame
             logger.info("Creating overlay — screen: \(screen.localizedName), role: \(isPrimary ? "primary" : "ambient"), frame: \(frame.debugDescription), scale: \(screen.backingScaleFactor)")
-            let window = NSWindow(
+            let window = OverlayWindow(
                 contentRect: frame,
                 styleMask: .borderless,
                 backing: .buffered,
@@ -120,6 +131,53 @@ class OverlayWindowManager {
 
             windows.append(window)
         }
+    }
+
+    // MARK: - Cursor concealment
+
+    /// Hide the pointer while locked, but never trap the user: the cursor reappears
+    /// the moment the mouse moves (it's needed to reach the fallback-auth controls)
+    /// and slips away again after a few seconds of stillness. NSCursor.hide() is
+    /// deliberately avoided — an unbalanced hide would leave the pointer invisible
+    /// while someone tries to click the unlock chevron.
+    private func startCursorConcealment() {
+        stopCursorConcealment()
+        // setHiddenUntilMouseMoves only takes effect while the app is active — and
+        // when locking via the global hotkey some other app is frontmost. Activate
+        // and make the primary overlay key first, then hide on the next runloop turn
+        // so the activation has landed.
+        NSApp.activate(ignoringOtherApps: true)
+        windows.first?.makeKey()
+        NSCursor.setHiddenUntilMouseMoves(true)
+        DispatchQueue.main.async {
+            NSCursor.setHiddenUntilMouseMoves(true)
+        }
+        let onMove: () -> Void = { [weak self] in self?.scheduleCursorRehide() }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved], handler: { _ in onMove() }) {
+            mouseMoveMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved], handler: { event in
+            onMove()
+            return event
+        }) {
+            mouseMoveMonitors.append(local)
+        }
+    }
+
+    private func scheduleCursorRehide() {
+        cursorRehideTimer?.invalidate()
+        cursorRehideTimer = Timer.scheduledTimer(withTimeInterval: Constants.Timing.cursorIdleHide, repeats: false) { _ in
+            NSCursor.setHiddenUntilMouseMoves(true)
+        }
+    }
+
+    private func stopCursorConcealment() {
+        cursorRehideTimer?.invalidate()
+        cursorRehideTimer = nil
+        for monitor in mouseMoveMonitors { NSEvent.removeMonitor(monitor) }
+        mouseMoveMonitors.removeAll()
+        // Make sure the pointer isn't left hidden after unlock.
+        NSCursor.setHiddenUntilMouseMoves(false)
     }
 
     private func startObservingScreenChanges() {
@@ -179,6 +237,7 @@ class OverlayWindowManager {
     deinit {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
+        stopCursorConcealment()
         for window in windows {
             window.orderOut(nil)
             window.contentView = nil

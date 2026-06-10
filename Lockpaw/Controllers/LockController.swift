@@ -19,6 +19,10 @@ class LockController: ObservableObject {
     /// screen watches this token to trigger a one-shot attention glow.
     @Published private(set) var pingPulse: Int = 0
 
+    /// True from the first agent ping until unlock — after the glow pulses finish,
+    /// the lock screen keeps a subtle "your agent needs you" hint from this flag.
+    @Published private(set) var agentAttention = false
+
     private let overlayManager = OverlayWindowManager()
     private let inputBlocker = InputBlocker()
     private let authenticator = Authenticator()
@@ -312,7 +316,10 @@ class LockController: ObservableObject {
 
         let soundEnabled = UserDefaults.standard.bool(forKey: Constants.agentPingSoundKey)
         let decision = PingDecision.make(state: state, soundEnabled: soundEnabled)
-        if decision.shouldPulse { pingPulse &+= 1 }
+        if decision.shouldPulse {
+            pingPulse &+= 1
+            agentAttention = true
+        }
         if decision.shouldNotify { AgentNotifier.shared.notify(withSound: decision.withSound) }
     }
 
@@ -352,6 +359,7 @@ class LockController: ObservableObject {
         errorClearTask?.cancel()
         lockStartTime = nil
         elapsedTime = 0
+        clearAgentAttention()
         state = .unlocked
         overlayManager.dismissOverlay(animated: true)
         inputBlocker.stopBlocking()
@@ -367,6 +375,7 @@ class LockController: ObservableObject {
         errorClearTask?.cancel()
         lockStartTime = nil
         elapsedTime = 0
+        clearAgentAttention()
         state = .unlocked
         overlayManager.dismissOverlay()
         inputBlocker.stopBlocking()
@@ -376,6 +385,13 @@ class LockController: ObservableObject {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+
+    /// Once unlocked, the agent banners in Notification Center are stale — the user
+    /// is back at the machine. Drop the flag and the delivered notifications together.
+    private func clearAgentAttention() {
+        agentAttention = false
+        AgentNotifier.shared.clearDelivered()
     }
 
     private func startAccessibilityMonitoring() {

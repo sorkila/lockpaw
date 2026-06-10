@@ -17,11 +17,11 @@ struct LockScreenView: View {
 
     @State private var phase: CGFloat = 0
     @State private var appeared = false
-    @State private var showingHelp = false
     @State private var hoveringAuth = false
     @State private var shakeOffset: CGFloat = 0
     @State private var successScale: CGFloat = 1.0
     @State private var pingGlow: CGFloat = 0
+    @State private var pingGlowGeneration = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -90,16 +90,19 @@ struct LockScreenView: View {
                                 EmptyView()
                             } else if controller.isAuthenticating {
                                 Text("Authenticating\u{2026}")
-                                    .font(.system(size: compact ? 14 : 16, weight: .regular))
+                                    .font(.lockBody(compact: compact))
                                     .foregroundStyle(.white.opacity(0.55))
                             } else if let error = controller.lastError {
+                                // Same body role as the message — color carries the
+                                // error, weight just steadies it.
                                 Text(error)
-                                    .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                                    .font(.lockBody(compact: compact))
+                                    .fontWeight(.medium)
                                     .foregroundStyle(Color("LockpawError"))
                                     .shadow(color: Color("LockpawError").opacity(0.15), radius: 8)
                             } else if showMessage {
                                 Text(message)
-                                    .font(.system(size: compact ? 14 : 16, weight: .regular))
+                                    .font(.lockBody(compact: compact))
                                     .foregroundStyle(.white.opacity(0.55))
                             }
                         }
@@ -117,7 +120,7 @@ struct LockScreenView: View {
                         // Time
                         TimelineView(.periodic(from: .now, by: 1)) { _ in
                             Text(Constants.formatElapsedTime(controller.elapsedTime))
-                                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                .font(.lockMono)
                                 .foregroundStyle(.white.opacity(0.35))
                                 .tracking(0.5)
                                 .accessibilityLabel("Locked for \(Constants.formatElapsedTimeAccessible(controller.elapsedTime))")
@@ -125,7 +128,25 @@ struct LockScreenView: View {
                         .opacity(appeared ? 1 : 0)
                         .opacity(controller.isAuthenticating || controller.unlockSucceeded ? 0.15 : 1)
                         .allowsHitTesting(false)
+
+                        // Standing agent hint — quiet, persistent companion to the
+                        // glow pulses; stays until unlock.
+                        if controller.agentAttention && !controller.unlockSucceeded {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color("LockpawTeal"))
+                                    .frame(width: 5, height: 5)
+                                    .opacity(0.55 + breathe * 0.3)
+                                Text("Your agent needs you")
+                                    .font(.lockCaption)
+                                    .foregroundStyle(.white.opacity(0.4))
+                                    .tracking(0.5)
+                            }
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
+                        }
                     }
+                    .animation(Constants.Anim.gentle, value: controller.agentAttention)
 
                     Spacer()
 
@@ -141,27 +162,29 @@ struct LockScreenView: View {
                                     .tint(Color("LockpawTeal"))
                                 VStack(spacing: 4) {
                                     Text("Use Touch ID or enter your Mac password")
-                                        .font(.system(size: 13, weight: .regular))
+                                        .font(.lockCaption)
                                         .foregroundStyle(.white.opacity(0.55))
                                     Text("Check for a system dialog")
-                                        .font(.system(size: 11, weight: .light))
+                                        .font(.lockCaption)
                                         .foregroundStyle(.white.opacity(0.3))
                                 }
+                                .tracking(0.5)
                             }
                             .transition(.opacity)
-                        } else if showingHelp {
+                        } else {
+                            // Fallback auth is always visible — no tap-to-reveal.
                             VStack(spacing: 16) {
                                 Text(requiresAuthenticationToUnlock ? "Authentication required to unlock" : "Use your hotkey to unlock, or")
-                                    .font(.system(size: 12, weight: .light))
+                                    .font(.lockCaption)
                                     .foregroundStyle(.white.opacity(0.35))
-                                    .tracking(0.3)
+                                    .tracking(0.5)
 
                                 Button {
                                     NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
                                     controller.requestUnlock()
                                 } label: {
                                     Text(requiresAuthenticationToUnlock ? "Authenticate to Unlock" : "Authenticate with Touch ID")
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.lockLabel)
                                         .foregroundStyle(.white.opacity(hoveringAuth ? 0.6 : 0.4))
                                         .tracking(0.3)
                                         .frame(minHeight: 44)
@@ -180,38 +203,14 @@ struct LockScreenView: View {
                                 .onHover { hoveringAuth = $0 }
                                 .accessibilityLabel("Authenticate with Touch ID or Mac password")
                             }
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .offset(y: 8)),
-                                removal: .opacity
-                            ))
-                        } else {
-                            VStack(spacing: 8) {
-                                Image(systemName: "chevron.up")
-                                    .font(.system(size: 14, weight: .thin))
-                                    .foregroundStyle(.white.opacity(0.25 + breathe * 0.1))
-                                    .offset(y: breathe * -2)
-
-                                Text("Tap for help")
-                                    .font(.system(size: 11, weight: .light))
-                                    .foregroundStyle(.white.opacity(0.2))
-                                    .tracking(0.5)
-                            }
                             .transition(.opacity)
-                            .allowsHitTesting(false)
                         }
                     }
                     .frame(height: 120)
                     .padding(.bottom, compact ? 16 : 40)
                     .animation(Constants.Anim.gentle, value: controller.isAuthenticating)
                     .animation(Constants.Anim.gentle, value: controller.unlockSucceeded)
-                    .animation(Constants.Anim.spring, value: showingHelp)
                     .offset(x: shakeOffset)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if !showingHelp && !controller.isAuthenticating {
-                    withAnimation(Constants.Anim.spring) { showingHelp = true }
                 }
             }
             .accessibilityElement(children: .contain)
@@ -222,13 +221,6 @@ struct LockScreenView: View {
             withAnimation(reduceMotion ? .none : .timingCurve(0.16, 1, 0.3, 1, duration: 0.6)) { appeared = true }
             guard !reduceMotion else { return }
             withAnimation(Constants.Anim.breathe) { phase = Constants.Anim.breathePhaseTarget }
-            if screenRole == .primary {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.autoShowHelpDelay) {
-                    if !showingHelp && !controller.isAuthenticating {
-                        withAnimation(Constants.Anim.gentle) { showingHelp = true }
-                    }
-                }
-            }
         }
         .onChange(of: controller.lastError) { _, error in
             guard error != nil else { return }
@@ -248,15 +240,40 @@ struct LockScreenView: View {
         }
     }
 
-    /// One-shot attention glow: ramp up fast, hold at peak, then ease away.
+    /// Attention glow: a few slow breaths (rise to peak, settle to a floor, repeat)
+    /// rather than one quick flash — calmer, and reads from across a room.
     /// Only the primary screen glows (secondary displays show the ambient view).
+    /// The generation counter cancels a stale pulse chain if a new ping lands mid-sequence.
     private func triggerPingGlow() {
         guard screenRole == .primary else { return }
-        let rise = reduceMotion ? Constants.Anim.standard : Constants.Anim.pingGlowIn
-        let fall = reduceMotion ? Constants.Anim.gentle : Constants.Anim.pingGlowOut
-        withAnimation(rise) { pingGlow = 1 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(Constants.Timing.pingGlowHoldNs) / 1_000_000_000) {
-            withAnimation(fall) { pingGlow = 0 }
+        pingGlowGeneration += 1
+        let generation = pingGlowGeneration
+
+        if reduceMotion {
+            withAnimation(Constants.Anim.standard) { pingGlow = 1 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.pingPulsePeriod) {
+                guard generation == pingGlowGeneration else { return }
+                withAnimation(Constants.Anim.gentle) { pingGlow = Constants.Timing.pingGlowRest }
+            }
+            return
+        }
+
+        let half = Constants.Timing.pingPulsePeriod / 2
+        for breath in 0..<Constants.Timing.pingPulseCount {
+            let start = Double(breath) * Constants.Timing.pingPulsePeriod
+            let isLast = breath == Constants.Timing.pingPulseCount - 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + start) {
+                guard generation == pingGlowGeneration else { return }
+                withAnimation(.easeInOut(duration: half)) { pingGlow = 1 }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + start + half) {
+                guard generation == pingGlowGeneration else { return }
+                // Settle to a faint resting glow, not black — the agent still
+                // needs attention; the hint under the timer carries the message.
+                withAnimation(.easeInOut(duration: isLast ? half * 1.4 : half)) {
+                    pingGlow = isLast ? Constants.Timing.pingGlowRest : Constants.Timing.pingPulseFloor
+                }
+            }
         }
     }
 
@@ -279,8 +296,14 @@ struct LockScreenView: View {
             // Attention glow — fires on an agent ping. Bright and full-screen so it
             // reads from across a room while the screen stays covered.
             if pingGlow > 0 {
+                // Mid-stop keeps a wide band at full saturation — a single
+                // stop-to-clear ramp washed the brand green toward pale cyan.
                 RadialGradient(
-                    colors: [Color("LockpawTeal").opacity(0.28 * pingGlow), .clear],
+                    stops: [
+                        .init(color: Color("LockpawTeal").opacity(0.30 * pingGlow), location: 0),
+                        .init(color: Color("LockpawTeal").opacity(0.14 * pingGlow), location: 0.45),
+                        .init(color: .clear, location: 1)
+                    ],
                     center: .center, startRadius: 0,
                     endRadius: max(geo.size.width, geo.size.height) * 0.8
                 )
