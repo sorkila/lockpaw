@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Settings: one-click agent setup — Install the CLI and connect Claude Code or Codex with a single button (Gemini still copies a snippet). Failures show the reason inline instead of pretending it worked.
+
+### Fixed
+
+- `lockpaw install-hook` is now self-contained: it installs the `~/.local/bin/lockpaw` symlink itself and writes hooks that reference it by path, so agent pings no longer fail silently when `install-cli` was skipped or `~/.local/bin` isn't on PATH. Re-running upgrades older hook entries in place.
+- `lockpaw install-hook claude` honors `$CLAUDE_CONFIG_DIR`, so multi-profile Claude Code setups get the hook in the right `settings.json`.
+
 ## [1.1.0] - 2026-06-09
 
 ### Added

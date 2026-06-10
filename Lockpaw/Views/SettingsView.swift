@@ -120,6 +120,7 @@ struct SettingsView: View {
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
     @State private var accessibilityTimer: Timer?
     @State private var copiedItem: String?
+    @State private var agentSetupResults: [String: AgentSetupResult] = [:]
 
     init(viewModel: UpdateCheckViewModel) {
         self.updateCheckViewModel = viewModel
@@ -373,10 +374,72 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Agent setup (clipboard-based; the app never edits your config files)
+    // MARK: - Agent setup (one-click; runs the bundled CLI, which backs up configs)
+
+    private enum AgentSetupResult {
+        case success
+        case failure(String)
+    }
 
     private var cliURL: URL? {
         Bundle.main.sharedSupportURL?.appendingPathComponent("lockpaw")
+    }
+
+    /// Run the bundled `lockpaw` CLI with the given arguments off the main thread,
+    /// then record the outcome for the row identified by `mark`. A ⚠️ on stdout with
+    /// exit 0 (e.g. Codex already has a foreign `notify`) is surfaced as a failure
+    /// so the button doesn't claim success for a write that didn't happen.
+    private func runAgentSetup(_ arguments: [String], mark: String, treatWarningAsFailure: Bool = true) {
+        guard let cli = cliURL, FileManager.default.isExecutableFile(atPath: cli.path) else {
+            agentSetupResults[mark] = .failure("The bundled lockpaw tool is missing — reinstall Lockpaw.")
+            return
+        }
+        Task.detached {
+            let process = Process()
+            process.executableURL = cli
+            process.arguments = arguments
+            let stdout = Pipe()
+            let stderr = Pipe()
+            process.standardOutput = stdout
+            process.standardError = stderr
+
+            let result: AgentSetupResult
+            do {
+                try process.run()
+                process.waitUntilExit()
+                let out = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                if process.terminationStatus != 0 {
+                    result = .failure(err.trimmingCharacters(in: .whitespacesAndNewlines))
+                } else if treatWarningAsFailure, out.contains("⚠️") {
+                    result = .failure(out.trimmingCharacters(in: .whitespacesAndNewlines))
+                } else {
+                    result = .success
+                }
+            } catch {
+                result = .failure(error.localizedDescription)
+            }
+            await MainActor.run {
+                agentSetupResults[mark] = result
+            }
+        }
+    }
+
+    private func agentButtonTitle(for tool: String) -> String {
+        switch agentSetupResults[tool] {
+        case .success: return "\(agentLabel(tool)) ✓"
+        case .failure: return "\(agentLabel(tool)) ⚠︎"
+        case nil: return agentLabel(tool)
+        }
+    }
+
+    private var agentSetupFailureMessage: String? {
+        for tool in ["claude", "codex"] {
+            if case .failure(let message) = agentSetupResults[tool], !message.isEmpty {
+                return message
+            }
+        }
+        return nil
     }
 
     private func agentLabel(_ tool: String) -> String {
@@ -396,11 +459,6 @@ struct SettingsView: View {
             try? await Task.sleep(nanoseconds: 1_600_000_000)
             if copiedItem == mark { copiedItem = nil }
         }
-    }
-
-    private func copyInstallCommand() {
-        guard let cli = cliURL else { return }
-        copyToPasteboard("\"\(cli.path)\" install-cli", mark: "cli")
     }
 
     private func copyHook(for tool: String) {
@@ -479,30 +537,48 @@ struct SettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow("Command-line tool", subtitle: "Adds lockpaw to your PATH so agents can ping. Paste in Terminal.") {
+                SettingsRow("Command-line tool", subtitle: "Installs the lockpaw command into ~/.local/bin.") {
                     Button {
-                        copyInstallCommand()
+                        runAgentSetup(["install-cli"], mark: "cli", treatWarningAsFailure: false)
                     } label: {
-                        Text(copiedItem == "cli" ? "Copied ✓" : "Copy command")
-                            .padding(.horizontal, 8)
+                        Text({
+                            switch agentSetupResults["cli"] {
+                            case .success: return "Installed ✓"
+                            case .failure: return "Failed ⚠︎"
+                            case nil: return "Install"
+                            }
+                        }())
+                        .padding(.horizontal, 8)
                     }
                     .buttonStyle(.bordered)
                 }
 
                 SettingsDivider()
 
-                SettingsRow("Connect your agent", subtitle: "Copy the hook for your CLI agent, then paste it into its config.") {
+                SettingsRow("Connect your agent", subtitle: "One click wires the ping hook into the agent's config (a .bak backup is kept). Gemini copies a snippet to paste.") {
                     HStack(spacing: 8) {
                         ForEach(["claude", "codex", "gemini"], id: \.self) { tool in
                             Button {
-                                copyHook(for: tool)
+                                if tool == "gemini" {
+                                    copyHook(for: tool)
+                                } else {
+                                    runAgentSetup(["install-hook", tool], mark: tool)
+                                }
                             } label: {
-                                Text(copiedItem == tool ? "Copied ✓" : agentLabel(tool))
+                                Text(tool == "gemini" && copiedItem == tool ? "Copied ✓" : agentButtonTitle(for: tool))
                                     .padding(.horizontal, 4)
                             }
                             .buttonStyle(.bordered)
                         }
                     }
+                }
+
+                if let failure = agentSetupFailureMessage {
+                    Text(failure)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 4)
                 }
             }
 

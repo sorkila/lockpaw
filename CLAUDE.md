@@ -1,6 +1,6 @@
 # Lockpaw
 
-macOS menu bar screen guard. Lock/unlock with a hotkey. Dog mascot.
+macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows when your AI agent (Claude Code / Codex / Gemini) needs you. Dog or cat mascot.
 
 ## Quick reference
 
@@ -47,6 +47,8 @@ Builds unsigned → copies to `/tmp` for signing → signs with Developer ID →
 
 **DMG pipeline:** Builds a R/W DMG via `hdiutil`, copies app + Finder alias (not symlink) to `/Applications`, applies AppleScript window styling (background, icon positions, hide dotfiles), copies volume icon AFTER AppleScript (the `update` command deletes `.VolumeIcon.icns`), then converts once to compressed UDZO. No intermediate conversions.
 
+**⚠️ Finder Automation gotcha:** the DMG window-styling AppleScript needs Automation→Finder permission (`-1743 Not authorized to send Apple events to Finder` otherwise). It is auto-denied in non-interactive / Claude Code processes (incl. its `!` shell) — run `build-release.sh` from a real Terminal granted Automation→Finder (System Settings → Privacy & Security → Automation). v1.1.0 shipped with a **plain-DMG fallback** (a `/Applications` symlink + volume icon, no window styling) built by signing+notarizing inline without Finder. Long-term fix: add CI signing secrets so `v*` tags build the branded DMG in the cloud. See `memory/project_release_gotchas.md`.
+
 **After building a release:**
 1. Tag: `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`
 2. Create GitHub Release with DMG: `gh release create vX.Y.Z build/Lockpaw.dmg#Lockpaw.dmg --repo sorkila/lockpaw`
@@ -71,11 +73,11 @@ Lockpaw/
 │   ├── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection/auth unlock preference
 │   └── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
 ├── Views/
-│   ├── LockScreenView.swift        Lock screen — dog, timer, message, fallback auth
+│   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
 │   ├── AmbientScreenView.swift     Secondary display — morphing gradient blobs
 │   ├── MenuBarView.swift           Menu bar dropdown
-│   ├── SettingsView.swift          Native Form, hotkey recorder, auth setting, updates, Buy Me a Coffee
-│   └── OnboardingView.swift        4 steps: welcome, hotkey, accessibility, menu bar
+│   ├── SettingsView.swift          5 tabs; hotkey recorder, auth setting, agent alerts (sound/test/setup), updates, Buy Me a Coffee
+│   └── OnboardingView.swift        5 steps: welcome (mascot), hotkey, accessibility, agent alerts, menu bar
 ├── Utilities/
 │   ├── Constants.swift             App constants, Timing enum, animation presets, formatting
 │   ├── Notifications.swift         All Notification.Name in one place
@@ -118,7 +120,10 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Glow is the hero, not the banner** — `LockScreenView` ramps a bright teal full-screen radial bloom (peak ~0.28, `.plusLighter`) so it reads across a room; notification is secondary. Sound is opt-in (`Constants.agentPingSoundKey`, default off, for shared offices).
 - **The CLI lives in `Contents/SharedSupport/`, NOT `Contents/MacOS/`** — `lockpaw` would collide with the app binary `Lockpaw` on case-insensitive filesystems (DMG/Applications). `install-cli` symlinks it into `~/.local/bin`.
 - **The CLI target sets `PRODUCT_MODULE_NAME: LockpawCLI`** (executable stays `lockpaw`) — its Swift module would otherwise be `lockpaw`, which case-collides with the app's `Lockpaw` module and breaks `@testable import Lockpaw` on a clean build (`unable to resolve module dependency: 'Lockpaw'`). This only surfaces on a clean build (CI), not incremental local ones.
-- **CLI resolves `$HOME`, not `homeDirectoryForCurrentUser`** — the latter ignores `$HOME`; agent CLIs locate their own configs via `$HOME`, so `install-hook` must too. Writers back up (`.bak`), are idempotent, and never clobber an existing `notify`/hook.
+- **CLI resolves `$HOME`, not `homeDirectoryForCurrentUser`** — the latter ignores `$HOME`; agent CLIs locate their own configs via `$HOME`, so `install-hook` must too. Writers back up (`.bak`), are idempotent, and never clobber a foreign `notify`/hook.
+- **`install-hook` is self-contained** — it ensures the `~/.local/bin/lockpaw` symlink exists (`ensureCLISymlink()`, shared with `install-cli`) and writes PATH-independent commands: Claude gets `"$HOME/.local/bin/lockpaw" ping` (hook commands run through a shell, which expands `$HOME`); Codex gets the absolute symlink path in the `notify` argv (executed directly, no shell). Bare `lockpaw ping` silently failed for anyone who skipped `install-cli` or lacked `~/.local/bin` on PATH. Re-running upgrades any older lockpaw entry in place (`isLockpawPingCommand` matches loosely).
+- **`install-hook claude` honors `$CLAUDE_CONFIG_DIR`** — falls back to `~/.claude`. Users running multiple Claude Code profiles (e.g. `CLAUDE_CONFIG_DIR=~/.claude-personal`) get the hook in the right settings.json.
+- **Settings → General has one-click agent setup** — buttons run the bundled CLI (`SharedSupport/lockpaw`) via `Process` off the main thread: Install (install-cli), Claude/Codex (install-hook), Gemini copies the `--print` snippet (its hook schema is still stabilizing). Exit ≠ 0 or a ⚠️ on stdout (foreign Codex `notify`) shows as a failure with the message under the row — the button never claims success for a write that didn't happen. Note: the GUI app launches without `CLAUDE_CONFIG_DIR`, so one-click Claude setup targets `~/.claude`; multi-profile users should run `install-hook` from their terminal.
 - **build-release.sh signs the CLI inside-out** — `Contents/SharedSupport/lockpaw` is signed before the outer app, same `/tmp` copy treatment as the rest (iCloud xattr gotcha).
 
 ### Misc
@@ -133,7 +138,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Fast User Switching** → cancels in-flight auth, keeps lock, re-blocks on session return.
 - **Auth rate limiting** → 30s cooldown after 3 failed attempts.
 - **Lock screen is always dark mode** regardless of appearance setting.
-- **Breathing cycle** is 12 seconds (single master phase drives all animation).
+- **Breathing animation uses one monotonic master phase** — advanced linearly over a ~14-day span (`Constants.Anim.breathePhaseTarget`), one phase-unit ≈ 12s. NOT a `0→1 repeatForever` loop: that wrapped discontinuously and snapped the mascot every 12s. Drives the lock screen and ambient blobs.
 - **Sparkle updater deferred to applicationDidFinishLaunching** — `SPUStandardUpdaterController` created with `startingUpdater: false`, then `updater.start()` called manually.
 - **Sparkle uses inline update UI** — `UpdateCheckViewModel` (SPUUpdaterDelegate) in SettingsView shows spinner, checkmark, or error inline. Sparkle's standard dialogs don't surface in LSUIElement apps.
 - **AccessibilityChecker uses `takeUnretainedValue()`** on `kAXTrustedCheckOptionPrompt` — it's a global CF constant, not a +1 return.
@@ -141,11 +146,11 @@ LockpawCLI/                         (sibling of Lockpaw/)
 ## Design principles
 
 - Minimal, whisper-quiet aesthetic. Low opacities, light font weights, generous negative space.
-- The dog is the hero in normal mode. Everything else recedes.
+- The mascot (dog or cat) is the hero in normal mode. Everything else recedes.
 - Progressive disclosure — lock screen shows chevron + hint, tap reveals fallback auth.
 - Color as signal — teal (safe) → amber (caution) → red (danger). Everything uses the same proximity-based gradient.
 - No information on screen that would help someone bypass the lock (hotkey is not shown).
-- Settings: two sections max (Lock Screen + General). No scrolling needed. Keep support and update controls discoverable without turning Settings into a dashboard.
+- Settings has five focused tabs (Lock Screen, Shortcuts, General, Permissions, About) via `SettingsTabBar`; tabs cross-fade. Keep each tab tight — don't turn Settings into a dashboard. The full design system (tokens, motion, coherence) lives in `DESIGN.md`.
 
 ## Color assets
 
@@ -157,11 +162,11 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ## CI / Distribution
 
-- **GitHub Actions CI** — build + 41 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v6`.
-- **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Handles pre-existing releases gracefully (`gh release view` check before create, `gh release upload --clobber` for DMG).
-- **Latest release** — v1.0.9 prepared 2026-05-25. DMG SHA-256: `48cfa87be14eef13491ef3093bca85c4005cff47ed7c06feb87d27481635a960`.
-- **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. The public appcast should advertise v1.0.9 / build 10 after release.
-- **Homebrew cask** — tap repo at `sorkila/homebrew-lockpaw`, install via `brew tap sorkila/lockpaw && brew install --cask lockpaw`. The tap and checked-in `homebrew/Casks/lockpaw.rb` are current at v1.0.9. Homebrew core submission [Homebrew/homebrew-cask#259932](https://github.com/Homebrew/homebrew-cask/pull/259932) was closed 2026-04-18 for notability requirements; resubmit once the app meets Homebrew's thresholds.
+- **GitHub Actions CI** — build + 50 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v6`.
+- **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Handles pre-existing releases gracefully. **Note:** signing/notarization only runs if signing secrets are set — they are **not** currently configured, so a tag push creates a release but no signed DMG. Sign/notarize locally (or add the secrets).
+- **Latest release** — v1.1.0 released 2026-06-09 (build 11). DMG SHA-256: `c485c1c477077ed174ff2663877cfdf8ec86f54f1b427e3f6b1973177b89f566`. (Shipped with the plain-DMG fallback — see the Finder Automation gotcha under Release.)
+- **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. Advertises **v1.1.0 / build 11**.
+- **Homebrew cask** — tap repo at `sorkila/homebrew-lockpaw`, install via `brew tap sorkila/lockpaw && brew install --cask lockpaw`. The tap and checked-in `homebrew/Casks/lockpaw.rb` are current at **v1.1.0** (uses modern `depends_on macos: :sonoma`). Homebrew core submission [Homebrew/homebrew-cask#259932](https://github.com/Homebrew/homebrew-cask/pull/259932) was closed 2026-04-18 for notability requirements; resubmit once the app meets Homebrew's thresholds.
 - **Raycast extension** — `lockpaw-raycast/`, submitted to Raycast store.
 - **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed.
 - **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
@@ -171,12 +176,14 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **`LICENSE`** — MIT license
 - **`CONTRIBUTING.md`** — Build, test, and PR guidelines for contributors
 - **`CHANGELOG.md`** — Version history and release notes
+- **`DESIGN.md`** — Canonical design system (color/type/space/motion/elevation tokens + coherence checklist) for app, web, and GitHub
+- **`MARKETING.md`** — v1.1.0 go-to-market plan (untracked/local — competitive positioning; not committed)
 - **`.github/ISSUE_TEMPLATE/`** — Bug report and feature request templates (YAML)
 - **`.github/FUNDING.yml`** — Buy Me a Coffee link
 
 ## Repo-level directories
 
-- **`assets/`** — `demo.gif` hero GIF for README (lock/unlock flow, 800px wide)
+- **`assets/`** — `demo.gif` hero GIF for README (lock/unlock flow, 800px wide); `hero.png` agent-angle key art (README hero + website OG + repo social preview)
 - **`scripts/`** — `build-release.sh`, DMG background PNGs, volume icon
 - **`homebrew/`** — Local copy of Homebrew cask (canonical version in `sorkila/homebrew-lockpaw`)
 - **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands)

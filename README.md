@@ -62,20 +62,23 @@ the locked screen **glows from across the room** and a notification fires. You s
 covered (and private) until *you* unlock. The glow is always silent; turn on a sound in
 **Settings → General** if you want one (off by default for shared offices).
 
-Lockpaw ships a tiny `lockpaw` command-line tool that any agent can call. Install it once:
-
-```bash
-lockpaw install-cli          # symlinks lockpaw into ~/.local/bin
-```
-
-Then wire up your agent (writes the config for you; add `--print` to just see the snippet):
+**Easiest:** open **Settings → General → Connect your agent** and click your agent —
+done. Prefer the terminal? Lockpaw ships a tiny `lockpaw` command-line tool
+(`Lockpaw.app/Contents/SharedSupport/lockpaw`); one command wires everything up,
+including installing itself into `~/.local/bin` (add `--print` to just see the snippet):
 
 | Agent | Setup | What it hooks |
 |-------|-------|---------------|
-| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` hooks in `~/.claude/settings.json` |
+| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`) |
 | **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` |
 | **Gemini CLI** | `lockpaw install-hook gemini` | prints a hook snippet for `~/.gemini/settings.json` |
 | **Anything else** | append `; lockpaw ping` to your command | runs after your agent finishes |
+
+The hooks reference `~/.local/bin/lockpaw` by path, so they work no matter what's on
+your PATH, and keep working when the app moves or updates. Re-running `install-hook`
+upgrades older hook entries in place; existing foreign hooks are never clobbered, and
+a `.bak` backup is saved next to any config it touches. `lockpaw install-cli` is still
+there if you just want the command on your PATH.
 
 Under the hood, `lockpaw ping` posts a local notification that Lockpaw listens for — it
 never launches the app if it isn't already running.
