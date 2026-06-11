@@ -12,6 +12,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
 - **Current version:** 1.1.1
+- **Size:** ~10 MB DMG download, ~13 MB installed (2.7 MB of that is Sparkle) — keep README/site/marketing claims in sync with the actual DMG when this changes
 
 ## Build
 
@@ -193,7 +194,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ## Awesome list submissions
 
-Lockpaw has been submitted to the following curated lists. **⚠️ Never delete a fork until its PR is merged** — the 2026-04-19 fork cleanup deleted forks for 13 still-open PRs, which GitHub auto-closed (they were not rejected; each needs a fresh fork + new PR — see MARKETING.md Phase 0):
+Lockpaw has been submitted to the following curated lists. **⚠️ Never delete a fork until its PR is merged** — the 2026-04-19 fork cleanup deleted forks for 13 still-open PRs, which GitHub auto-closed. All 13 were resubmitted from fresh forks on 2026-06-11 (rows below); the forks live under `sorkila/` and stay until each PR merges, then delete:
 
 | Repo | PR | Category | Status |
 |---|---|---|---|
