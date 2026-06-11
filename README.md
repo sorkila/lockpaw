@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Lockpaw demo — lock and unlock with a hotkey" width="600">
+  <img src="assets/demo.gif" alt="Lockpaw demo — lock the screen while your agent works, get a glow when it needs you" width="600">
 </p>
 
 ---
