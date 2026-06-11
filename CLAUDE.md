@@ -169,7 +169,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Latest release** — v1.1.1 released 2026-06-10 (build 12). DMG SHA-256: `94a4ad96650f395e21fcb112c4904621cce1442cfef9d4919feccdbeedbdf9b4`. Full branded DMG (Finder styling worked from Claude Code after granting Ghostty Automation→Finder in System Settings).
 - **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. Advertises **v1.1.1 / build 12**.
 - **Homebrew cask** — tap repo at `sorkila/homebrew-lockpaw`, install via `brew tap sorkila/lockpaw && brew install --cask lockpaw`. The tap and checked-in `homebrew/Casks/lockpaw.rb` are current at **v1.1.1** (uses modern `depends_on macos: :sonoma`). Homebrew core submission [Homebrew/homebrew-cask#259932](https://github.com/Homebrew/homebrew-cask/pull/259932) was closed 2026-04-18 for notability requirements; resubmit once the app meets Homebrew's thresholds.
-- **Raycast extension** — `lockpaw-raycast/`, submitted to Raycast store.
+- **Raycast extension** — **scrapped (2026-06-11)**. Never shipped: store PR [raycast/extensions#26497](https://github.com/raycast/extensions/pull/26497) auto-closed after unanswered review comments; decision is to not pursue the Raycast store. Code still in `lockpaw-raycast/`.
 - **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed (the FTP connection to Inleed occasionally times out; re-run the failed workflow). Hero `demo.mp4` is the annotated agent-ping cut (since 2026-06-11).
 - **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
 
@@ -189,45 +189,45 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **`assets/`** — `demo.gif` hero GIF for README (18s agent-ping story: Claude Code working → lock → teal glow ping → unlock, annotated with Settings-style badges + branded end card; 800px wide, updated 2026-06-11); `hero.png` agent-angle key art (README hero + website OG + repo social preview). The same cut ships as `demo.mp4` on the website (played at 1×; pacing is edited into the cut).
 - **`scripts/`** — `build-release.sh`, DMG background PNGs, volume icon
 - **`homebrew/`** — Local copy of Homebrew cask (canonical version in `sorkila/homebrew-lockpaw`)
-- **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands)
+- **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands) — **scrapped 2026-06-11**, never shipped to the store; safe to delete
 - **`lockpaw-web/`** — local checkout of `sorkila/lockpaw-web` (the live getlockpaw.com site; untracked in this repo, has its own CLAUDE.md)
 - **`website/`** — original site brief + scratch assets from before `lockpaw-web` existed (untracked; superseded — safe to delete)
 
 ## Awesome list submissions
 
-Lockpaw has been submitted to the following curated lists (delete forks after merge):
+Lockpaw has been submitted to the following curated lists. **⚠️ Never delete a fork until its PR is merged** — the 2026-04-19 fork cleanup deleted forks for 13 still-open PRs, which GitHub auto-closed (they were not rejected; each needs a fresh fork + new PR — see MARKETING.md Phase 0):
 
 | Repo | PR | Category | Status |
 |---|---|---|---|
 | `jaywcjlove/awesome-mac` | #1901 | Security Tools | Merged |
 | `jaywcjlove/awesome-swift-macos-apps` | #27 | Security | Merged |
 | `xyNNN/awesome-mac` | #29 | Security | Merged |
-| `phmullins/awesome-macos` | #158 | Security | Pending |
-| `milanaryal/awesome-macos` | #7 | Utilities | Pending |
+| `phmullins/awesome-macos` | #199 | Security | Pending (resubmitted 2026-06-11, was #158) |
+| `milanaryal/awesome-macos` | #12 | Utilities | Pending (resubmitted 2026-06-11, was #7; fork is `sorkila/awesome-macos-milanaryal` due to name collision) |
 | `iCHAIT/awesome-macOS` | #731 | Security | Merged |
-| `open-saas-directory/awesome-native-macosx-apps` | #48 | Security & Privacy | Pending (superseded #47) |
-| `SKaplanOfficial/Mac-Menubar-Megalist` | #11 | Security | Pending (superseded #10) |
+| `open-saas-directory/awesome-native-macosx-apps` | #87 | Security & Privacy | Pending (resubmitted 2026-06-11, was #48) |
+| `SKaplanOfficial/Mac-Menubar-Megalist` | #18 | Security | Pending (resubmitted 2026-06-11, was #11) |
 | `ashishb/osx-and-ios-security-awesome` | #48 | macOS Security | Merged |
 | `jeffreyjackson/mac-apps` | #79 | Mac Interface Exclusives | Merged |
 | `kai5263499/osx-security-awesome` | #24 | Useful tools and guides | Merged |
-| `drduh/macOS-Security-and-Privacy-Guide` | #523 | Related software | Pending |
-| `tonnoz/super-awesome-mac` | #3 | Utils | Pending |
-| `guyzyl/awesome-macos-apps` | #19 | Utilities | Pending |
+| `drduh/macOS-Security-and-Privacy-Guide` | #532 | Related software | Pending (resubmitted 2026-06-11, was #523) |
+| `tonnoz/super-awesome-mac` | #7 | Utils | Pending (resubmitted 2026-06-11, was #3) |
+| `guyzyl/awesome-macos-apps` | #25 | Utilities | Pending (resubmitted 2026-06-11, was #19) |
 | `serhii-londar/open-source-mac-os-apps` | #1062 | Security + Menubar | Closed |
 | `matteocrippa/awesome-swift` | #1899 | Security | Rejected (libraries only) |
 | `Wolg/awesome-swift` | #283 | Security | Closed |
 | `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Rejected (project too new) |
-| `pluja/awesome-privacy` | #731 | Desktop | Pending |
+| `pluja/awesome-privacy` | #859 | Desktop | Pending (resubmitted 2026-06-11, was #731) |
 | `onmyway133/awesome-swiftui` | #29 | Open source apps > macOS | Merged |
-| `linsa-io/macos-apps` | #40 | Utilities | Pending |
-| `johnjago/awesome-free-software` | #100 | Utilities | Pending |
-| `unicodeveloper/awesome-opensource-apps` | #162 | Swift | Pending |
-| `sbilly/awesome-security` | #471 | Endpoint > Authentication | Pending |
-| `ishanvyas22/awesome-open-source-systems` | #16 | Security | Pending |
+| `linsa-io/macos-apps` | #54 | Utilities | Pending (resubmitted 2026-06-11, was #40) |
+| `johnjago/awesome-free-software` | #130 | Utilities | Pending (resubmitted 2026-06-11, was #100) |
+| `unicodeveloper/awesome-opensource-apps` | #183 | Swift | Pending (resubmitted 2026-06-11, was #162; PR also restores the list README clobbered by their #149) |
+| `sbilly/awesome-security` | #594 | Endpoint > Authentication | Pending (resubmitted 2026-06-11, was #471) |
+| `ishanvyas22/awesome-open-source-systems` | #24 | Security | Pending (resubmitted 2026-06-11, was #16) |
 
 ## Directory listings
 
 | Site | Category | Status |
 |---|---|---|
-| MacUpdate | Utilities | Submitted |
-| AlternativeTo | Screen Lock | Submitted |
+| MacUpdate | Security | Resubmitted 2026-06-11 (icon + screenshots), awaiting review — first submission never went live |
+| AlternativeTo | Screen Lock | Live: [alternativeto.net/software/lockpaw](https://alternativeto.net/software/lockpaw/) (zero likes/reviews yet) |

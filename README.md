@@ -35,7 +35,7 @@
 - 🤖 **Agents keep running** — AI coding tools, builds, downloads, SSH sessions
 - 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, or Gemini needs you
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
-- 📦 **3.4 MB** — native Swift, no Electron, no frameworks
+- 📦 **10 MB** — native Swift, no Electron
 - 🚫 **No analytics** — no data leaves your Mac, no accounts, no internet required
 - 🐕🐈 **Dog or cat mode** — choose the metallic origami dog or cat for the lock screen
 - ⚙️ **Native Settings** — lock screen, shortcuts, updates, permissions, and about in one quiet window
