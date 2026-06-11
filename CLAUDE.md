@@ -179,8 +179,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **`CONTRIBUTING.md`** — Build, test, and PR guidelines for contributors
 - **`CHANGELOG.md`** — Version history and release notes
 - **`DESIGN.md`** — Canonical design system (color/type/space/motion/elevation tokens + coherence checklist) for app, web, and GitHub
-- **`MARKETING.md`** — go-to-market plan (untracked/local — competitive positioning; not committed). Hero demo clip shipped 2026-06-11; the channel posts (Reddit/PH/HN/X) in its launch checklist are still open.
-- **`AGENTS.md`** — stale untracked copy of an older CLAUDE.md (May 2026, predates cat mode and agent alerts); refresh or delete before relying on it
+- **`MARKETING.md`** — go-to-market plan (untracked/local — competitive positioning; not committed). Rewritten 2026-06-11 as the v1.1.1 relaunch plan; Phase 0 closed, channel posts (Reddit/PH/HN/X) still open. Reddit battery: `~/Desktop/lockpaw-reddit/POSTS.txt`.
 - **`.github/ISSUE_TEMPLATE/`** — Bug report and feature request templates (YAML)
 - **`.github/FUNDING.yml`** — Buy Me a Coffee link
 
@@ -191,7 +190,6 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **`homebrew/`** — Local copy of Homebrew cask (canonical version in `sorkila/homebrew-lockpaw`)
 - **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands) — **scrapped 2026-06-11**, never shipped to the store; safe to delete
 - **`lockpaw-web/`** — local checkout of `sorkila/lockpaw-web` (the live getlockpaw.com site; untracked in this repo, has its own CLAUDE.md)
-- **`website/`** — original site brief + scratch assets from before `lockpaw-web` existed (untracked; superseded — safe to delete)
 
 ## Awesome list submissions
 
