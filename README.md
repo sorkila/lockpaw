@@ -36,7 +36,7 @@
 - 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, or Gemini needs you
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
 - 📦 **10 MB** — native Swift, no Electron
-- 🚫 **No analytics** — no data leaves your Mac, no accounts, no internet required
+- 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check
 - 🐕🐈 **Dog or cat mode** — choose the metallic origami dog or cat for the lock screen
 - ⚙️ **Native Settings** — lock screen, shortcuts, updates, permissions, and about in one quiet window
 
@@ -48,7 +48,7 @@
 |--------|-----|
 | Lock | Your hotkey (default `Cmd+Shift+L`) |
 | Quick unlock | Same hotkey |
-| Fallback unlock | Tap screen → Touch ID or password |
+| Fallback unlock | Click *Authenticate with Touch ID* at the bottom of the lock screen |
 | Settings | Menu bar → Settings… |
 | Change hotkey | Settings → Shortcuts → click to record |
 | Change mascot | Settings → Lock Screen → Mascot |
@@ -116,7 +116,7 @@ On first launch, grant **Accessibility** when prompted. The Lockpaw icon appears
 
 The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow. One element at a time.
 
-**Calm by default** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer; the pointer slips away after a moment of stillness. The fallback auth button waits quietly at the bottom — always there, never loud. When an agent pings, the screen breathes two slow waves of green, then keeps a soft "your agent needs you" hint until you return.
+**Calm by default** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer; the pointer slips away after a moment of stillness. The fallback auth button waits quietly at the bottom — always there, never loud. When an agent pings, the screen breathes two slow waves of teal, then keeps a soft "your agent needs you" hint until you return.
 
 **Mascots** — a metallic origami dog or cat rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the mascot scales up with a teal bloom and fades away.
 
@@ -204,17 +204,19 @@ Lockpaw/
 │  ├─ InputBlocker                CGEventTap · keyboard/scroll blocking
 │  ├─ HotkeyManager              CGEventTap · global hotkey detection
 │  ├─ OverlayWindowManager       NSWindow · multi-display · shielding level
-│  └─ SleepPreventer             IOKit · idle sleep assertion
+│  ├─ SleepPreventer             IOKit · idle sleep assertion
+│  └─ AgentNotifier              UNUserNotificationCenter · agent-ping notifications
 ├─ Models/
 │  ├─ LockState                  .unlocked → .locking → .locked → .unlocking
 │  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
+│  ├─ PingDecision               Pure agent-ping decision (pulse/notify/sound)
 │  └─ Mascot                     Dog/cat lock screen preference
 ├─ Views/
 │  ├─ LockScreenView             Dog/cat mascot · agent-ping glow · fallback auth
 │  ├─ AmbientScreenView          Secondary display gradient animation
 │  ├─ MenuBarView                Dropdown · lock/unlock/quit
 │  ├─ SettingsView               Native tabs · hotkey recorder · updates
-│  └─ OnboardingView             4-step wizard · hotkey · accessibility
+│  └─ OnboardingView             5-step wizard · hotkey · accessibility · agent alerts
 ├─ Utilities/
 │  ├─ Constants                  Timing, animations, formatting
 │  ├─ Notifications              All Notification.Name in one place
@@ -227,7 +229,7 @@ Lockpaw/
 
 ## CI
 
-Pushes to `main` and PRs run build + 44 unit tests via GitHub Actions. Tagged releases (`v*`) build, sign, notarize, and create GitHub Releases with the DMG attached.
+Pushes to `main` and PRs run build + 50 unit tests via GitHub Actions. Tagged releases (`v*`) build, sign, notarize, and create GitHub Releases with the DMG attached.
 
 <br>
 
