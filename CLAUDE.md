@@ -170,7 +170,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. Advertises **v1.1.1 / build 12**.
 - **Homebrew cask** — tap repo at `sorkila/homebrew-lockpaw`, install via `brew tap sorkila/lockpaw && brew install --cask lockpaw`. The tap and checked-in `homebrew/Casks/lockpaw.rb` are current at **v1.1.1** (uses modern `depends_on macos: :sonoma`). Homebrew core submission [Homebrew/homebrew-cask#259932](https://github.com/Homebrew/homebrew-cask/pull/259932) was closed 2026-04-18 for notability requirements; resubmit once the app meets Homebrew's thresholds.
 - **Raycast extension** — `lockpaw-raycast/`, submitted to Raycast store.
-- **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed.
+- **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed (the FTP connection to Inleed occasionally times out; re-run the failed workflow). Hero `demo.mp4` is the annotated agent-ping cut (since 2026-06-11).
 - **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
 
 ## Repo-level files
@@ -179,17 +179,19 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **`CONTRIBUTING.md`** — Build, test, and PR guidelines for contributors
 - **`CHANGELOG.md`** — Version history and release notes
 - **`DESIGN.md`** — Canonical design system (color/type/space/motion/elevation tokens + coherence checklist) for app, web, and GitHub
-- **`MARKETING.md`** — v1.1.0 go-to-market plan (untracked/local — competitive positioning; not committed)
+- **`MARKETING.md`** — go-to-market plan (untracked/local — competitive positioning; not committed). Hero demo clip shipped 2026-06-11; the channel posts (Reddit/PH/HN/X) in its launch checklist are still open.
+- **`AGENTS.md`** — stale untracked copy of an older CLAUDE.md (May 2026, predates cat mode and agent alerts); refresh or delete before relying on it
 - **`.github/ISSUE_TEMPLATE/`** — Bug report and feature request templates (YAML)
 - **`.github/FUNDING.yml`** — Buy Me a Coffee link
 
 ## Repo-level directories
 
-- **`assets/`** — `demo.gif` hero GIF for README (lock/unlock flow, 800px wide); `hero.png` agent-angle key art (README hero + website OG + repo social preview)
+- **`assets/`** — `demo.gif` hero GIF for README (18s agent-ping story: Claude Code working → lock → teal glow ping → unlock, annotated with Settings-style badges + branded end card; 800px wide, updated 2026-06-11); `hero.png` agent-angle key art (README hero + website OG + repo social preview). The same cut ships as `demo.mp4` on the website (played at 1×; pacing is edited into the cut).
 - **`scripts/`** — `build-release.sh`, DMG background PNGs, volume icon
 - **`homebrew/`** — Local copy of Homebrew cask (canonical version in `sorkila/homebrew-lockpaw`)
 - **`lockpaw-raycast/`** — Raycast extension (TypeScript, 4 commands)
-- **`website/`** — getlockpaw.com marketing site (untracked)
+- **`lockpaw-web/`** — local checkout of `sorkila/lockpaw-web` (the live getlockpaw.com site; untracked in this repo, has its own CLAUDE.md)
+- **`website/`** — original site brief + scratch assets from before `lockpaw-web` existed (untracked; superseded — safe to delete)
 
 ## Awesome list submissions
 
