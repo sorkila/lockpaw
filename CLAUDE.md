@@ -181,8 +181,10 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **`CHANGELOG.md`** — Version history and release notes
 - **`DESIGN.md`** — Canonical design system (color/type/space/motion/elevation tokens + coherence checklist) for app, web, and GitHub
 - **`MARKETING.md`** — go-to-market plan (gitignored/local — competitive positioning; not committed). Rewritten 2026-06-11 as the v1.1.1 relaunch plan; Phase 0 closed. Reddit seeding started 2026-06-11 (r/ClaudeAI + r/vibecoding); PH/HN/X still open. 2026-06-12: "round 2" directory/list section added — ready-to-paste copy for the web-form directories (MacMenuBar, OpenAlternative, Softpedia, …) and the launch-morning platforms (Uneed/Fazier/MicroLaunch/OpenHunts), plus parked ideas (Claude Code plugin, MacPorts). Reddit copy: `~/Desktop/lockpaw-claudeai-post.md` (the old `~/Desktop/lockpaw-reddit/POSTS.txt` is lost). ⚠️ This file is public — Reddit account identity, post history, and per-sub filter intel live in `memory/project_reddit_account.md` only; never name the Reddit account in committed files.
+- **`SECURITY.md`** — Security policy: threat-model caveat, latest-release-only support, private vulnerability reporting (enabled on the repo 2026-06-12)
 - **`.github/ISSUE_TEMPLATE/`** — Bug report and feature request templates (YAML)
 - **`.github/FUNDING.yml`** — Buy Me a Coffee link
+- **`.github/dependabot.yml`** — monthly GitHub Actions version bumps (actions only — no tracked Package.swift/Package.resolved, so SPM/Sparkle can't be tracked; xcodeproj is gitignored)
 
 ## Repo-level directories
 
