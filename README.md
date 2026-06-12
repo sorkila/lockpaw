@@ -180,6 +180,8 @@ For real security: `Ctrl+Cmd+Q`.
 
 </details>
 
+Found a lock or auth bypass anyway? Please [report it privately](SECURITY.md).
+
 <br>
 
 ## URL scheme
@@ -202,10 +204,10 @@ Lockpaw/
 │  ├─ LockController              State machine, lock/unlock orchestration
 │  ├─ Authenticator               LAContext · Touch ID · password fallback
 │  ├─ InputBlocker                CGEventTap · keyboard/scroll blocking
-│  ├─ HotkeyManager              CGEventTap · global hotkey detection
-│  ├─ OverlayWindowManager       NSWindow · multi-display · shielding level
-│  ├─ SleepPreventer             IOKit · idle sleep assertion
-│  └─ AgentNotifier              UNUserNotificationCenter · agent-ping notifications
+│  ├─ HotkeyManager               CGEventTap · global hotkey detection
+│  ├─ OverlayWindowManager        NSWindow · multi-display · shielding level
+│  ├─ SleepPreventer              IOKit · idle sleep assertion
+│  └─ AgentNotifier               UNUserNotificationCenter · agent-ping notifications
 ├─ Models/
 │  ├─ LockState                  .unlocked → .locking → .locked → .unlocking
 │  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
@@ -222,14 +224,17 @@ Lockpaw/
 │  ├─ Notifications              All Notification.Name in one place
 │  └─ AccessibilityChecker       AXIsProcessTrusted + System Settings
 └─ Resources/
-   └─ Assets                     App icon, mascot, menu bar icon, colors
+   └─ Assets                      App icon, mascot, menu bar icon, colors
+
+LockpawCLI/
+└─ main                           `lockpaw` CLI · ping · install-cli · install-hook
 ```
 
 <br>
 
 ## CI
 
-Pushes to `main` and PRs run build + 50 unit tests via GitHub Actions. Tagged releases (`v*`) build, sign, notarize, and create GitHub Releases with the DMG attached.
+Pushes to `main` and PRs run build + 50 unit tests via GitHub Actions. Shipped DMGs are Developer ID-signed, notarized, and published to [GitHub Releases](https://github.com/sorkila/lockpaw/releases); auto-updates are delivered through Sparkle with EdDSA-signed appcasts.
 
 <br>
 

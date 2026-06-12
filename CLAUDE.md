@@ -72,6 +72,7 @@ Lockpaw/
 ├── Models/
 │   ├── LockState.swift             .unlocked → .locking → .locked → .unlocking
 │   ├── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection/auth unlock preference
+│   ├── Mascot.swift                Dog/cat lock-screen mascot preference
 │   └── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
 ├── Views/
 │   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
