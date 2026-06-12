@@ -19,6 +19,6 @@ build/
 .AppleDouble
 .LSOverride
 
-# Raycast
-lockpaw-raycast/node_modules/
-lockpaw-raycast/dist/
+# Local-only (never commit)
+MARKETING.md
+lockpaw-web/
