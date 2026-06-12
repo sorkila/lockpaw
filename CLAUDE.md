@@ -174,6 +174,8 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Raycast extension** — **scrapped (2026-06-11)**. Never shipped: store PR [raycast/extensions#26497](https://github.com/raycast/extensions/pull/26497) auto-closed after unanswered review comments; decision is to not pursue the Raycast store. The `lockpaw-raycast/` code was deleted from the repo 2026-06-12 (recoverable from git history if ever needed).
 - **Website** — `sorkila/lockpaw-web`, deployed via FTP GitHub Action to Inleed (the FTP connection to Inleed occasionally times out; re-run the failed workflow). Hero `demo.mp4` is the annotated agent-ping cut (since 2026-06-11).
 - **GitHub Sponsors** — `.github/FUNDING.yml` links to Buy Me a Coffee (eriknielsen)
+- **Git history rewritten 2026-06-12** (author-email normalization to the sorkila identity via `git filter-repo`; file trees byte-identical). All pre-rewrite SHAs are invalid — **re-clone stale clones, never pull/merge across the rewrite**. Tags/releases/appcast/cask were unaffected (they bind to tag names + asset URLs). Old commits remain reachable on GitHub only via immutable `refs/pull/*`; purging those would need a GitHub Support request.
+- **Repo settings** (2026-06-12): wiki + Projects tabs disabled, private vulnerability reporting enabled (SECURITY.md routes reports there).
 
 ## Repo-level files
 
