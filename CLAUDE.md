@@ -180,7 +180,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **`CONTRIBUTING.md`** — Build, test, and PR guidelines for contributors
 - **`CHANGELOG.md`** — Version history and release notes
 - **`DESIGN.md`** — Canonical design system (color/type/space/motion/elevation tokens + coherence checklist) for app, web, and GitHub
-- **`MARKETING.md`** — go-to-market plan (untracked/local — competitive positioning; not committed). Rewritten 2026-06-11 as the v1.1.1 relaunch plan; Phase 0 closed, channel posts (Reddit/PH/HN/X) still open. Reddit battery: `~/Desktop/lockpaw-reddit/POSTS.txt`.
+- **`MARKETING.md`** — go-to-market plan (untracked/local — competitive positioning; not committed). Rewritten 2026-06-11 as the v1.1.1 relaunch plan; Phase 0 closed. Reddit seeding started 2026-06-11 (r/ClaudeAI + r/vibecoding); PH/HN/X still open. 2026-06-12: "round 2" directory/list section added — ready-to-paste copy for the web-form directories (MacMenuBar, OpenAlternative, Softpedia, …) and the launch-morning platforms (Uneed/Fazier/MicroLaunch/OpenHunts), plus parked ideas (Claude Code plugin, MacPorts). Reddit copy: `~/Desktop/lockpaw-claudeai-post.md` (the old `~/Desktop/lockpaw-reddit/POSTS.txt` is lost). ⚠️ This file is public — Reddit account identity, post history, and per-sub filter intel live in `memory/project_reddit_account.md` only; never name the Reddit account in committed files.
 - **`.github/ISSUE_TEMPLATE/`** — Bug report and feature request templates (YAML)
 - **`.github/FUNDING.yml`** — Buy Me a Coffee link
 
@@ -223,6 +223,9 @@ Lockpaw has been submitted to the following curated lists. **⚠️ Never delete
 | `unicodeveloper/awesome-opensource-apps` | #183 | Swift | Pending (resubmitted 2026-06-11, was #162; PR also restores the list README clobbered by their #149) |
 | `sbilly/awesome-security` | #594 | Endpoint > Authentication | Pending (resubmitted 2026-06-11, was #471) |
 | `ishanvyas22/awesome-open-source-systems` | #24 | Security | Pending (resubmitted 2026-06-11, was #16) |
+| `Piebald-AI/awesome-gemini-cli` | #58 | Development Tools & Utilities | Pending (submitted 2026-06-12; list merges actively) |
+| `RoggeOhta/awesome-codex-cli` | #88 | GUI & Desktop Apps | Pending (submitted 2026-06-12; ⚠️ list has never merged a PR) |
+| `hesreallyhim/awesome-claude-code` | issue #2015 | Tooling | Pending (submitted 2026-06-12 via their issue form — PRs banned; bot validation passed, awaiting maintainer review) |
 
 ## Directory listings
 
@@ -230,3 +233,5 @@ Lockpaw has been submitted to the following curated lists. **⚠️ Never delete
 |---|---|---|
 | MacUpdate | Security | Resubmitted 2026-06-11 (icon + screenshots), awaiting review — first submission never went live |
 | AlternativeTo | Screen Lock | Live: [alternativeto.net/software/lockpaw](https://alternativeto.net/software/lockpaw/) (zero likes/reviews yet) |
+
+Queued (browser forms, ready-to-paste copy in MARKETING.md round-2 section): MacMenuBar.com, macosmenubar.com, OpenAlternative, opensourcealternative.to, Softpedia — anytime; Uneed/Fazier/MicroLaunch/OpenHunts — save for the coordinated launch morning. Repo topics include `claude-code` (added 2026-06-12) since auto-curated lists scrape by topic. Skipped deliberately: jqueryscript/awesome-claude-code (never merges PRs), Console.dev (pre-1.0 tools only), AI-tool directories (wrong category).
