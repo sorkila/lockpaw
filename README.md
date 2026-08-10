@@ -238,6 +238,12 @@ Pushes to `main` and PRs run build + 50 unit tests via GitHub Actions. Shipped D
 
 <br>
 
+## Pairs with
+
+[**Tintpad**](https://tintpad.com) is the other half of the loop: one hotkey opens your terminal at the right repo with Claude Code, Codex, or any agent already running. Tintpad starts your agents. Lockpaw covers for you while they run. Also free, also MIT.
+
+<br>
+
 ---
 
 <p align="center">
