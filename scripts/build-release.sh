@@ -132,7 +132,21 @@ SetFile -a C "${MOUNT_DIR}"
 
 # Convert to compressed read-only (single conversion, no metadata loss)
 sync
-hdiutil detach "${MOUNT_DIR}"
+# Finder holds the volume briefly after the styling AppleScript, so a single
+# detach races and fails with "Resource busy". Retry, then force as a last
+# resort — contents are already synced, so force loses nothing.
+detached=0
+for attempt in $(seq 1 10); do
+  if hdiutil detach "${MOUNT_DIR}" 2>/dev/null; then
+    detached=1
+    break
+  fi
+  echo "   Volume busy, retrying detach (${attempt}/10)..."
+  sleep 2
+done
+if [ "${detached}" -eq 0 ]; then
+  hdiutil detach "${MOUNT_DIR}" -force
+fi
 hdiutil convert "${RW_DMG}" -format UDZO -o "${DMG_PATH}"
 rm "${RW_DMG}"
 rm -rf "${DMG_DIR}"
