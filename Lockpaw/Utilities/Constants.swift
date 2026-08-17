@@ -30,6 +30,15 @@ enum Constants {
         static let pingGlowRest: CGFloat = 0.08                       // faint glow held after the breaths until unlock — paired with the "agent needs you" hint
         static let cursorIdleHide: TimeInterval = 3.0                 // seconds of stillness before the pointer hides again while locked
         static let agentSetupMinSpin: TimeInterval = 1.2              // seconds; floor on the Settings connect-spinner so success registers
+
+        // Fade to black — dim the lock UI to pure black after inactivity (OLED burn-in guard).
+        static let fadeToBlackDuration: TimeInterval = 6.0            // visible → black fade; the one sanctioned >1.6s motion token (DESIGN.md §4)
+        static let attentionFadeIn: TimeInterval = 1.2                // black → attention pulse ease-in
+        static let attentionFadeOut: TimeInterval = 2.0               // attention → black settle
+        /// Time spent in .attention before settling back to black: entrance plus the
+        /// same breath budget as the lock-screen ping glow.
+        static let attentionPulse: TimeInterval = attentionFadeIn + Double(pingPulseCount) * pingPulsePeriod
+        static let physicalInputThrottle: TimeInterval = 0.5          // min spacing of physical-input signals (tap posts + timer re-arm churn)
     }
 
     enum Anim {

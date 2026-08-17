@@ -110,6 +110,8 @@ struct SettingsView: View {
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
+    @AppStorage(FadeToBlack.enabledKey) private var fadeToBlackEnabled = FadeToBlack.defaultEnabled
+    @AppStorage(FadeToBlack.storageKey) private var fadeToBlackDelay = FadeToBlack.defaultValue
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
 
@@ -140,7 +142,7 @@ struct SettingsView: View {
         }
         .tint(settingsAccentColor)
         .accentColor(settingsAccentColor)
-        .frame(minWidth: 760, idealWidth: 820, minHeight: 720, idealHeight: 740)
+        .frame(minWidth: 760, idealWidth: 820, minHeight: 720, idealHeight: 820)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             NSApp.setActivationPolicy(.regular)
@@ -226,6 +228,24 @@ struct SettingsView: View {
                         options: [("Ambient", 0), ("Mirror", 1)],
                         width: 220
                     )
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Fade to black", subtitle: "Fade to pure black while you're away. Agent pings still glow.") {
+                    SettingsCheckbox(isOn: $fadeToBlackEnabled)
+                }
+
+                if fadeToBlackEnabled {
+                    SettingsDivider()
+
+                    SettingsRow("Fade delay") {
+                        SettingsSegmentedControl(
+                            selection: $fadeToBlackDelay,
+                            options: FadeToBlack.allCases.map { ($0.displayName, $0.rawValue) },
+                            width: 210
+                        )
+                    }
                 }
 
                 SettingsDivider()
@@ -723,7 +743,9 @@ struct SettingsView: View {
         window.title = "Lockpaw Settings"
         window.minSize = NSSize(width: 760, height: 720)
 
-        let targetSize = NSSize(width: 820, height: 740)
+        // Tall enough for the tallest tab state (Lock Screen with Fade to black
+        // expanded, ≈807pt); small screens fall back to the page ScrollView.
+        let targetSize = NSSize(width: 820, height: 820)
         let contentSize = window.contentView?.frame.size ?? .zero
         if contentSize.width < targetSize.width || contentSize.height < targetSize.height {
             window.setContentSize(targetSize)
