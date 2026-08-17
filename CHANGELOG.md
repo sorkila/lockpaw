@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.0] - 2026-08-17
+
+### Added
+
+- Agent alerts now cover six agents. One-command (and one-click in Settings) hook setup for **Cursor** (`stop` hook in `~/.cursor/hooks.json`), **GitHub Copilot CLI** (`agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json`, honors `$COPILOT_HOME`), and **Aider** (`notifications-command` in `~/.aider.conf.yml`) — alongside the existing Claude Code and Codex support.
+- `lockpaw install-hook gemini` now writes the hook for you. Gemini CLI's hook system has stabilized (`Notification` + `AfterAgent` in `~/.gemini/settings.json`), so the copy-a-snippet step is gone from both the CLI and Settings.
+
+### Fixed
+
+- Config backups (`.bak`) are now refreshed on every write — previously a stale earlier backup could survive a later Codex config rewrite.
+
 ## [1.1.1] - 2026-06-10
 
 ### Added
