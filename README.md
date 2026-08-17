@@ -33,7 +33,7 @@
 - 🔒 **Touch ID unlock** — or password fallback, just like your Mac
 - 🖥️ **Every screen covered** — all displays, auto-detects new monitors
 - 🤖 **Agents keep running** — AI coding tools, builds, downloads, SSH sessions
-- 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, or Gemini needs you
+- 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot, or Aider needs you
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
 - 📦 **10 MB** — native Swift, no Electron
 - 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check
@@ -71,7 +71,10 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 |-------|-------|---------------|
 | **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`) |
 | **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` |
-| **Gemini CLI** | `lockpaw install-hook gemini` | prints a hook snippet for `~/.gemini/settings.json` |
+| **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json` |
+| **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` |
+| **Copilot CLI** | `lockpaw install-hook copilot` | `agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json` (honors `$COPILOT_HOME`) |
+| **Aider** | `lockpaw install-hook aider` | `notifications-command` in `~/.aider.conf.yml` |
 | **Anything else** | append `; lockpaw ping` to your command | runs after your agent finishes |
 
 The hooks reference `~/.local/bin/lockpaw` by path, so they work no matter what's on

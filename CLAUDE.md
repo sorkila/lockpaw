@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.1.1
+- **Current version:** 1.2.0
 - **Size:** ~10 MB DMG download, ~13 MB installed (2.7 MB of that is Sparkle) — keep README/site/marketing claims in sync with the actual DMG when this changes
 
 ## Build
@@ -96,7 +96,7 @@ LockpawTests/                       (sibling of Lockpaw/)
 └── AgentPingTests.swift            PingDecision branching: locked/unlocked × sound (6 tests)
 
 LockpawCLI/                         (sibling of Lockpaw/)
-└── main.swift                      `lockpaw` CLI: ping / install-cli / install-hook <claude|codex|gemini>
+└── main.swift                      `lockpaw` CLI: ping / install-cli / install-hook <claude|codex|gemini|cursor|copilot|aider>
 ```
 
 ## Architecture decisions
@@ -125,9 +125,10 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **The CLI lives in `Contents/SharedSupport/`, NOT `Contents/MacOS/`** — `lockpaw` would collide with the app binary `Lockpaw` on case-insensitive filesystems (DMG/Applications). `install-cli` symlinks it into `~/.local/bin`.
 - **The CLI target sets `PRODUCT_MODULE_NAME: LockpawCLI`** (executable stays `lockpaw`) — its Swift module would otherwise be `lockpaw`, which case-collides with the app's `Lockpaw` module and breaks `@testable import Lockpaw` on a clean build (`unable to resolve module dependency: 'Lockpaw'`). This only surfaces on a clean build (CI), not incremental local ones.
 - **CLI resolves `$HOME`, not `homeDirectoryForCurrentUser`** — the latter ignores `$HOME`; agent CLIs locate their own configs via `$HOME`, so `install-hook` must too. Writers back up (`.bak`), are idempotent, and never clobber a foreign `notify`/hook.
-- **`install-hook` is self-contained** — it ensures the `~/.local/bin/lockpaw` symlink exists (`ensureCLISymlink()`, shared with `install-cli`) and writes PATH-independent commands: Claude gets `"$HOME/.local/bin/lockpaw" ping` (hook commands run through a shell, which expands `$HOME`); Codex gets the absolute symlink path in the `notify` argv (executed directly, no shell). Bare `lockpaw ping` silently failed for anyone who skipped `install-cli` or lacked `~/.local/bin` on PATH. Re-running upgrades any older lockpaw entry in place (`isLockpawPingCommand` matches loosely).
+- **`install-hook` is self-contained** — it ensures the `~/.local/bin/lockpaw` symlink exists (`ensureCLISymlink()`, shared with `install-cli`) and writes PATH-independent commands: Claude/Gemini/Copilot get `"$HOME/.local/bin/lockpaw" ping` (their hook commands run through a shell, which expands `$HOME` — Copilot via the `bash` key); Codex, Cursor, and Aider get the literal absolute symlink path (Codex `notify` is argv-executed with no shell; Cursor and Aider don't document a shell guarantee, and the literal path works either way). Bare `lockpaw ping` silently failed for anyone who skipped `install-cli` or lacked `~/.local/bin` on PATH. Re-running upgrades any older lockpaw entry in place (`isLockpawPingCommand` matches loosely).
+- **Six hookable agents (since v1.2.0)** — Claude (`Notification`+`Stop`, `~/.claude/settings.json`), Codex (`notify`, `~/.codex/config.toml` — its richer hooks.json is still feature-flagged upstream, so `notify` stays), Gemini (`Notification`+`AfterAgent`, `~/.gemini/settings.json` — adopted Claude's hook schema, shared merge via `mergingPingHook`), Cursor (`stop`, `~/.cursor/hooks.json` — flat schema, command at group level), Copilot CLI (`agentStop`+`notification` in an owned file `~/.copilot/hooks/lockpaw.json`, honors `$COPILOT_HOME` — the CLI loads every `*.json` in that dir, so no foreign-config merging), Aider (`notifications: true` + `notifications-command` in `~/.aider.conf.yml`, dashed YAML keys per aider's sample config; both keys written because docs don't promise the command implies enabling).
 - **`install-hook claude` honors `$CLAUDE_CONFIG_DIR`** — falls back to `~/.claude`. Users running multiple Claude Code profiles (e.g. `CLAUDE_CONFIG_DIR=~/.claude-personal`) get the hook in the right settings.json.
-- **Settings → General has one-click agent setup** — buttons run the bundled CLI (`SharedSupport/lockpaw`) via `Process` off the main thread: Install (install-cli), Claude/Codex (install-hook), Gemini copies the `--print` snippet (its hook schema is still stabilizing). Exit ≠ 0 or a ⚠️ on stdout (foreign Codex `notify`) shows as a failure with the message under the row — the button never claims success for a write that didn't happen. Note: the GUI app launches without `CLAUDE_CONFIG_DIR`, so one-click Claude setup targets `~/.claude`; multi-profile users should run `install-hook` from their terminal.
+- **Settings → General has one-click agent setup** — buttons run the bundled CLI (`SharedSupport/lockpaw`) via `Process` off the main thread: Install (install-cli) plus a 3×2 grid of Claude/Codex/Gemini/Cursor/Copilot/Aider (install-hook — all real writers since v1.2.0; the old Gemini copy-snippet path and its pasteboard plumbing are gone). Exit ≠ 0 or a ⚠️ on stdout (foreign Codex `notify` / Aider `notifications-command`) shows as a failure with the message under the row — the button never claims success for a write that didn't happen. Note: the GUI app launches without `CLAUDE_CONFIG_DIR`, so one-click Claude setup targets `~/.claude`; multi-profile users should run `install-hook` from their terminal.
 - **build-release.sh signs the CLI inside-out** — `Contents/SharedSupport/lockpaw` is signed before the outer app, same `/tmp` copy treatment as the rest (iCloud xattr gotcha).
 
 ### Misc

@@ -1,8 +1,8 @@
 import Foundation
 
 // The `lockpaw` command-line tool. Lets AI coding agents (Claude Code, Codex,
-// Gemini CLI, or anything scriptable) ping Lockpaw so the locked screen glows and
-// a notification fires when they need you.
+// Gemini CLI, Cursor, Copilot CLI, Aider, or anything scriptable) ping Lockpaw so
+// the locked screen glows and a notification fires when they need you.
 //
 // Transport: a DistributedNotificationCenter message — NOT the lockpaw:// URL
 // scheme — so a background ping never launches the app when it isn't running.
@@ -31,7 +31,8 @@ func printUsage() {
     USAGE:
       lockpaw ping                  Signal Lockpaw (locked screen glows + notification)
       lockpaw install-cli           Symlink this tool into your PATH (~/.local/bin)
-      lockpaw install-hook <tool>   Wire up an agent. <tool>: claude | codex | gemini
+      lockpaw install-hook <tool>   Wire up an agent. <tool>: claude | codex | gemini |
+                                    cursor | copilot | aider
                                     Add --print to show the snippet without writing it.
       lockpaw --help                Show this help
 
@@ -117,15 +118,21 @@ func installCLI() {
 
 // MARK: - install-hook
 
-func writeJSON(_ object: [String: Any], to url: URL, label: String) {
+/// Refresh `<file>.bak` with the current contents, if the file exists.
+func backupFile(at url: URL) {
     let fm = FileManager.default
+    guard fm.fileExists(atPath: url.path) else { return }
+    let backup = url.appendingPathExtension("bak")
+    try? fm.removeItem(at: backup)
+    try? fm.copyItem(at: url, to: backup)
+}
+
+func writeJSON(_ object: [String: Any], to url: URL, label: String) {
     do {
-        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fm.fileExists(atPath: url.path) {
-            let backup = url.appendingPathExtension("bak")
-            try? fm.removeItem(at: backup)
-            try? fm.copyItem(at: url, to: backup)
-        }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        backupFile(at: url)
         let data = try JSONSerialization.data(
             withJSONObject: object,
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -135,6 +142,14 @@ func writeJSON(_ object: [String: Any], to url: URL, label: String) {
     } catch {
         fail("Could not write \(label) config: \(error.localizedDescription)")
     }
+}
+
+func readJSONObject(at url: URL) -> [String: Any] {
+    guard let data = try? Data(contentsOf: url),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        return [:]
+    }
+    return obj
 }
 
 /// Claude Code's config directory: $CLAUDE_CONFIG_DIR if set (users running multiple
@@ -157,38 +172,26 @@ func isLockpawPingCommand(_ command: String) -> Bool {
     command.contains("lockpaw") && command.contains("ping")
 }
 
-func installClaudeHook(printOnly: Bool) {
-    let url = claudeConfigDirectory().appendingPathComponent("settings.json")
-    let escaped = claudePingCommand.replacingOccurrences(of: "\"", with: "\\\"")
-    let snippet = """
-    Add to \(url.path):
-
-      "hooks": {
-        "Notification": [{ "hooks": [{ "type": "command", "command": "\(escaped)" }] }],
-        "Stop":         [{ "hooks": [{ "type": "command", "command": "\(escaped)" }] }]
-      }
-    """
-    if printOnly { print(snippet); return }
-
-    // The command points at the ~/.local/bin symlink, so make sure it exists.
+/// The command points at the ~/.local/bin symlink; bail out if it can't be created.
+func requireCLISymlink() {
     do {
         try ensureCLISymlink()
     } catch {
         fail("Could not install the lockpaw command: \(error.localizedDescription)")
     }
+}
 
-    var root: [String: Any] = [:]
-    if let data = try? Data(contentsOf: url),
-       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-        root = obj
-    }
-
+/// Merge a lockpaw ping into a Claude Code-style `hooks` object — the schema Gemini
+/// CLI adopted too: each event maps to an array of groups, each group holding a
+/// `hooks` array of {type, command} entries. Upgrades any existing lockpaw entry in
+/// place (older versions wrote a bare `lockpaw ping`, which silently fails when
+/// ~/.local/bin isn't on PATH); never touches foreign hooks.
+func mergingPingHook(into root: [String: Any], events: [String]) -> [String: Any] {
+    var root = root
     var hooks = root["hooks"] as? [String: Any] ?? [:]
-    for event in ["Notification", "Stop"] {
+    for event in events {
         var groups = hooks[event] as? [[String: Any]] ?? []
         var present = false
-        // Upgrade any existing lockpaw entry in place — older versions wrote a bare
-        // `lockpaw ping`, which silently fails when ~/.local/bin isn't on PATH.
         for g in groups.indices {
             guard var inner = groups[g]["hooks"] as? [[String: Any]] else { continue }
             for h in inner.indices {
@@ -205,7 +208,32 @@ func installClaudeHook(printOnly: Bool) {
         hooks[event] = groups
     }
     root["hooks"] = hooks
-    writeJSON(root, to: url, label: "Claude Code")
+    return root
+}
+
+func claudeStyleSnippet(path: String, events: [String]) -> String {
+    let escaped = claudePingCommand.replacingOccurrences(of: "\"", with: "\\\"")
+    let width = events.map(\.count).max() ?? 0
+    let lines = events.map { event in
+        let padding = String(repeating: " ", count: width - event.count)
+        return "    \"\(event)\": \(padding)[{ \"hooks\": [{ \"type\": \"command\", \"command\": \"\(escaped)\" }] }]"
+    }
+    return """
+    Add to \(path):
+
+      "hooks": {
+    \(lines.joined(separator: ",\n"))
+      }
+    """
+}
+
+func installClaudeHook(printOnly: Bool) {
+    let url = claudeConfigDirectory().appendingPathComponent("settings.json")
+    let events = ["Notification", "Stop"]
+    if printOnly { print(claudeStyleSnippet(path: url.path, events: events)); return }
+    requireCLISymlink()
+    writeJSON(mergingPingHook(into: readJSONObject(at: url), events: events),
+              to: url, label: "Claude Code")
 }
 
 func installCodexHook(printOnly: Bool) {
@@ -218,11 +246,7 @@ func installCodexHook(printOnly: Bool) {
         return
     }
 
-    do {
-        try ensureCLISymlink()
-    } catch {
-        fail("Could not install the lockpaw command: \(error.localizedDescription)")
-    }
+    requireCLISymlink()
 
     let fm = FileManager.default
     let url = homeDirectory().appendingPathComponent(".codex/config.toml")
@@ -233,10 +257,7 @@ func installCodexHook(printOnly: Bool) {
         if isLockpawPingCommand(String(contents[existing])) {
             if contents[existing] != Substring(line) {
                 contents.replaceSubrange(existing, with: line)
-                if fm.fileExists(atPath: url.path) {
-                    try? fm.removeItem(at: url.appendingPathExtension("bak"))
-                    try? fm.copyItem(at: url, to: url.appendingPathExtension("bak"))
-                }
+                backupFile(at: url)
                 do {
                     try contents.write(to: url, atomically: true, encoding: .utf8)
                     print("✓ Updated notify hook in Codex config at \(url.path)")
@@ -258,9 +279,7 @@ func installCodexHook(printOnly: Bool) {
 
     do {
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fm.fileExists(atPath: url.path) {
-            try? fm.copyItem(at: url, to: url.appendingPathExtension("bak"))
-        }
+        backupFile(at: url)
         if !contents.isEmpty && !contents.hasSuffix("\n") { contents += "\n" }
         contents += line + "\n"
         try contents.write(to: url, atomically: true, encoding: .utf8)
@@ -270,17 +289,149 @@ func installCodexHook(printOnly: Bool) {
     }
 }
 
-func installGeminiHook() {
-    // Gemini CLI's hook schema is still stabilizing, so we print rather than write.
-    print("""
-    Gemini CLI hooks live in ~/.gemini/settings.json. Add a hook on a completion or
-    notification event that runs:
+func installGeminiHook(printOnly: Bool) {
+    // Gemini CLI adopted Claude Code's hook schema (stable since mid-2026), so the
+    // same merge applies. AfterAgent fires once per turn after the final response;
+    // Notification fires on system alerts like tool-permission prompts.
+    let url = homeDirectory().appendingPathComponent(".gemini/settings.json")
+    let events = ["Notification", "AfterAgent"]
+    if printOnly { print(claudeStyleSnippet(path: url.path, events: events)); return }
+    requireCLISymlink()
+    writeJSON(mergingPingHook(into: readJSONObject(at: url), events: events),
+              to: url, label: "Gemini CLI")
+}
 
-        lockpaw ping
+func installCursorHook(printOnly: Bool) {
+    // Cursor's hooks.json is flat — each event maps straight to [{command}]; `stop`
+    // fires when the agent loop completes (in the IDE and the CLI). Cursor doesn't
+    // document a shell guarantee for hook commands, so the command uses the literal
+    // symlink path: no $HOME expansion needed, and macOS home paths have no spaces.
+    let linkPath = homeDirectory().appendingPathComponent(".local/bin/lockpaw").path
+    let command = "\(linkPath) ping"
+    let url = homeDirectory().appendingPathComponent(".cursor/hooks.json")
+    let snippet = """
+    Add to \(url.path):
 
-    See https://geminicli.com/docs/hooks/ for the current schema, then point the hook
-    command at `lockpaw ping`.
-    """)
+      { "version": 1, "hooks": { "stop": [{ "command": "\(command)" }] } }
+    """
+    if printOnly { print(snippet); return }
+    requireCLISymlink()
+
+    var root = readJSONObject(at: url)
+    if root["version"] == nil { root["version"] = 1 }
+    var hooks = root["hooks"] as? [String: Any] ?? [:]
+    var groups = hooks["stop"] as? [[String: Any]] ?? []
+    var present = false
+    for g in groups.indices {
+        if let cmd = groups[g]["command"] as? String, isLockpawPingCommand(cmd) {
+            groups[g]["command"] = command
+            present = true
+        }
+    }
+    if !present { groups.append(["command": command]) }
+    hooks["stop"] = groups
+    root["hooks"] = hooks
+    writeJSON(root, to: url, label: "Cursor")
+}
+
+/// Copilot CLI's hooks directory: $COPILOT_HOME/hooks if set, else ~/.copilot/hooks.
+func copilotHooksDirectory() -> URL {
+    if let dir = ProcessInfo.processInfo.environment["COPILOT_HOME"], !dir.isEmpty {
+        return URL(fileURLWithPath: (dir as NSString).expandingTildeInPath, isDirectory: true)
+            .appendingPathComponent("hooks", isDirectory: true)
+    }
+    return homeDirectory().appendingPathComponent(".copilot/hooks", isDirectory: true)
+}
+
+func installCopilotHook(printOnly: Bool) {
+    // Copilot CLI loads every *.json in its hooks directory, so Lockpaw owns a whole
+    // file — nothing foreign to merge with or clobber, and rewriting it is idempotent.
+    // agentStop = turn finished; notification = permission prompts and other alerts.
+    // The `bash` key guarantees a shell on macOS, so the $HOME form works.
+    let url = copilotHooksDirectory().appendingPathComponent("lockpaw.json")
+    let escaped = claudePingCommand.replacingOccurrences(of: "\"", with: "\\\"")
+    let snippet = """
+    Write \(url.path):
+
+      {
+        "version": 1,
+        "hooks": {
+          "agentStop":    [{ "type": "command", "bash": "\(escaped)" }],
+          "notification": [{ "type": "command", "bash": "\(escaped)" }]
+        }
+      }
+    """
+    if printOnly { print(snippet); return }
+    requireCLISymlink()
+    let hook: [String: Any] = ["type": "command", "bash": claudePingCommand]
+    writeJSON(
+        ["version": 1, "hooks": ["agentStop": [hook], "notification": [hook]]],
+        to: url, label: "Copilot CLI"
+    )
+}
+
+func installAiderHook(printOnly: Bool) {
+    // Aider has a single notification moment — the LLM finished and awaits input —
+    // configured in ~/.aider.conf.yml. The docs don't promise notifications-command
+    // implies notifications, so write both keys. Literal symlink path, same
+    // reasoning as Cursor.
+    let linkPath = homeDirectory().appendingPathComponent(".local/bin/lockpaw").path
+    let enableLine = "notifications: true"
+    let commandLine = "notifications-command: \"\(linkPath) ping\""
+    let url = homeDirectory().appendingPathComponent(".aider.conf.yml")
+    if printOnly {
+        print("Add to \(url.path):\n\n  \(enableLine)\n  \(commandLine)")
+        return
+    }
+    requireCLISymlink()
+
+    var contents = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    var changed = false
+
+    if let existing = contents.range(of: #"(?m)^\s*notifications-command\s*:.*$"#, options: .regularExpression) {
+        // Upgrade an older lockpaw command in place; never clobber someone else's.
+        guard isLockpawPingCommand(String(contents[existing])) else {
+            print("""
+            ⚠️  \(url.path) already defines `notifications-command` — leaving it untouched.
+            To route Aider through Lockpaw, set it to:
+                \(commandLine)
+            """)
+            return
+        }
+        if contents[existing] != Substring(commandLine) {
+            contents.replaceSubrange(existing, with: commandLine)
+            changed = true
+        }
+    } else {
+        if !contents.isEmpty && !contents.hasSuffix("\n") { contents += "\n" }
+        contents += commandLine + "\n"
+        changed = true
+    }
+
+    if let enabled = contents.range(of: #"(?m)^\s*notifications\s*:.*$"#, options: .regularExpression) {
+        if contents[enabled] != Substring(enableLine) {
+            contents.replaceSubrange(enabled, with: enableLine)
+            changed = true
+        }
+    } else {
+        contents = contents.replacingOccurrences(of: commandLine, with: enableLine + "\n" + commandLine)
+        changed = true
+    }
+
+    guard changed else {
+        print("✓ Aider config already routes notifications through Lockpaw.")
+        return
+    }
+    do {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        backupFile(at: url)
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        print("✓ Updated Aider config at \(url.path)")
+    } catch {
+        fail("Could not write Aider config: \(error.localizedDescription)")
+    }
 }
 
 // MARK: - dispatch
@@ -294,14 +445,17 @@ case "install-cli":
     installCLI()
 case "install-hook":
     guard args.count >= 2 else {
-        fail("Usage: lockpaw install-hook <claude|codex|gemini> [--print]")
+        fail("Usage: lockpaw install-hook <claude|codex|gemini|cursor|copilot|aider> [--print]")
     }
     let printOnly = args.contains("--print")
     switch args[1] {
     case "claude": installClaudeHook(printOnly: printOnly)
     case "codex": installCodexHook(printOnly: printOnly)
-    case "gemini": installGeminiHook()
-    default: fail("Unknown tool '\(args[1])'. Use claude, codex, or gemini.")
+    case "gemini": installGeminiHook(printOnly: printOnly)
+    case "cursor": installCursorHook(printOnly: printOnly)
+    case "copilot": installCopilotHook(printOnly: printOnly)
+    case "aider": installAiderHook(printOnly: printOnly)
+    default: fail("Unknown tool '\(args[1])'. Use claude, codex, gemini, cursor, copilot, or aider.")
     }
 case "--help", "-h", "help", nil:
     printUsage()

@@ -322,7 +322,7 @@ struct OnboardingView: View {
                 Text("Lockpaw taps you")
                     .font(.title2.weight(.semibold))
 
-                Text("Lock your screen and walk away. When Claude Code,\nCodex, or Gemini needs you, the screen glows.")
+                Text("Lock your screen and walk away. When Claude Code, Codex,\nGemini, Cursor, Copilot, or Aider needs you, the screen glows.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

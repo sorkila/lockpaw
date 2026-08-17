@@ -119,7 +119,6 @@ struct SettingsView: View {
     @State private var keyMonitor: Any?
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
     @State private var accessibilityTimer: Timer?
-    @State private var copiedItem: String?
     @State private var agentSetupResults: [String: AgentSetupResult] = [:]
 
     init(viewModel: UpdateCheckViewModel) {
@@ -463,7 +462,7 @@ struct SettingsView: View {
     }
 
     private var agentSetupFailureMessage: String? {
-        for tool in ["claude", "codex", "cli"] {
+        for tool in ["claude", "codex", "gemini", "cursor", "copilot", "aider", "cli"] {
             if case .failure(let message) = agentSetupResults[tool], !message.isEmpty {
                 return message
             }
@@ -476,45 +475,10 @@ struct SettingsView: View {
         case "claude": return "Claude"
         case "codex": return "Codex"
         case "gemini": return "Gemini"
+        case "cursor": return "Cursor"
+        case "copilot": return "Copilot"
+        case "aider": return "Aider"
         default: return tool
-        }
-    }
-
-    private func copyToPasteboard(_ string: String, mark: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(string, forType: .string)
-        copiedItem = mark
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_600_000_000)
-            if copiedItem == mark { copiedItem = nil }
-        }
-    }
-
-    private func copyHook(for tool: String) {
-        copyToPasteboard(hookSnippet(for: tool), mark: tool)
-    }
-
-    /// Source the snippet from the bundled CLI (`install-hook <tool> --print`) so it
-    /// never drifts from the tool; fall back to a literal if the CLI can't be run.
-    private func hookSnippet(for tool: String) -> String {
-        if let cli = cliURL, FileManager.default.isExecutableFile(atPath: cli.path) {
-            let process = Process()
-            process.executableURL = cli
-            process.arguments = ["install-hook", tool, "--print"]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = Pipe()
-            if (try? process.run()) != nil {
-                process.waitUntilExit()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let out = String(data: data, encoding: .utf8) ?? ""
-                if !out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return out }
-            }
-        }
-        switch tool {
-        case "codex": return "notify = [\"lockpaw\", \"ping\"]"
-        case "gemini": return "Add a hook running `lockpaw ping` in ~/.gemini/settings.json — see https://geminicli.com/docs/hooks/"
-        default: return "\"hooks\": {\n  \"Notification\": [{ \"hooks\": [{ \"type\": \"command\", \"command\": \"lockpaw ping\" }] }],\n  \"Stop\": [{ \"hooks\": [{ \"type\": \"command\", \"command\": \"lockpaw ping\" }] }]\n}"
         }
     }
 
@@ -566,25 +530,20 @@ struct SettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow("Connect your agent", subtitle: "One click sets up everything — the command-line tool and the agent's ping hook (a .bak backup is kept). Gemini copies a snippet to paste.") {
-                    HStack(spacing: 8) {
-                        ForEach(["claude", "codex", "gemini"], id: \.self) { tool in
-                            Button {
-                                if tool == "gemini" {
-                                    copyHook(for: tool)
-                                } else {
-                                    runAgentSetup(["install-hook", tool], mark: tool)
-                                }
-                            } label: {
-                                if tool == "gemini" {
-                                    Text(copiedItem == tool ? "Copied ✓" : agentLabel(tool))
-                                        .padding(.horizontal, 4)
-                                } else {
-                                    setupButtonLabel(mark: tool, idle: agentLabel(tool), done: "\(agentLabel(tool)) ✓")
+                SettingsRow("Connect your agent", subtitle: "One click sets up everything — the command-line tool and the agent's ping hook (a .bak backup is kept).") {
+                    VStack(alignment: .trailing, spacing: 8) {
+                        ForEach([["claude", "codex", "gemini"], ["cursor", "copilot", "aider"]], id: \.self) { row in
+                            HStack(spacing: 8) {
+                                ForEach(row, id: \.self) { tool in
+                                    Button {
+                                        runAgentSetup(["install-hook", tool], mark: tool)
+                                    } label: {
+                                        setupButtonLabel(mark: tool, idle: agentLabel(tool), done: "\(agentLabel(tool)) ✓")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(isSetupRunning(tool))
                                 }
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(isSetupRunning(tool))
                         }
                     }
                 }
