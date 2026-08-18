@@ -230,7 +230,7 @@ Lockpaw has been submitted to the following curated lists. **⚠️ Never delete
 | `ishanvyas22/awesome-open-source-systems` | #24 | Security | Pending (resubmitted 2026-06-11, was #16) |
 | `Piebald-AI/awesome-gemini-cli` | #58 | Development Tools & Utilities | Pending (submitted 2026-06-12; list merges actively) |
 | `RoggeOhta/awesome-codex-cli` | #88 | GUI & Desktop Apps | Pending (submitted 2026-06-12; ⚠️ list has never merged a PR) |
-| `hesreallyhim/awesome-claude-code` | issue #2015 | Tooling | Pending (submitted 2026-06-12 via their issue form — PRs banned; bot validation passed, awaiting maintainer review) |
+| `hesreallyhim/awesome-claude-code` | issue #2015 | Tooling | Pending (submitted 2026-06-12 via their issue form — PRs banned; bot validation passed, awaiting maintainer review; status-update comment posted 2026-08-18 via browser) |
 
 ## Directory listings
 
