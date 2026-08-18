@@ -22,3 +22,5 @@ build/
 # Local-only (never commit)
 MARKETING.md
 lockpaw-web/
+OUTREACH-*.md
+backlog.md
