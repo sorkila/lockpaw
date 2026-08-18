@@ -167,7 +167,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ## CI / Distribution
 
-- **GitHub Actions CI** — build + 50 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v6`.
+- **GitHub Actions CI** — build + 50 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v7`.
 - **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Handles pre-existing releases gracefully. **Note:** signing/notarization only runs if signing secrets are set — they are **not** currently configured, so a tag push creates a release but no signed DMG. Sign/notarize locally (or add the secrets).
 - **Latest release** — v1.2.0 released 2026-08-17 (build 13). DMG SHA-256: `0d8993fd3b1421aadcfd7299cf9cf33d7f7d8718affe076e83417cbed0d1cf51`. Six-agent hook support (Gemini real writer, Cursor, Copilot CLI, Aider). Full branded DMG; the build initially failed twice on `hdiutil detach` ("Resource busy" — Finder holds the volume after the styling AppleScript), fixed with a retry loop in `build-release.sh`.
 - **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. Advertises **v1.2.0 / build 13**. ⚠️ The 1.1.1 appcast entry's enclosure is `https://getlockpaw.com/Lockpaw.dmg` and `lockpaw-web/Lockpaw.dmg` still holds the 1.1.1 bytes — do NOT overwrite that file with a newer DMG or the 1.1.1 entry's EdDSA signature stops matching for old clients.
