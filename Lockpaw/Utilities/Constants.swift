@@ -39,6 +39,7 @@ enum Constants {
         /// same breath budget as the lock-screen ping glow.
         static let attentionPulse: TimeInterval = attentionFadeIn + Double(pingPulseCount) * pingPulsePeriod
         static let physicalInputThrottle: TimeInterval = 0.5          // min spacing of physical-input signals (tap posts + timer re-arm churn)
+        static let revealFade: TimeInterval = 0.4                     // black → visible; matches Anim.standard's duration (pulse unmount delay)
     }
 
     enum Anim {
