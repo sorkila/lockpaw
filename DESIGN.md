@@ -106,7 +106,9 @@ Motion is the moat. Two named, reusable signatures + a small curve set.
 | `ease-loop` | `0.45, 0, 0.55, 1` | `.easeInOut(…)` | Looping (glow out, breathing easing) |
 
 ### Durations
-`quick 0.2 · standard 0.35 · gentle 0.5 · entrance 0.8 · glow-in 0.45 · glow-out 1.6`
+`quick 0.2 · standard 0.35 · gentle 0.5 · entrance 0.8 · glow-in 0.45 · glow-out 1.6 · fade-to-black 6.0`
+
+`fade-to-black` is the one sanctioned duration above 1.6s — it empties the lock screen to pure black, so nothing competes with it.
 
 ### Choreography rules
 - **Enter fast, settle slow.** Reveals use `ease-out`; exits are quieter.
