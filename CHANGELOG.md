@@ -1,10 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [1.3.0] - 2026-08-24
 
 ### Added
 
-- Lock screen: **Fade to black** (Settings → Lock Screen, off by default) — after 1, 5, or 10 minutes of inactivity the lock screen fades to pure black to protect OLED displays. Agent pings breathe the teal glow for a few seconds, and any key or mouse movement brings the lock screen back (it returns to black after the same configured delay). The display never actually sleeps, so agents, automation, and the unlock hotkey keep working.
+- Lock screen: **Fade to black** (Settings → Lock Screen, off by default) — after 1, 5, or 10 minutes of inactivity the lock screen fades to pure black to protect OLED displays. Agent pings breathe the teal glow for a few seconds, and any key or mouse movement brings the lock screen back (it returns to black after the same configured delay). The display never actually sleeps, so agents, automation, and the unlock hotkey keep working. Thanks to Scott Woolsey Biggart (@swbiggart) for the contribution (#15, closes #13).
 
 ## [1.2.0] - 2026-08-17
 
