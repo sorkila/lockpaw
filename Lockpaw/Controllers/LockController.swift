@@ -27,6 +27,7 @@ class LockController: ObservableObject {
     private let inputBlocker = InputBlocker()
     private let authenticator = Authenticator()
     private let sleepPreventer = SleepPreventer()
+    private let presentationController = PresentationController()
 
     private var timer: Timer?
     private var sleepObserver: Any?
@@ -156,19 +157,15 @@ class LockController: ObservableObject {
         sleepPreventer.preventSleep()
 
         let mirrorAll = UserDefaults.standard.integer(forKey: "multiDisplayMode") == 1
+        let fadeTimeout = FadeToBlack.currentTimeout
         guard overlayManager.showOverlay(contentFactory: { [weak self] index, isPrimary in
             guard let self else { return AnyView(Color.black) }
-            if isPrimary || mirrorAll {
-                return AnyView(LockScreenView(
-                    controller: self,
-                    screenRole: .primary,
-                    phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15
-                ))
-            } else {
-                return AnyView(AmbientScreenView(
-                    phaseOffset: CGFloat(index) * 0.15
-                ))
-            }
+            return AnyView(OverlayRootView(
+                controller: self,
+                presentationController: self.presentationController,
+                showsLockUI: isPrimary || mirrorAll,
+                phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15
+            ))
         }) else {
             logger.error("Lock failed — no screens available for overlay")
             sleepPreventer.allowSleep()
@@ -177,6 +174,11 @@ class LockController: ObservableObject {
             scheduleErrorClear()
             return
         }
+
+        // After the overlay is up (the failure path above never starts anything) and
+        // before transitionTo(.locked) below, so the state sink observes the entry
+        // into .locked and arms the blackout timer.
+        presentationController.start(timeout: fadeTimeout, state: $state, error: $lastError)
 
         Task {
             try? await Task.sleep(nanoseconds: Constants.Timing.inputBlockerDelayNs)
@@ -319,6 +321,7 @@ class LockController: ObservableObject {
         if decision.shouldPulse {
             pingPulse &+= 1
             agentAttention = true
+            presentationController.notePing()
         }
         if decision.shouldNotify { AgentNotifier.shared.notify(withSound: decision.withSound) }
     }
@@ -354,6 +357,7 @@ class LockController: ObservableObject {
     }
 
     private func unlock() {
+        presentationController.stop()
         stopAccessibilityMonitoring()
         stopTimer()
         errorClearTask?.cancel()
@@ -367,6 +371,7 @@ class LockController: ObservableObject {
     }
 
     private func forceUnlock() {
+        presentationController.stop()
         authenticationInProgress = false
         isAuthenticating = false
         authenticator.cancelPending()

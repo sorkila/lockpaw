@@ -15,6 +15,11 @@ class InputBlocker {
     var cachedKeyCode: Int64 = Int64(HotkeyConfig.defaultKeyCode)
     var cachedModifiers: Int = HotkeyConfig.defaultModifiers
 
+    /// Last time the tap posted `.lockpawPhysicalInput`. Only ever touched from the
+    /// tap callback, which runs on the run loop that installed it — the main run
+    /// loop, since startBlocking() is called from the main actor — so no locking.
+    var lastPhysicalInputPost = Date.distantPast
+
     private var hotkeyObserver: NSObjectProtocol?
 
     private static let eventMask: CGEventMask = {
@@ -64,6 +69,21 @@ class InputBlocker {
                         }
                     }
                     return nil
+                }
+
+                // Physical (hardware) events carry eventSourceUnixProcessID == 0;
+                // synthetic posts carry the poster's PID. Best-effort heuristic —
+                // signal fade-to-black that the user is present, throttled. The
+                // event is still swallowed below; blocking semantics are unchanged.
+                if event.getIntegerValueField(.eventSourceUnixProcessID) == 0, let refcon {
+                    let blocker = Unmanaged<InputBlocker>.fromOpaque(refcon).takeUnretainedValue()
+                    let now = Date()
+                    if now.timeIntervalSince(blocker.lastPhysicalInputPost) >= Constants.Timing.physicalInputThrottle {
+                        blocker.lastPhysicalInputPost = now
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: .lockpawPhysicalInput, object: nil)
+                        }
+                    }
                 }
 
                 if type == .keyDown {

@@ -35,6 +35,7 @@
 - 🤖 **Agents keep running** — AI coding tools, builds, downloads, SSH sessions
 - 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot, or Aider needs you
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
+- 🌑 **Fade to black** — optionally dim the lock screen to pure black after inactivity (OLED-safe) without ever sleeping the display, so agents keep running
 - 📦 **10 MB** — native Swift, no Electron
 - 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check
 - 🐕🐈 **Dog or cat mode** — choose the metallic origami dog or cat for the lock screen
@@ -237,7 +238,7 @@ LockpawCLI/
 
 ## CI
 
-Pushes to `main` and PRs run build + 50 unit tests via GitHub Actions. Shipped DMGs are Developer ID-signed, notarized, and published to [GitHub Releases](https://github.com/sorkila/lockpaw/releases); auto-updates are delivered through Sparkle with EdDSA-signed appcasts.
+Pushes to `main` and PRs run build + 91 unit tests via GitHub Actions. Shipped DMGs are Developer ID-signed, notarized, and published to [GitHub Releases](https://github.com/sorkila/lockpaw/releases); auto-updates are delivered through Sparkle with EdDSA-signed appcasts.
 
 <br>
 

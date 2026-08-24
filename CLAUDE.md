@@ -32,7 +32,7 @@ tccutil reset Accessibility com.eriknielsen.lockpaw
 xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ```
 
-50 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution, and PingDecision agent-ping branching.
+91 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution, PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), and every branch of the PresentationLogic fade-to-black reducer.
 
 ## Release
 
@@ -68,13 +68,16 @@ Lockpaw/
 │   ├── HotkeyManager.swift         CGEventTap on dedicated background thread — global hotkey
 │   ├── OverlayWindowManager.swift  NSWindow per screen at CGShieldingWindowLevel
 │   ├── SleepPreventer.swift        IOKit sleep assertion
+│   ├── PresentationController.swift  Fade-to-black effects — timer slot, NSEvent monitors, cross-fades
 │   └── AgentNotifier.swift         UNUserNotificationCenter — "your agent needs you" (lazy auth)
 ├── Models/
 │   ├── LockState.swift             .unlocked → .locking → .locked → .unlocking
 │   ├── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection/auth unlock preference
 │   ├── Mascot.swift                Dog/cat lock-screen mascot preference
+│   ├── FadeToBlack.swift           Fade-to-black preference + pure presentation reducer (LockPresentation / PresentationLogic)
 │   └── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
 ├── Views/
+│   ├── OverlayRootView.swift       Per-screen presentation switch — lock UI / pure black / attention pulse
 │   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
 │   ├── AmbientScreenView.swift     Secondary display — morphing gradient blobs
 │   ├── MenuBarView.swift           Menu bar dropdown
@@ -92,6 +95,8 @@ LockpawTests/                       (sibling of Lockpaw/)
 ├── ConstantsTests.swift            Time formatting (11 tests)
 ├── HotkeyConfigTests.swift         System shortcut conflict detection + auth unlock preference (9 tests)
 ├── SleepPreventerTests.swift       Sleep assertion state handling (5 tests)
+├── FadeToBlackTests.swift          Fade-to-black checkbox/delay resolution + timeout mapping (11 tests)
+├── PresentationLogicTests.swift    Presentation reducer: blackout/reveal/pulse/error branches (30 tests)
 ├── MascotTests.swift               Mascot resolution (3 tests)
 └── AgentPingTests.swift            PingDecision branching: locked/unlocked × sound (6 tests)
 
@@ -112,15 +117,26 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Overlay dismiss does NOT call window.close()** — only `orderOut` + clear `contentView`. Calling `close()` during animated dismiss causes EXC_BAD_ACCESS in `_NSWindowTransformAnimation dealloc` (autorelease pool timing).
 
 ### Multi-display
-- **Primary vs ambient screens** — `OverlayWindowManager.showOverlay` takes a content factory `(Int, Bool) -> AnyView`. Primary screen shows full lock screen; secondary screens show `AmbientScreenView`.
+- **Primary vs ambient screens** — `OverlayWindowManager.showOverlay` takes a content factory `(Int, Bool) -> AnyView`. Every screen gets an `OverlayRootView`; while presentation is `.visible` the primary (or all screens in Mirror mode) shows the full lock screen and secondaries show `AmbientScreenView`.
 - **AmbientScreenView uses 5 morphing gradient blobs** — ellipses with solid fills at low opacity, heavy blur, on independent orbital paths. 3-second fade-in from black.
+
+### Fade to black (display protection)
+- **Why not real display sleep** — macOS's "require password after display off" locks the GUI session when the display sleeps, which revokes Accessibility from session apps: the hotkey taps die and agent automation breaks. Fade to black paints pure black over an *awake* display instead — OLED pixels off, session (and agents) fully alive. Off by default; a Settings → Lock Screen checkbox reveals a "Fade delay" row (1/5/10 min), mirroring the "Show lock message" → "Message" pattern.
+- **Presentation is a pure reducer, separate from LockState** — `PresentationLogic.reduce` (Models/FadeToBlack.swift) maps (presentation, armed timer, event, timeout) → decision; `PresentationController` only runs the effects. No presentation bug can touch the security-relevant lock state, and every branch is unit-tested.
+- **Single one-shot timer slot** — arming always invalidates the previous timer, so stale blackout/re-black fires are structurally impossible. A Combine sink on `$state` arms on every `.locked` entry (including re-entry after failed auth) and forces `.visible` + cancel on `.unlocking`; a sink on `$lastError` reveals errors and re-arms the configured fade delay as the re-black window (every reveal — input or error — reuses that one delay; there is no separate reveal constant) — cancelling instead would disarm protection for the rest of the session under auth rate limiting, which never leaves `.locked`.
+- **`.lockpawPhysicalInput` side channel** — InputBlocker's tap swallows keyboard/scroll before NSEvent monitors can see them, so the tap posts this (throttled) for physical events; mouse arrives via NSEvent global+local monitors in PresentationController.
+- **Physical vs synthetic: `eventSourceUnixProcessID == 0`** — hardware events carry PID 0; synthetic posts carry the poster's PID, so agent automation (cliclick, AppleScript) never lights the screen. Best-effort: remappers (Karabiner/BTT) repost under their own PID and won't reveal — the unlock hotkey ignores the filter, so recovery always works.
+- **The reveal click is consumed** — the local monitor returns nil for mouseDowns while not `.visible`, so the click that wakes the screen can never press the just-mounted auth button (the orphaned mouseUp is harmless).
+- **The attention pulse runs on every screen** — the primary lock UI is unmounted while black, so a ping breathes the lock screen's teal glow everywhere (`AttentionPulseView`, keyed by `attentionGeneration` so re-pings restart the breaths) for a bounded `Timing.attentionPulse`, then settles back to black. `agentAttention` survives blackness; on reveal the caption + resting glow appear (LockScreenView seeds `pingGlow` on appear). Under Reduce Motion the glow holds static at the pulse floor.
+- **The pointer stays with OverlayWindowManager's concealment in every presentation state** — fade-to-black adds no cursor calls of its own. An earlier revision hid via `NSCursor.hide()` while black, but mixing `hide()`/`unhide()` with `setHiddenUntilMouseMoves` is documented-unpredictable and in practice kills the idle re-hide for the rest of the session after the first reveal. Accepted trade: a synthetic mouse nudge can show the pointer over black for ~`Timing.cursorIdleHide` seconds before it re-conceals (the screen itself stays black — the PID filter ignores synthetic input).
+- **`stop()` leaves `presentation` untouched** — unlocking from black fades the overlay out from black with no lock-UI flash; the next `start()` resets it. `OverlayRootView`'s constant black backdrop is load-bearing: overlay windows have clear backgrounds, so the 6s cross-fade would otherwise blend through to the desktop.
 
 ### Agent alerts (the `lockpaw` CLI ping)
 - **Purpose** — when an AI agent (Claude Code, Codex, Gemini) pauses for permission or finishes while the screen is locked, the lock screen glows + a notification fires. Stays locked; you unlock when ready.
 - **Transport is DistributedNotificationCenter, NOT `lockpaw://`** — `open lockpaw://ping` would launch the app when it isn't running (wrong for a background ping). The CLI posts `com.eriknielsen.lockpaw.ping`; `AppDelegate` bridges it to a local `.lockpawPing`. The URL scheme stays for `lock`/`unlock` only.
 - **`PingDecision.make(state:soundEnabled:)` is pure** — locked → pulse + notify; any other state → no-op. Unit-tested directly (no UNUserNotificationCenter mocking). `LockController.handlePing()` debounces (`Timing.pingDebounce`) then applies the decision; `pingPulse` is a counter the lock screen watches via `.onChange`.
 - **Glow is the hero, not the banner** — on ping, `LockScreenView` breathes a saturated teal full-screen radial bloom (`pingPulseCount` breaths of `pingPulsePeriod`, mid-stop gradient + `.plusLighter`), then settles to a faint resting glow (`pingGlowRest`) with a standing "Your agent needs you" caption (`LockController.agentAttention`) until unlock. A generation counter cancels a stale pulse chain if a new ping lands mid-sequence. Notification is secondary; delivered banners are cleared on unlock (`AgentNotifier.clearDelivered()`). Sound is opt-in (`Constants.agentPingSoundKey`, default off, for shared offices).
-- **Cursor hides while locked** — `OverlayWindowManager` activates the app, makes the primary overlay key (`OverlayWindow` subclass: borderless windows refuse key status by default), then `NSCursor.setHiddenUntilMouseMoves(true)` — which is a no-op unless the app is active. Mouse-move monitors + an idle timer (`Timing.cursorIdleHide`) re-hide after stillness. Never `NSCursor.hide()` — an unbalanced hide would leave the pointer invisible over the auth button.
+- **Cursor hides while locked** — `OverlayWindowManager` activates the app, makes the primary overlay key (`OverlayWindow` subclass: borderless windows refuse key status by default), then `NSCursor.setHiddenUntilMouseMoves(true)` — which is a no-op unless the app is active. Mouse-move monitors + an idle timer (`Timing.cursorIdleHide`) re-hide after stillness. Never `NSCursor.hide()` — an unbalanced hide would leave the pointer invisible over the auth button, and even a balanced one breaks `setHiddenUntilMouseMoves` re-hides for the rest of the session (see the fade-to-black pointer note above).
 - **Lock-screen type uses four tokens** — `Font.lockBody/lockLabel/lockCaption/lockMono` in Constants.swift map to the DESIGN.md §2 scale; differentiate captions with opacity, never new sizes.
 - **The CLI lives in `Contents/SharedSupport/`, NOT `Contents/MacOS/`** — `lockpaw` would collide with the app binary `Lockpaw` on case-insensitive filesystems (DMG/Applications). `install-cli` symlinks it into `~/.local/bin`.
 - **The CLI target sets `PRODUCT_MODULE_NAME: LockpawCLI`** (executable stays `lockpaw`) — its Swift module would otherwise be `lockpaw`, which case-collides with the app's `Lockpaw` module and breaks `@testable import Lockpaw` on a clean build (`unable to resolve module dependency: 'Lockpaw'`). This only surfaces on a clean build (CI), not incremental local ones.
@@ -167,7 +183,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ## CI / Distribution
 
-- **GitHub Actions CI** — build + 50 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v7`.
+- **GitHub Actions CI** — build + 91 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v7`.
 - **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Handles pre-existing releases gracefully. **Note:** signing/notarization only runs if signing secrets are set — they are **not** currently configured, so a tag push creates a release but no signed DMG. Sign/notarize locally (or add the secrets).
 - **Latest release** — v1.2.0 released 2026-08-17 (build 13). DMG SHA-256: `0d8993fd3b1421aadcfd7299cf9cf33d7f7d8718affe076e83417cbed0d1cf51`. Six-agent hook support (Gemini real writer, Cursor, Copilot CLI, Aider). Full branded DMG; the build initially failed twice on `hdiutil detach` ("Resource busy" — Finder holds the volume after the styling AppleScript), fixed with a retry loop in `build-release.sh`.
 - **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. Advertises **v1.2.0 / build 13**. ⚠️ The 1.1.1 appcast entry's enclosure is `https://getlockpaw.com/Lockpaw.dmg` and `lockpaw-web/Lockpaw.dmg` still holds the 1.1.1 bytes — do NOT overwrite that file with a newer DMG or the 1.1.1 entry's EdDSA signature stops matching for old clients.

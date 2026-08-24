@@ -218,6 +218,9 @@ struct LockScreenView: View {
         }
         .environment(\.colorScheme, .dark)
         .onAppear {
+            // Fade-to-black reveals remount this view with fresh @State — restore the
+            // resting glow after a ping (onChange(of: pingPulse) won't refire on mount).
+            if controller.agentAttention { pingGlow = Constants.Timing.pingGlowRest }
             withAnimation(reduceMotion ? .none : .timingCurve(0.16, 1, 0.3, 1, duration: 0.6)) { appeared = true }
             guard !reduceMotion else { return }
             withAnimation(Constants.Anim.breathe) { phase = Constants.Anim.breathePhaseTarget }
