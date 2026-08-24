@@ -4,6 +4,11 @@ import SwiftUI
 /// black (fade-to-black burn-in protection), and the bounded agent-attention pulse.
 /// The constant black backdrop is load-bearing — overlay windows have clear
 /// backgrounds, so the slow cross-fade would otherwise blend through to the desktop.
+///
+/// Cross-fades are driven by explicit opacity values, not `.transition(.opacity)`
+/// on switched-out branches — removal transitions hard-cut inside NSHostingView
+/// overlay windows on macOS 26. Subtrees unmount only after their fade completes
+/// (so a black screen still costs nothing: no TimelineView, no breathing, no blobs).
 struct OverlayRootView: View {
     @ObservedObject var controller: LockController
     @ObservedObject var presentationController: PresentationController
@@ -11,30 +16,85 @@ struct OverlayRootView: View {
     let showsLockUI: Bool
     let phaseOffset: CGFloat
 
+    @State private var lockUIMounted = true
+    @State private var lockUIOpacity: Double = 1
+    @State private var pulseMounted = false
+    @State private var pulseOpacity: Double = 0
+    /// Bumped on every presentation change — a delayed unmount only lands if no
+    /// newer change superseded it (same guard pattern as the ping-glow generation).
+    @State private var fadeGeneration = 0
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            switch presentationController.presentation {
-            case .visible:
-                if showsLockUI {
-                    LockScreenView(controller: controller, screenRole: .primary, phaseOffset: phaseOffset)
-                        .transition(.opacity)
-                } else {
-                    AmbientScreenView(phaseOffset: phaseOffset)
-                        .transition(.opacity)
+            if lockUIMounted {
+                Group {
+                    if showsLockUI {
+                        LockScreenView(controller: controller, screenRole: .primary, phaseOffset: phaseOffset)
+                    } else {
+                        AmbientScreenView(phaseOffset: phaseOffset)
+                    }
                 }
-            case .black:
-                // Nothing mounted: no TimelineView, no breathing, no blob compositing.
-                EmptyView()
-            case .attention:
+                .opacity(lockUIOpacity)
+            }
+
+            if pulseMounted {
                 // Keyed by generation so a re-ping remounts and restarts the breaths.
                 AttentionPulseView()
                     .id(presentationController.attentionGeneration)
-                    .transition(.opacity)
+                    .opacity(pulseOpacity)
             }
         }
         .ignoresSafeArea()
+        .onChange(of: presentationController.presentation) { old, new in
+            apply(from: old, to: new)
+        }
+    }
+
+    private func apply(from old: LockPresentation, to new: LockPresentation) {
+        fadeGeneration &+= 1
+        let generation = fadeGeneration
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let animation = PresentationController.animation(from: old, to: new)
+
+        func animate(_ changes: () -> Void) {
+            if reduceMotion { changes() } else { withAnimation(animation, changes) }
+        }
+        func unmountAfter(_ delay: TimeInterval, _ changes: @escaping () -> Void) {
+            guard !reduceMotion else { changes(); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard generation == fadeGeneration else { return }
+                changes()
+            }
+        }
+
+        switch new {
+        case .visible:
+            lockUIMounted = true
+            animate {
+                lockUIOpacity = 1
+                pulseOpacity = 0
+            }
+            unmountAfter(Constants.Timing.revealFade) { pulseMounted = false }
+
+        case .black:
+            let duration = old == .attention
+                ? Constants.Timing.attentionFadeOut
+                : Constants.Timing.fadeToBlackDuration
+            animate {
+                lockUIOpacity = 0
+                pulseOpacity = 0
+            }
+            unmountAfter(duration) {
+                lockUIMounted = false
+                pulseMounted = false
+            }
+
+        case .attention:
+            pulseMounted = true
+            animate { pulseOpacity = 1 }
+        }
     }
 }
 
