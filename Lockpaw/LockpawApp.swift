@@ -9,9 +9,13 @@ struct LockpawApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var lockController = LockController()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage(Constants.showMenuBarIconKey) private var showMenuBarIcon = true
 
     var body: some Scene {
-        MenuBarExtra {
+        // `isInserted` removes the item entirely (not just its icon) when the user
+        // hides it in Settings → General. Reopening the app from Finder or
+        // `lockpaw://settings` flips the preference back on (AppDelegate).
+        MenuBarExtra(isInserted: $showMenuBarIcon) {
             MenuBarView(controller: lockController)
         } label: {
             Image("MenuBarIcon")
@@ -44,6 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastURLSchemeCall: Date = .distantPast
     private var onboardingWindow: NSWindow?
     private var pingDistributedObserver: Any?
+    private var openSettingsObserver: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Instantiate AgentNotifier now so it registers as the notification-center
@@ -108,6 +113,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.post(name: .lockpawPing, object: nil)
         }
 
+        openSettingsObserver = NotificationCenter.default.addObserver(
+            forName: .lockpawOpenSettings, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.openSettingsWindow()
+        }
+
         if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
             showOnboarding()
         } else if !AccessibilityChecker.isEnabled {
@@ -116,6 +127,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
             showOnboarding()
         }
+    }
+
+    /// Refuse to quit while the screen is guarded. Every quit path (the menu's
+    /// Cmd+Q, AppleScript, a stray keystroke reaching the app during the password
+    /// sheet, when secure input hides keys from the input tap) ends here.
+    /// Unlock first, then quit.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let state = LockStatus.shared.state
+        if TerminationPolicy.allowsQuit(state: state) { return .terminateNow }
+        logger.notice("Quit refused while \(String(describing: state))")
+        return .terminateCancel
+    }
+
+    /// Reopening Lockpaw (double-click in Applications, `open -a Lockpaw`) is the
+    /// way back when the menu bar icon is hidden: restore the icon and open Settings.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else { return true }
+        UserDefaults.standard.set(true, forKey: Constants.showMenuBarIconKey)
+        openSettingsWindow()
+        return false
+    }
+
+    private func openSettingsWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        // SwiftUI's Settings scene has no public opener outside a View; this
+        // selector is the documented-by-practice route on macOS 14+.
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     private func showOnboarding() {
@@ -172,6 +210,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case "unlock": NotificationCenter.default.post(name: .lockpawUnlock, object: nil)
             case "unlock-password": NotificationCenter.default.post(name: .lockpawUnlockPassword, object: nil)
             case "toggle": NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
+            case "settings":
+                UserDefaults.standard.set(true, forKey: Constants.showMenuBarIconKey)
+                NotificationCenter.default.post(name: .lockpawOpenSettings, object: nil)
             default: logger.warning("Unknown URL scheme: \(url.host ?? "nil")")
             }
         }
@@ -180,5 +221,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     deinit {
         if let obs = hotkeyObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = pingDistributedObserver { DistributedNotificationCenter.default().removeObserver(obs) }
+        if let obs = openSettingsObserver { NotificationCenter.default.removeObserver(obs) }
     }
 }

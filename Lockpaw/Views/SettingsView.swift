@@ -112,6 +112,7 @@ struct SettingsView: View {
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
     @AppStorage(FadeToBlack.enabledKey) private var fadeToBlackEnabled = FadeToBlack.defaultEnabled
     @AppStorage(FadeToBlack.storageKey) private var fadeToBlackDelay = FadeToBlack.defaultValue
+    @AppStorage(Constants.showMenuBarIconKey) private var showMenuBarIcon = true
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
 
@@ -216,7 +217,8 @@ struct SettingsView: View {
                 SettingsRow("Mascot") {
                     SettingsSegmentedControl(
                         selection: $selectedMascot,
-                        options: Mascot.allCases.map { ($0.displayName, $0.rawValue) }
+                        options: Mascot.allCases.map { ($0.displayName, $0.rawValue) },
+                        width: 240
                     )
                 }
 
@@ -308,11 +310,19 @@ struct SettingsView: View {
                     endRadius: 120
                 )
 
-                Image(mascot.assetName)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .padding(18)
+                if let asset = mascot.assetName {
+                    Image(asset)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .padding(18)
+                } else {
+                    // What "None" looks like: just the quiet timer line.
+                    Text("00:00")
+                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .tracking(0.5)
+                }
             }
             .frame(width: 132, height: 104)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -322,9 +332,11 @@ struct SettingsView: View {
             )
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("\(mascot.displayName) takeover")
+                Text(mascot == .hidden ? "No mascot" : "\(mascot.displayName) takeover")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Shown on the primary display while Lockpaw is active.")
+                Text(mascot == .hidden
+                     ? "Only your message and the timer on the primary display."
+                     : "Shown on the primary display while Lockpaw is active.")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -515,6 +527,14 @@ struct SettingsView: View {
                                 launchAtLogin = !enabled
                             }
                         }
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Show menu bar icon", subtitle: showMenuBarIcon
+                            ? "Turn off to run Lockpaw invisibly. The hotkey and the lockpaw command still work, and opening Lockpaw from Applications brings the icon and this window back."
+                            : "Hidden. The hotkey and the lockpaw command still work. Open Lockpaw from Applications to bring the icon back.") {
+                    SettingsCheckbox(isOn: $showMenuBarIcon)
                 }
 
                 SettingsDivider()

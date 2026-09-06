@@ -140,14 +140,18 @@ struct OnboardingView: View {
                 .blur(radius: 18)
                 .offset(y: size * 0.5)
 
-            Image(Mascot.resolved(from: selectedMascot).assetName)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .shadow(color: Color("LockpawTeal").opacity(0.18), radius: 24, y: 8)
-                .scaleEffect(mascotBreath ? 1.03 : 1.0)
-                .offset(y: mascotBreath ? -3 : 0)
+            if let asset = Mascot.resolved(from: selectedMascot).assetName {
+                Image(asset)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .shadow(color: Color("LockpawTeal").opacity(0.18), radius: 24, y: 8)
+                    .scaleEffect(mascotBreath ? 1.03 : 1.0)
+                    .offset(y: mascotBreath ? -3 : 0)
+            } else {
+                Color.clear.frame(width: size, height: size)
+            }
         }
         .onAppear {
             guard !reduceMotion else { return }
@@ -304,11 +308,13 @@ struct OnboardingView: View {
                         center: .center, startRadius: 0, endRadius: 95))
                     .blendMode(.plusLighter)
 
-                Image(Mascot.resolved(from: selectedMascot).assetName)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(width: 46, height: 46)
+                if let asset = Mascot.resolved(from: selectedMascot).assetName {
+                    Image(asset)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 46, height: 46)
+                }
             }
             .frame(width: 156, height: 104)
             .onAppear {

@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.3.0
+- **Current version:** 1.3.1
 - **Size:** ~10 MB DMG download, ~13 MB installed (2.7 MB of that is Sparkle) — keep README/site/marketing claims in sync with the actual DMG when this changes
 
 ## Build
@@ -32,7 +32,7 @@ tccutil reset Accessibility com.eriknielsen.lockpaw
 xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ```
 
-91 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution, PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), and every branch of the PresentationLogic fade-to-black reducer.
+96 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` case), PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, and TerminationPolicy (quit refused unless `.unlocked`).
 
 ## Release
 
@@ -97,7 +97,8 @@ LockpawTests/                       (sibling of Lockpaw/)
 ├── SleepPreventerTests.swift       Sleep assertion state handling (5 tests)
 ├── FadeToBlackTests.swift          Fade-to-black checkbox/delay resolution + timeout mapping (11 tests)
 ├── PresentationLogicTests.swift    Presentation reducer: blackout/reveal/pulse/error branches (30 tests)
-├── MascotTests.swift               Mascot resolution (3 tests)
+├── MascotTests.swift               Mascot resolution incl. hidden (5 tests)
+├── TerminationPolicyTests.swift    Quit guard + LockStatus mirror (3 tests)
 └── AgentPingTests.swift            PingDecision branching: locked/unlocked × sound (6 tests)
 
 LockpawCLI/                         (sibling of Lockpaw/)
@@ -148,6 +149,11 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Settings → General has one-click agent setup** — buttons run the bundled CLI (`SharedSupport/lockpaw`) via `Process` off the main thread: Install (install-cli) plus a 3×2 grid of Claude/Codex/Gemini/Cursor/Copilot/Aider (install-hook — all real writers since v1.2.0; the old Gemini copy-snippet path and its pasteboard plumbing are gone). Exit ≠ 0 or a ⚠️ on stdout (foreign Codex `notify` / Aider `notifications-command`) shows as a failure with the message under the row — the button never claims success for a write that didn't happen. Note: the GUI app launches without `CLAUDE_CONFIG_DIR`, so one-click Claude setup targets `~/.claude`; multi-profile users should run `install-hook` from their terminal.
 - **build-release.sh signs the CLI inside-out** — `Contents/SharedSupport/lockpaw` is signed before the outer app, same `/tmp` copy treatment as the rest (iCloud xattr gotcha).
 
+### Quit guard, hidden icon, no mascot (v1.3.1)
+- **Quit is refused while guarded** — `AppDelegate.applicationShouldTerminate` returns `.terminateCancel` unless `TerminationPolicy.allowsQuit(state:)` (pure, tested: only `.unlocked`). Why: the overlay makes Lockpaw the active app and the menu's Quit carries an app-wide Cmd+Q; the input tap normally swallows it, but macOS enables **secure input while the LAContext password sheet is up, and secure input hides keystrokes from event taps** — so Cmd+Q reached the app and quit it (reported in #10 by @moonlit-ds). `LockStatus.shared` mirrors `LockController.state` (a `didSet`) so the delegate can read it without a controller reference. `.terminateCancel` also blocks logout/shutdown while locked — accepted, that is what a lock does; ssh `shutdown` bypasses app replies anyway.
+- **Menu bar icon is optional** — `MenuBarExtra(isInserted:)` bound to `Constants.showMenuBarIconKey` (default on). Ways back in when hidden: the hotkey, the CLI, `lockpaw://settings`, and **reopening the app** (`applicationShouldHandleReopen` re-enables the icon and opens Settings via the `showSettingsWindow:` selector — SwiftUI's Settings scene has no opener outside a View). Onboarding never hides it. (#14)
+- **Mascot `.hidden` (raw value "none")** — `assetName` is optional; the lock screen, onboarding hero and Settings preview all branch on it. Named `hidden`, not `none`, so call sites never collide with `Optional.none`. (#8, #9)
+
 ### Misc
 - **NSHostingView requires explicit autoresizingMask** — defaults to 0 (no flex). Must set `[.width, .height]` and `frame = window.contentLayoutRect`.
 - **Screen change handler uses true debounce** — cancels pending `DispatchWorkItem` before scheduling a new one. 300ms delay for `NSScreen.screens` to settle.
@@ -184,7 +190,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ## CI / Distribution
 
-- **GitHub Actions CI** — build + 91 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v7`.
+- **GitHub Actions CI** — build + 96 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v7`.
 - **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Handles pre-existing releases gracefully. **Note:** signing/notarization only runs if signing secrets are set — they are **not** currently configured, so a tag push creates a release but no signed DMG. Sign/notarize locally (or add the secrets).
 - **Latest release** — v1.3.0 released 2026-08-24 (build 14). DMG SHA-256: `9b1df1d26c433c18f1921f09390b04c3a806015c0fdb07c4c12ed6ca3e694251`. Fade to black display protection (contributed in #15 by @swbiggart; follow-up `40e9f1f` fixed removal-transition hard cuts on macOS 26). Full branded DMG. ⚠️ First release build after the repo moved out of iCloud failed on stale SPM artifacts pointing at the old `~/Documents` path — `rm -rf build/DerivedData` fixed it.
 - **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. Advertises **v1.3.0 / build 14**. ⚠️ The 1.1.1 appcast entry's enclosure is `https://getlockpaw.com/Lockpaw.dmg` and `lockpaw-web/Lockpaw.dmg` still holds the 1.1.1 bytes — do NOT overwrite that file with a newer DMG or the 1.1.1 entry's EdDSA signature stops matching for old clients.
@@ -259,3 +265,7 @@ Lockpaw has been submitted to the following curated lists. **⚠️ Never delete
 | AlternativeTo | Screen Lock | Live: [alternativeto.net/software/lockpaw](https://alternativeto.net/software/lockpaw/) (zero likes/reviews yet) |
 
 Queued (browser forms, ready-to-paste copy in MARKETING.md round-2 section): MacMenuBar.com, macosmenubar.com, OpenAlternative, opensourcealternative.to, Softpedia — anytime; Uneed/Fazier/MicroLaunch/OpenHunts — save for the coordinated launch morning. Repo topics include `claude-code` (added 2026-06-12) since auto-curated lists scrape by topic. Skipped deliberately: jqueryscript/awesome-claude-code (never merges PRs), Console.dev (pre-1.0 tools only), AI-tool directories (wrong category).
+
+## Portfolio context (2026-08-25)
+
+Lockpaw is a reputation piece in a portfolio plan targeting 100 000 kr/month in side income (Sorkila session artifacts: "The Demand Ledger"). Research verdict: the agent-companion lane was nativised (Claude Code hooks, desktop app with parallel sessions/worktrees, Remote Control; Codex app with worktrees) or VC-subsidised, and Terragon, Bloop, Crystal and Omnara folded in 2026. Treat Lockpaw as pipeline for consulting, not a revenue line. A paid tier was measured: cross-agent status/notification asks **halved** since March 2026 (free tools filled them; CodexBar +5 549 stars in 67 days), so a paid status/menu-bar product is saturated. The one measured unmet need is a **Claude Code transcript/session-history vault** (r/ClaudeCode "transcript" posts 9/month in January → 88 peak in July), a $19 one-time Mac tool sold direct via r/macapps and brew, which could live in Tintpad or Lockpaw. Per-app locks and scheduled lockouts (r/macapps FaceGate 142↑) remain a plausible small Lockpaw Pro. Nothing decided.

@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.3.1] - 2026-09-06
+
+### Added
+
+- Lock screen: **Mascot → None**. The lock screen can be just your message and the timer, for shared offices and rooms full of curious colleagues. (#8, #9)
+- Settings → General: **Show menu bar icon**. Turn it off to run Lockpaw invisibly; the hotkey, the `lockpaw` command and `lockpaw://settings` keep working, and opening Lockpaw from Applications brings the icon and Settings back. (#14)
+
+### Fixed
+
+- Lockpaw now refuses to quit while the screen is guarded. Cmd+Q could reach the app while the Touch ID / password sheet was up (secure input hides keystrokes from the input tap), which quit Lockpaw and dropped the guard. Unlock first, then quit. Reported in #10.
+
 ## [1.3.0] - 2026-08-24
 
 ### Added

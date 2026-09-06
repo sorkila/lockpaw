@@ -9,6 +9,8 @@ extension Notification.Name {
     static let lockpawSessionLost = Notification.Name("lockpawSessionLost")
     static let toggleLockpaw = Notification.Name("toggleLockpaw")
     static let lockpawHotkeyPreferenceChanged = Notification.Name("lockpawHotkeyPreferenceChanged")
+    /// Posted when Settings should open from outside SwiftUI (reopen from Finder, `lockpaw://settings`).
+    static let lockpawOpenSettings = Notification.Name("lockpawOpenSettings")
     /// Posted when an AI agent pings (bridged from the distributed notification, or fired by the in-app test button).
     static let lockpawPing = Notification.Name("lockpawPing")
     /// Posted (throttled) by InputBlocker when a physical keyboard/scroll event hits its
