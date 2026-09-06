@@ -15,4 +15,15 @@ final class MascotTests: XCTestCase {
         XCTAssertEqual(Mascot.resolved(from: "cat"), .cat)
         XCTAssertEqual(Mascot.resolved(from: "unknown"), .dog)
     }
+
+    func testHiddenMascotHasNoAsset() {
+        XCTAssertEqual(Mascot.resolved(from: "none"), .hidden)
+        XCTAssertNil(Mascot.hidden.assetName)
+        XCTAssertEqual(Mascot.hidden.displayName, "None")
+    }
+
+    func testHiddenIsLastOption() {
+        // Settings lists the cases in declaration order; "None" belongs after the two mascots.
+        XCTAssertEqual(Mascot.allCases.last, .hidden)
+    }
 }

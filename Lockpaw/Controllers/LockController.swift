@@ -8,7 +8,9 @@ private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "Loc
 
 @MainActor
 class LockController: ObservableObject {
-    @Published private(set) var state: LockState = .unlocked
+    @Published private(set) var state: LockState = .unlocked {
+        didSet { LockStatus.shared.update(state) }
+    }
     @Published var lockStartTime: Date?
     @Published var elapsedTime: TimeInterval = 0
     @Published private(set) var isAuthenticating = false

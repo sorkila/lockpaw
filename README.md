@@ -38,7 +38,7 @@
 - 🌑 **Fade to black** — optionally dim the lock screen to pure black after inactivity (OLED-safe) without ever sleeping the display, so agents keep running
 - 📦 **10 MB** — native Swift, no Electron
 - 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check
-- 🐕🐈 **Dog or cat mode** — choose the metallic origami dog or cat for the lock screen
+- 🐕🐈 **Dog or cat mode** — choose the metallic origami dog or cat for the lock screen, or no mascot at all
 - ⚙️ **Native Settings** — lock screen, shortcuts, updates, permissions, and about in one quiet window
 
 <br>
@@ -52,7 +52,8 @@
 | Fallback unlock | Click *Authenticate with Touch ID* at the bottom of the lock screen |
 | Settings | Menu bar → Settings… |
 | Change hotkey | Settings → Shortcuts → click to record |
-| Change mascot | Settings → Lock Screen → Mascot |
+| Change mascot (or turn it off) | Settings → Lock Screen → Mascot |
+| Hide the menu bar icon | Settings → General → Show menu bar icon (open Lockpaw from Applications to bring it back) |
 
 <br>
 
@@ -216,7 +217,8 @@ Lockpaw/
 │  ├─ LockState                  .unlocked → .locking → .locked → .unlocking
 │  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
 │  ├─ PingDecision               Pure agent-ping decision (pulse/notify/sound)
-│  └─ Mascot                     Dog/cat lock screen preference
+│  ├─ Mascot                     Dog/cat/none lock screen preference
+│  └─ TerminationPolicy          Quit is refused while guarded (+ LockStatus mirror)
 ├─ Views/
 │  ├─ LockScreenView             Dog/cat mascot · agent-ping glow · fallback auth
 │  ├─ AmbientScreenView          Secondary display gradient animation
@@ -238,7 +240,7 @@ LockpawCLI/
 
 ## CI
 
-Pushes to `main` and PRs run build + 91 unit tests via GitHub Actions. Shipped DMGs are Developer ID-signed, notarized, and published to [GitHub Releases](https://github.com/sorkila/lockpaw/releases); auto-updates are delivered through Sparkle with EdDSA-signed appcasts.
+Pushes to `main` and PRs run build + 96 unit tests via GitHub Actions. Shipped DMGs are Developer ID-signed, notarized, and published to [GitHub Releases](https://github.com/sorkila/lockpaw/releases); auto-updates are delivered through Sparkle with EdDSA-signed appcasts.
 
 <br>
 

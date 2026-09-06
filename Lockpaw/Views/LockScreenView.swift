@@ -27,7 +27,7 @@ struct LockScreenView: View {
 
     private var breathe: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.2) }
     private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
-    private var mascotAssetName: String { Mascot.resolved(from: selectedMascot).assetName }
+    private var mascotAssetName: String? { Mascot.resolved(from: selectedMascot).assetName }
 
     var body: some View {
         GeometryReader { geo in
@@ -46,7 +46,8 @@ struct LockScreenView: View {
                     // Mascot + message + time as a tight cohesive group
                     VStack(spacing: unit * 1.2) {
 
-                        // Mascot
+                        // Mascot (absent entirely when the preference is "None")
+                        if let mascotAssetName {
                         ZStack {
                             if controller.unlockSucceeded {
                                 // Success animation: mascot scales up and fades
@@ -83,6 +84,7 @@ struct LockScreenView: View {
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                         .animation(Constants.Anim.gentle, value: controller.unlockSucceeded)
+                        }
 
                         // Message
                         Group {

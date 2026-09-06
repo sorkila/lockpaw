@@ -14,6 +14,10 @@ enum Constants {
     /// UserDefaults key: play a sound on agent ping. Off by default for shared spaces.
     static let agentPingSoundKey = "agentPingSound"
 
+    /// UserDefaults key: show the menu bar icon. On by default; when off, the hotkey,
+    /// the `lockpaw` CLI, `lockpaw://settings`, and reopening the app are the ways in.
+    static let showMenuBarIconKey = "showMenuBarIcon"
+
     enum Timing {
         static let inputBlockerDelayNs: UInt64 = 50_000_000           // 50ms
         static let unlockSuccessAnimNs: UInt64 = 400_000_000          // 400ms
