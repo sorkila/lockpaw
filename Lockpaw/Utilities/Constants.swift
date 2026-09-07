@@ -25,6 +25,9 @@ enum Constants {
         static let errorAutoClearNs: UInt64 = 5_000_000_000           // 5s
         static let authRateLimitCooldown: TimeInterval = 30.0         // seconds
         static let maxAuthAttempts = 3
+        /// Gap between arming passive Touch ID and sampling secure input — the auth
+        /// daemon flips it as the (hidden) prompt comes up, not synchronously.
+        static let secureInputProbeNs: UInt64 = 150_000_000           // 150ms
         static let urlSchemeDebounce: TimeInterval = 0.1              // seconds
         static let userActivityRefreshInterval: TimeInterval = 30     // seconds; defeats screensaver idle timer while locked
         static let pingDebounce: TimeInterval = 2.0                   // seconds; collapse chatty agent pings into one

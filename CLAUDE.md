@@ -32,7 +32,7 @@ tccutil reset Accessibility com.eriknielsen.lockpaw
 xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ```
 
-96 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` case), PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, and TerminationPolicy (quit refused unless `.unlocked`).
+110 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` case), PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, TerminationPolicy (quit refused unless `.unlocked`), and PassiveAuthPolicy (when the Touch ID sensor may be armed × how each LAError ending is scored).
 
 ## Release
 
@@ -63,7 +63,7 @@ Lockpaw/
 ├── LockpawApp.swift                Entry point, MenuBarExtra, AppDelegate, onboarding
 ├── Controllers/
 │   ├── LockController.swift        State machine, lock/unlock orchestration, toggle observer
-│   ├── Authenticator.swift         LAContext (Touch ID / password fallback)
+│   ├── Authenticator.swift         LAContext (armed Touch ID, prompted Touch ID / password fallback)
 │   ├── InputBlocker.swift          CGEventTap — blocks keyboard/scroll while locked
 │   ├── HotkeyManager.swift         CGEventTap on dedicated background thread — global hotkey
 │   ├── OverlayWindowManager.swift  NSWindow per screen at CGShieldingWindowLevel
@@ -75,7 +75,8 @@ Lockpaw/
 │   ├── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection/auth unlock preference
 │   ├── Mascot.swift                Dog/cat lock-screen mascot preference
 │   ├── FadeToBlack.swift           Fade-to-black preference + pure presentation reducer (LockPresentation / PresentationLogic)
-│   └── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
+│   ├── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
+│   └── PassiveAuthPolicy.swift     Pure passive Touch ID rules (arm/re-arm/stand down + LAError scoring)
 ├── Views/
 │   ├── OverlayRootView.swift       Per-screen presentation switch — lock UI / pure black / attention pulse
 │   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
@@ -109,6 +110,9 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ### Core lock system
 - **Hotkey is the primary unlock by default** — Touch ID / password is the fallback for forgotten hotkeys, and Settings can require auth before a hotkey unlock succeeds.
+- **Touch ID is armed, not requested** — entering `.locked` starts a biometrics-only `evaluatePolicy` immediately, so the first finger press unlocks with no click first (#12). The prompt it opens sits behind the shield-level overlay and is never seen, and the overlay is *not* lowered and input is *not* unblocked — doing either for the whole session would undo the lock. The visible prompt (`requestUnlock`) stays for password fallback and Macs without Touch ID; it disarms first, so `Authenticator.activeContext` is still a single slot.
+- **Only a rejected finger spends an attempt** — `PassiveAuthPolicy` scores `.authenticationFailed` as the user's failure and everything else (`.appCancel` when the button takes over, `.systemCancel` on session switch, biometry lockout) as stand-down. Scoring them all would drain the 3-attempt budget into a 30s cooldown with nobody at the Mac. Re-arming runs through the same `failCount`/`lastAuthFailTime` the button path uses, so the cooldown is shared, and a rate-limited arm reschedules itself for when it expires rather than being dropped.
+- **An armed sensor stands down if it turns secure input on** — secure input hides keystrokes from event taps (the #10 bypass), and an arm holds its prompt open for the whole session, so it would silently kill the hotkey. `LockController.secureInputProbe` samples `IsSecureEventInputEnabled()` before and ~150ms after arming and disables passive auth for the session if arming is what flipped it.
 - **HotkeyManager uses CGEventTap on a dedicated background thread** — Carbon RegisterEventHotKey is unreliable in LSUIElement (menu bar-only) apps because the Carbon event dispatch doesn't activate until user interaction. The background thread with its own CFRunLoop bypasses this entirely.
 - **Toggle observer lives in LockController.init()** — NOT in MenuBarExtra's `.onReceive`. SwiftUI lazily initializes MenuBarExtra content, so the observer wouldn't exist until the user clicks the menu bar icon.
 - **Hotkey not registered until onboarding completes** — CGEventTap requires Accessibility permission. Registering before permission is granted creates a dead tap. OnboardingView posts `lockpawHotkeyPreferenceChanged` on completion, which triggers registration.
