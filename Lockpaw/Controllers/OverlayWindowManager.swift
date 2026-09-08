@@ -114,9 +114,10 @@ class OverlayWindowManager {
             // ignoresMouseEvents the window is transparent to the pointer, so on a
             // secondary display each click passed through the (visually opaque) overlay
             // to whatever app sat underneath — keyboard was blocked, but buttons under
-            // the cover were still clickable while locked.
-            window.ignoresMouseEvents = false
-            window.acceptsKey = isPrimary
+            // the cover were still clickable while locked. Rules in OverlayPolicy.
+            let config = OverlayPolicy.config(isPrimary: isPrimary)
+            window.ignoresMouseEvents = config.ignoresMouseEvents
+            window.acceptsKey = config.acceptsKey
             window.hasShadow = false
 
             // NSHostingView defaults to autoresizingMask=0 (no flex), which can cause
