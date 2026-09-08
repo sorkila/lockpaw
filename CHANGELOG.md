@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.2] - 2026-09-08
+
+### Fixed
+
+- Multi-display: clicks on a secondary screen no longer reach the app underneath the cover. Ambient overlays were built to ignore mouse events, which makes a window transparent to the pointer — the screen looked covered, and keyboard input was blocked, but anything beneath it was still clickable while locked. Every overlay now swallows clicks, and only the primary takes focus. Relates to #10.
+
 ## [1.3.1] - 2026-09-06
 
 ### Added

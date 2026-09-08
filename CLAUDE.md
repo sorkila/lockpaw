@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.3.1
+- **Current version:** 1.3.2
 - **Size:** ~10 MB DMG download, ~13 MB installed (2.7 MB of that is Sparkle) — keep README/site/marketing claims in sync with the actual DMG when this changes
 
 ## Build
@@ -32,7 +32,7 @@ tccutil reset Accessibility com.eriknielsen.lockpaw
 xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ```
 
-96 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` case), PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, and TerminationPolicy (quit refused unless `.unlocked`).
+99 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` case), PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, TerminationPolicy (quit refused unless `.unlocked`), and OverlayPolicy (no overlay is ever transparent to the pointer; only the primary takes key).
 
 ## Release
 
@@ -75,7 +75,8 @@ Lockpaw/
 │   ├── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection/auth unlock preference
 │   ├── Mascot.swift                Dog/cat lock-screen mascot preference
 │   ├── FadeToBlack.swift           Fade-to-black preference + pure presentation reducer (LockPresentation / PresentationLogic)
-│   └── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
+│   ├── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
+│   └── OverlayPolicy.swift         Pure per-screen overlay config (clicks swallowed everywhere; key only on primary)
 ├── Views/
 │   ├── OverlayRootView.swift       Per-screen presentation switch — lock UI / pure black / attention pulse
 │   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
@@ -119,6 +120,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ### Multi-display
 - **Primary vs ambient screens** — `OverlayWindowManager.showOverlay` takes a content factory `(Int, Bool) -> AnyView`. Every screen gets an `OverlayRootView`; while presentation is `.visible` the primary (or all screens in Mirror mode) shows the full lock screen and secondaries show `AmbientScreenView`.
+- **Every overlay swallows clicks, ambient ones included** — `ignoresMouseEvents` makes a window transparent to the pointer, so while it was set on non-primary screens each click on a secondary display passed through the visually-opaque overlay to the app underneath (keyboard was blocked; buttons under the cover were not). All overlays now take mouse events, and only the primary takes key status (`OverlayWindow.acceptsKey`) so ambient screens can't steal focus from the fallback-auth controls.
 - **AmbientScreenView uses 5 morphing gradient blobs** — ellipses with solid fills at low opacity, heavy blur, on independent orbital paths. 3-second fade-in from black.
 
 ### Fade to black (display protection)
@@ -190,7 +192,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ## CI / Distribution
 
-- **GitHub Actions CI** — build + 96 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v7`.
+- **GitHub Actions CI** — build + 99 tests on `macos-15` runners (Xcode 16) on push to main and PRs (`.github/workflows/ci.yml`). Uses `actions/checkout@v7`.
 - **Release workflow** — tag `v*` → build → conditional sign/notarize (inside-out, not `--deep`) → branded DMG via `create-dmg` with Finder alias → GitHub Release (`.github/workflows/release.yml`). Handles pre-existing releases gracefully. **Note:** signing/notarization only runs if signing secrets are set — they are **not** currently configured, so a tag push creates a release but no signed DMG. Sign/notarize locally (or add the secrets).
 - **Latest release** — v1.3.1 released 2026-09-06 (build 15). DMG SHA-256: `c30f15bacff6e117e01dcdd866fa97e8b08f68cbaf3122cc0ee274cbf64e0d53`. Mascot None, optional menu bar icon, quit refused while guarded (issues #8/#9/#14/#10). Built with `./scripts/build-release.sh` from Claude Code, notarization accepted in ~1 min. Previous: v1.3.0 (2026-08-24, build 14, SHA `9b1df1d2…`), fade to black (contributed in #15 by @swbiggart; follow-up `40e9f1f` fixed removal-transition hard cuts on macOS 26). ⚠️ First release build after the repo moved out of iCloud failed on stale SPM artifacts pointing at the old `~/Documents` path — `rm -rf build/DerivedData` fixed it.
 - **Sparkle auto-updates** — EdDSA-signed appcast at `https://getlockpaw.com/appcast.xml`, download URL points to GitHub Releases. Advertises **v1.3.1 / build 15**. ⚠️ The 1.1.1 appcast entry's enclosure is `https://getlockpaw.com/Lockpaw.dmg` and `lockpaw-web/Lockpaw.dmg` still holds the 1.1.1 bytes — do NOT overwrite that file with a newer DMG or the 1.1.1 entry's EdDSA signature stops matching for old clients.
