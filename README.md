@@ -145,7 +145,7 @@ The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow.
 
 **Sleep prevention** — `IOPMAssertion` keeps the Mac awake while locked.
 
-**Auth** — while locked, a biometrics-only `LAContext` is already armed behind the overlay, so the first finger press unlocks with nothing to click. The button path uses `.deviceOwnerAuthentication` for Touch ID with password fallback. Both share one rate limit: 30s cooldown after 3 failed attempts.
+**Auth** — while locked, a biometrics-only `LAContext` is already armed behind the overlay, so the first finger press unlocks with nothing to click. The button path uses `.deviceOwnerAuthentication` for Touch ID with password fallback, rate-limited to a 30s cooldown after 3 failed attempts. A rejected finger on the armed sensor costs no attempt — it may be a palm or a bag strap, and Touch ID enforces its own lockout in hardware.
 
 **Auto-updates** — Sparkle framework checks for updates automatically. Appcast hosted at getlockpaw.com.
 

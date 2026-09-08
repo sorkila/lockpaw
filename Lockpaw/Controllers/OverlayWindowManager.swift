@@ -11,6 +11,13 @@ private final class OverlayWindow: NSWindow {
     override var canBecomeKey: Bool { true }
 }
 
+/// While Touch ID is armed the LocalAuthentication agent holds activation, so the overlay
+/// is not key and an unmodified first click would be spent activating Lockpaw instead of
+/// pressing the control under the pointer — the fallback-auth button would need two clicks.
+private final class OverlayHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 class OverlayWindowManager {
     private var windows: [NSWindow] = []
     private var screenObserver: Any?
@@ -111,7 +118,7 @@ class OverlayWindowManager {
 
             // NSHostingView defaults to autoresizingMask=0 (no flex), which can cause
             // the SwiftUI content to not fill the window on external/scaled displays.
-            let hostingView = NSHostingView(rootView: content)
+            let hostingView = OverlayHostingView(rootView: content)
             hostingView.autoresizingMask = [.width, .height]
             hostingView.frame = window.contentLayoutRect
             window.contentView = hostingView
@@ -142,16 +149,7 @@ class OverlayWindowManager {
     /// while someone tries to click the unlock chevron.
     private func startCursorConcealment() {
         stopCursorConcealment()
-        // setHiddenUntilMouseMoves only takes effect while the app is active — and
-        // when locking via the global hotkey some other app is frontmost. Activate
-        // and make the primary overlay key first, then hide on the next runloop turn
-        // so the activation has landed.
-        NSApp.activate(ignoringOtherApps: true)
-        windows.first?.makeKey()
-        NSCursor.setHiddenUntilMouseMoves(true)
-        DispatchQueue.main.async {
-            NSCursor.setHiddenUntilMouseMoves(true)
-        }
+        hideCursor()
         let onMove: () -> Void = { [weak self] in self?.scheduleCursorRehide() }
         if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved], handler: { _ in onMove() }) {
             mouseMoveMonitors.append(global)
@@ -166,7 +164,23 @@ class OverlayWindowManager {
 
     private func scheduleCursorRehide() {
         cursorRehideTimer?.invalidate()
-        cursorRehideTimer = Timer.scheduledTimer(withTimeInterval: Constants.Timing.cursorIdleHide, repeats: false) { _ in
+        cursorRehideTimer = Timer.scheduledTimer(withTimeInterval: Constants.Timing.cursorIdleHide, repeats: false) { [weak self] _ in
+            self?.hideCursor()
+        }
+    }
+
+    /// `setHiddenUntilMouseMoves` only takes effect while the app is active — when locking
+    /// via the global hotkey some other app is frontmost, and while Touch ID is armed the
+    /// LocalAuthentication agent holds activation for the whole armed period. So every hide
+    /// has to reclaim activation first, not just the one at lock time: without this the
+    /// initial hide survives but the idle re-hide after the first mouse movement silently
+    /// does nothing, leaving the pointer on the lock screen for the rest of the session.
+    /// Hide again on the next runloop turn so the activation has landed.
+    private func hideCursor() {
+        NSApp.activate(ignoringOtherApps: true)
+        windows.first?.makeKey()
+        NSCursor.setHiddenUntilMouseMoves(true)
+        DispatchQueue.main.async {
             NSCursor.setHiddenUntilMouseMoves(true)
         }
     }
