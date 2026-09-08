@@ -119,6 +119,7 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ### Multi-display
 - **Primary vs ambient screens** — `OverlayWindowManager.showOverlay` takes a content factory `(Int, Bool) -> AnyView`. Every screen gets an `OverlayRootView`; while presentation is `.visible` the primary (or all screens in Mirror mode) shows the full lock screen and secondaries show `AmbientScreenView`.
+- **Every overlay swallows clicks, ambient ones included** — `ignoresMouseEvents` makes a window transparent to the pointer, so while it was set on non-primary screens each click on a secondary display passed through the visually-opaque overlay to the app underneath (keyboard was blocked; buttons under the cover were not). All overlays now take mouse events, and only the primary takes key status (`OverlayWindow.acceptsKey`) so ambient screens can't steal focus from the fallback-auth controls.
 - **AmbientScreenView uses 5 morphing gradient blobs** — ellipses with solid fills at low opacity, heavy blur, on independent orbital paths. 3-second fade-in from black.
 
 ### Fade to black (display protection)
