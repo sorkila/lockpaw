@@ -30,7 +30,7 @@
 ## Features
 
 - ⌨️ **One hotkey** — lock and unlock with ⌘⇧L (customizable)
-- 🔒 **Touch ID unlock** — or password fallback, just like your Mac
+- 🔒 **Touch ID unlock** — just rest your finger on the sensor, no button first; password fallback like your Mac
 - 🖥️ **Every screen covered** — all displays, auto-detects new monitors
 - 🤖 **Agents keep running** — AI coding tools, builds, downloads, SSH sessions
 - 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot, or Aider needs you
@@ -48,7 +48,7 @@
 | Action | How |
 |--------|-----|
 | Lock | Your hotkey (default `Cmd+Shift+L`) |
-| Quick unlock | Same hotkey |
+| Quick unlock | Same hotkey, or rest a finger on Touch ID |
 | Fallback unlock | Click *Authenticate with Touch ID* at the bottom of the lock screen |
 | Settings | Menu bar → Settings… |
 | Change hotkey | Settings → Shortcuts → click to record |
@@ -145,7 +145,7 @@ The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow.
 
 **Sleep prevention** — `IOPMAssertion` keeps the Mac awake while locked.
 
-**Auth** — `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` for Touch ID with password fallback. Rate-limited: 30s cooldown after 3 failed attempts.
+**Auth** — while locked, a biometrics-only `LAContext` is already armed behind the overlay, so the first finger press unlocks with nothing to click. The button path uses `.deviceOwnerAuthentication` for Touch ID with password fallback, rate-limited to a 30s cooldown after 3 failed attempts. A rejected finger on the armed sensor costs no attempt — it may be a palm or a bag strap, and Touch ID enforces its own lockout in hardware.
 
 **Auto-updates** — Sparkle framework checks for updates automatically. Appcast hosted at getlockpaw.com.
 
@@ -207,7 +207,7 @@ Lockpaw/
 ├─ LockpawApp                     Entry, MenuBarExtra, AppDelegate, onboarding
 ├─ Controllers/
 │  ├─ LockController              State machine, lock/unlock orchestration
-│  ├─ Authenticator               LAContext · Touch ID · password fallback
+│  ├─ Authenticator               LAContext · armed Touch ID · password fallback
 │  ├─ InputBlocker                CGEventTap · keyboard/scroll blocking
 │  ├─ HotkeyManager               CGEventTap · global hotkey detection
 │  ├─ OverlayWindowManager        NSWindow · multi-display · shielding level
@@ -217,6 +217,7 @@ Lockpaw/
 │  ├─ LockState                  .unlocked → .locking → .locked → .unlocking
 │  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
 │  ├─ PingDecision               Pure agent-ping decision (pulse/notify/sound)
+│  ├─ PassiveAuthPolicy          Pure armed-Touch-ID rules (arm/re-arm/stand down)
 │  ├─ Mascot                     Dog/cat/none lock screen preference
 │  └─ TerminationPolicy          Quit is refused while guarded (+ LockStatus mirror)
 ├─ Views/

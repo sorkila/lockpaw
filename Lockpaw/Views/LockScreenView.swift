@@ -29,6 +29,16 @@ struct LockScreenView: View {
     private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
     private var mascotAssetName: String? { Mascot.resolved(from: selectedMascot).assetName }
 
+    /// The sensor is live when `passiveAuthArmed`, so name the gesture that already works
+    /// rather than pointing at the button below it — the button stays for the password
+    /// fallback and for Macs with no Touch ID.
+    private var unlockPrompt: String {
+        if controller.passiveAuthArmed {
+            return requiresAuthenticationToUnlock ? "Touch ID to unlock" : "Touch ID, or your hotkey, to unlock"
+        }
+        return requiresAuthenticationToUnlock ? "Authentication required to unlock" : "Use your hotkey to unlock, or"
+    }
+
     var body: some View {
         GeometryReader { geo in
             let compact = geo.size.height < 700
@@ -176,7 +186,7 @@ struct LockScreenView: View {
                         } else {
                             // Fallback auth is always visible — no tap-to-reveal.
                             VStack(spacing: 16) {
-                                Text(requiresAuthenticationToUnlock ? "Authentication required to unlock" : "Use your hotkey to unlock, or")
+                                Text(unlockPrompt)
                                     .font(.lockCaption)
                                     .foregroundStyle(.white.opacity(0.35))
                                     .tracking(0.5)

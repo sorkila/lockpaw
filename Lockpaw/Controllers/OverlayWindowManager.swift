@@ -15,6 +15,16 @@ private final class OverlayWindow: NSWindow {
     override var canBecomeKey: Bool { acceptsKey }
 }
 
+/// Belt and braces for the armed-Touch ID case: the LocalAuthentication agent holds
+/// activation, so the overlay is not key and a first click could be spent activating
+/// Lockpaw rather than pressing the control under the pointer. Measured on macOS 26 a stock
+/// NSHostingView already presses the button on that first click, so this changes nothing
+/// today — it is here so a future AppKit that reverts to the documented behaviour cannot
+/// cost the fallback-auth button a second click.
+private final class OverlayHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 class OverlayWindowManager {
     private var windows: [NSWindow] = []
     private var screenObserver: Any?
@@ -122,7 +132,7 @@ class OverlayWindowManager {
 
             // NSHostingView defaults to autoresizingMask=0 (no flex), which can cause
             // the SwiftUI content to not fill the window on external/scaled displays.
-            let hostingView = NSHostingView(rootView: content)
+            let hostingView = OverlayHostingView(rootView: content)
             hostingView.autoresizingMask = [.width, .height]
             hostingView.frame = window.contentLayoutRect
             window.contentView = hostingView
@@ -175,6 +185,17 @@ class OverlayWindowManager {
         }
     }
 
+    /// While the Touch ID sensor is armed this re-hide does nothing, and that is deliberate.
+    /// `setHiddenUntilMouseMoves` is a no-op unless the app is active, and the
+    /// LocalAuthentication agent holds activation for the whole armed period — arming alone
+    /// puts the pointer back on screen within half a second. Measured on macOS 26: Lockpaw
+    /// *can* take activation back (~400-500ms) and a hide applied in that window does land,
+    /// but the agent reclaims it about a second later and reveals the pointer again, so
+    /// fighting for it buys a flicker and costs an activation steal every few seconds.
+    /// Accepted trade, in the spirit of the fade-to-black pointer note: while a finger press
+    /// can unlock, the pointer is visible over the lock screen. It conceals as before
+    /// whenever nothing is armed — no Touch ID, biometry unavailable, or passive auth
+    /// suspended. `NSCursor.hide()` remains rejected for the reasons in CLAUDE.md.
     private func scheduleCursorRehide() {
         cursorRehideTimer?.invalidate()
         cursorRehideTimer = Timer.scheduledTimer(withTimeInterval: Constants.Timing.cursorIdleHide, repeats: false) { _ in
