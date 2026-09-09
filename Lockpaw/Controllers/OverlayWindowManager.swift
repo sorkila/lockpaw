@@ -8,7 +8,11 @@ private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "Ove
 /// to become key so the app can be activated while locked — cursor concealment
 /// (`NSCursor.setHiddenUntilMouseMoves`) only works while the app is active.
 private final class OverlayWindow: NSWindow {
-    override var canBecomeKey: Bool { true }
+    /// Only the primary overlay takes key status. Ambient windows still swallow clicks
+    /// (see `ignoresMouseEvents` below), but must not steal focus from the screen that
+    /// carries the fallback-auth controls.
+    var acceptsKey = true
+    override var canBecomeKey: Bool { acceptsKey }
 }
 
 /// Belt and braces for the armed-Touch ID case: the LocalAuthentication agent holds
@@ -116,7 +120,14 @@ class OverlayWindowManager {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.isOpaque = false
             window.backgroundColor = .clear
-            window.ignoresMouseEvents = !isPrimary
+            // Every overlay swallows clicks, ambient ones included. With
+            // ignoresMouseEvents the window is transparent to the pointer, so on a
+            // secondary display each click passed through the (visually opaque) overlay
+            // to whatever app sat underneath — keyboard was blocked, but buttons under
+            // the cover were still clickable while locked. Rules in OverlayPolicy.
+            let config = OverlayPolicy.config(isPrimary: isPrimary)
+            window.ignoresMouseEvents = config.ignoresMouseEvents
+            window.acceptsKey = config.acceptsKey
             window.hasShadow = false
 
             // NSHostingView defaults to autoresizingMask=0 (no flex), which can cause
