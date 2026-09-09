@@ -435,7 +435,11 @@ class LockController: ObservableObject {
     /// Arm the sensor so a finger press unlocks with no click first. Always disarms first,
     /// so there is never more than one LAContext in flight.
     private func armPassiveAuth() {
-        disarmPassiveAuth()
+        // Ask before disarming. `disarmPassiveAuth` bumps the generation, and the generation
+        // is what a committed unlock checks — so disarming first meant a tick that then
+        // refused to arm (because an unlock was committed) still invalidated that unlock,
+        // and the lock screen sat there with the mascot mid-success until the hotkey was
+        // used. Measured: the tick landed 351ms into the 400ms success window.
         guard PassiveAuthPolicy.shouldArm(
             state: state,
             unlockCommitted: unlockSucceeded,
@@ -446,9 +450,11 @@ class LockController: ObservableObject {
             lastFailure: lastAuthFailTime,
             now: Date()
         ) else {
-            logger.info("passiveAuth: arm refused — state=\(String(describing: self.state)), committed=\(self.unlockSucceeded), biometry=\(self.biometryAvailable), suspended=\(self.passiveAuthSuspended), authInProgress=\(self.authenticationInProgress), failCount=\(self.failCount)")
+            logger.debug("passiveAuth: arm refused — state=\(String(describing: self.state)), committed=\(self.unlockSucceeded), biometry=\(self.biometryAvailable), suspended=\(self.passiveAuthSuspended), authInProgress=\(self.authenticationInProgress), failCount=\(self.failCount)")
             return
         }
+
+        disarmPassiveAuth()
 
         logger.info("passiveAuth: arming (biometry=\(self.biometryAvailable), suspended=\(self.passiveAuthSuspended), failCount=\(self.failCount))")
         let generation = passiveAuthGeneration
@@ -463,6 +469,10 @@ class LockController: ObservableObject {
     /// Sleep and session switches both invalidate the evaluation and can change enrolment
     /// under us, so re-sample availability before arming again.
     private func armPassiveAuthAfterInterruption() {
+        // Tear the interrupted evaluation down explicitly. `armPassiveAuth` only disarms
+        // once it has decided to arm, so a refusal here (suspended, rate-limited) must not
+        // leave a stale context armed behind the overlay.
+        disarmPassiveAuth()
         biometryAvailable = authenticator.isBiometryAvailable
         armPassiveAuth()
     }
@@ -492,9 +502,15 @@ class LockController: ObservableObject {
         case .unlock:
             logger.info("passiveAuth: match — unlocking")
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            // The finger press is itself the confirmation, so this path does not hold the
+            // lock screen for the success beat the way the button path does — after a
+            // dialog a beat reads as acknowledgement, after a touch it reads as lag.
+            // The mascot's scale-and-fade plays over the overlay's own dismiss animation.
             unlockSucceeded = true
-            try? await Task.sleep(nanoseconds: Constants.Timing.unlockSuccessAnimNs)
-            guard generation == passiveAuthGeneration else { return }
+            // Deliberately not generation-guarded: the sensor matched, so the unlock is
+            // committed and no arming bookkeeping may cancel it. State is the only thing
+            // that can still make it moot (a hotkey unlock landing first).
+            guard state == .locked else { return }
             unlock()
 
         case .rearmImmediately:
@@ -531,7 +547,7 @@ class LockController: ObservableObject {
             return
         }
 
-        logger.info("passiveAuth: tick found nothing armed — re-arming")
+        logger.debug("passiveAuth: tick found nothing armed — re-arming")
         // Nothing armed while the screen is still covered: an evaluation the system
         // cancelled or expired under us, including after hours of being armed. Re-arming
         // from the tick rather than from the outcome caps retries at one a second, so an

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1] - 2026-09-09
+
+### Fixed
+
+- Unlocking with Touch ID could leave the lock screen up. The mascot played its success animation and then nothing happened, and the hotkey was the only way out. The once-a-second re-arm check tore down the in-flight evaluation before deciding it should not run, and that teardown invalidated the unlock that had just been granted — so roughly two unlocks in five stalled. The check now decides first and only tears down if it is actually going to re-arm, and a finger the sensor has matched commits the unlock outright.
+- Touch ID unlocks are immediate. The lock screen used to hold for 400ms so the mascot could play its success beat before dismissing, which is right after a dialog and wrong after a finger press. The animation now plays over the dismiss instead of before it.
+
 ## [1.4.0] - 2026-09-09
 
 ### Added
