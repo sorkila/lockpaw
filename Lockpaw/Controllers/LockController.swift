@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AppKit
 import SwiftUI
+import Carbon
 import os.log
 
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "LockController")
@@ -25,6 +26,10 @@ class LockController: ObservableObject {
     /// the lock screen keeps a subtle "your agent needs you" hint from this flag.
     @Published private(set) var agentAttention = false
 
+    /// True while the Touch ID sensor is armed with no prompt on screen — the lock screen
+    /// reads it to say a touch is enough, no button first.
+    @Published private(set) var passiveAuthArmed = false
+
     private let overlayManager = OverlayWindowManager()
     private let inputBlocker = InputBlocker()
     private let authenticator = Authenticator()
@@ -44,6 +49,18 @@ class LockController: ObservableObject {
     private var sessionWasLost = false
     private var lastAuthFailTime: Date?
     private var lastPingTime: Date?
+    private var passiveAuthTask: Task<Void, Never>?
+    /// Bumped by every arm and disarm so a late-resolving evaluation can tell it is stale.
+    private var passiveAuthGeneration = 0
+    /// Stable reasons not to arm again before the next lock(): biometry that is gone or
+    /// locked out, or secure input coming up while armed.
+    private var passiveAuthSuspended = false
+    /// Whether this Mac can arm at all. Sampled once per lock session and again after sleep
+    /// or a session switch, not on every tick — answering it builds an LAContext.
+    private var biometryAvailable = false
+    /// Secure-input reading taken as the current arm started, so the tick can tell a flip
+    /// caused by arming from one that was already there.
+    private var secureInputBeforeArm = false
 
     init() {
         toggleObserver = NotificationCenter.default.addObserver(
@@ -73,6 +90,7 @@ class LockController: ObservableObject {
                 self.inputBlocker.stopBlocking()
                 self.inputBlocker.startBlocking()
                 self.overlayManager.blockSystemDialogs()
+                self.armPassiveAuthAfterInterruption()
             }
         }
 
@@ -84,6 +102,7 @@ class LockController: ObservableObject {
                 guard let self else { return }
                 if self.state == .locked || self.state == .unlocking {
                     self.sessionWasLost = true
+                    self.disarmPassiveAuth()
                     if self.authenticationInProgress {
                         self.authenticator.cancelPending()
                         self.authenticationInProgress = false
@@ -108,6 +127,7 @@ class LockController: ObservableObject {
                 self.inputBlocker.stopBlocking()
                 self.inputBlocker.startBlocking()
                 self.overlayManager.blockSystemDialogs()
+                self.armPassiveAuthAfterInterruption()
             }
         }
 
@@ -135,6 +155,7 @@ class LockController: ObservableObject {
 
     deinit {
         if let obs = toggleObserver { NotificationCenter.default.removeObserver(obs) }
+        passiveAuthTask?.cancel()
         timer?.invalidate()
         accessibilityCheckTimer?.invalidate()
         errorClearTask?.cancel()
@@ -193,6 +214,8 @@ class LockController: ObservableObject {
         lastError = nil
         unlockSucceeded = false
         lastAuthFailTime = nil
+        passiveAuthSuspended = false
+        biometryAvailable = authenticator.isBiometryAvailable
         errorClearTask?.cancel()
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -202,12 +225,14 @@ class LockController: ObservableObject {
                       self.state == .locked || self.state == .unlocking,
                       let start = self.lockStartTime else { return }
                 self.elapsedTime = Date().timeIntervalSince(start)
+                self.tickPassiveAuth()
             }
         }
 
         startAccessibilityMonitoring()
         sessionWasLost = false
         transitionTo(.locked)
+        armPassiveAuth()
     }
 
     /// Quick unlock via hotkey — no auth.
@@ -230,6 +255,7 @@ class LockController: ObservableObject {
             return
         }
 
+        disarmPassiveAuth()
         guard transitionTo(.unlocking) else { return }
         authenticationInProgress = true
         isAuthenticating = true
@@ -275,6 +301,7 @@ class LockController: ObservableObject {
             return
         }
 
+        disarmPassiveAuth()
         guard transitionTo(.unlocking) else { return }
         authenticationInProgress = true
         isAuthenticating = true
@@ -338,6 +365,7 @@ class LockController: ObservableObject {
         inputBlocker.startBlocking()
         transitionTo(.locked)
         scheduleErrorClear()
+        armPassiveAuth()
     }
 
     private func scheduleErrorClear() {
@@ -360,6 +388,7 @@ class LockController: ObservableObject {
 
     private func unlock() {
         presentationController.stop()
+        disarmPassiveAuth()
         stopAccessibilityMonitoring()
         stopTimer()
         errorClearTask?.cancel()
@@ -374,6 +403,7 @@ class LockController: ObservableObject {
 
     private func forceUnlock() {
         presentationController.stop()
+        disarmPassiveAuth()
         authenticationInProgress = false
         isAuthenticating = false
         authenticator.cancelPending()
@@ -387,6 +417,102 @@ class LockController: ObservableObject {
         overlayManager.dismissOverlay()
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
+    }
+
+    // MARK: - Passive Touch ID
+
+    /// Arm the sensor so a finger press unlocks with no click first. Always disarms first,
+    /// so there is never more than one LAContext in flight.
+    private func armPassiveAuth() {
+        disarmPassiveAuth()
+        guard PassiveAuthPolicy.shouldArm(
+            state: state,
+            unlockCommitted: unlockSucceeded,
+            biometryAvailable: biometryAvailable,
+            suspended: passiveAuthSuspended,
+            authenticationInProgress: authenticationInProgress,
+            failCount: failCount,
+            lastFailure: lastAuthFailTime,
+            now: Date()
+        ) else { return }
+
+        let generation = passiveAuthGeneration
+        secureInputBeforeArm = IsSecureEventInputEnabled()
+        passiveAuthArmed = true
+        passiveAuthTask = Task { @MainActor [weak self] in
+            await self?.runPassiveAuth(generation: generation)
+        }
+    }
+
+    /// Sleep and session switches both invalidate the evaluation and can change enrolment
+    /// under us, so re-sample availability before arming again.
+    private func armPassiveAuthAfterInterruption() {
+        biometryAvailable = authenticator.isBiometryAvailable
+        armPassiveAuth()
+    }
+
+    /// Cancelling the Swift task does not stop the evaluation — the LAContext has to be
+    /// invalidated too, or the sensor stays armed after the overlay is gone.
+    private func disarmPassiveAuth() {
+        passiveAuthGeneration &+= 1
+        passiveAuthArmed = false
+        guard let task = passiveAuthTask else { return }
+        passiveAuthTask = nil
+        task.cancel()
+        authenticator.cancelPending()
+    }
+
+    private func runPassiveAuth(generation: Int) async {
+        let result = await authenticator.armBiometrics()
+        guard generation == passiveAuthGeneration, state == .locked else { return }
+        passiveAuthArmed = false
+
+        switch PassiveAuthPolicy.outcome(result) {
+        case .unlock:
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            unlockSucceeded = true
+            try? await Task.sleep(nanoseconds: Constants.Timing.unlockSuccessAnimNs)
+            guard generation == passiveAuthGeneration else { return }
+            unlock()
+
+        case .rearmImmediately:
+            // Deliberately silent: no haptic, no lastError, no attempt spent. A rejected
+            // finger may well be a bag strap, and the user who meant it can simply touch
+            // again — the sensor is live before their hand is back.
+            armPassiveAuth()
+
+        case .rearmOnNextTick:
+            break
+
+        case .standDown:
+            passiveAuthSuspended = true
+        }
+    }
+
+    /// Rides the one-second lock tick, which is already running for the elapsed clock.
+    private func tickPassiveAuth() {
+        guard state == .locked else { return }
+
+        if passiveAuthArmed {
+            // Secure input hides keystrokes from event taps (the #10 bypass), so an armed
+            // sensor that turned it on would silently kill the unlock hotkey — the primary
+            // way out. Measurement says the biometric prompt leaves it alone, unlike the
+            // password sheet, but one early sample is the shape that fails worst: a later
+            // flip on a slower machine or a future OS would go unnoticed for the whole
+            // session with no recovery. So keep looking for as long as we stay armed.
+            if !secureInputBeforeArm, IsSecureEventInputEnabled() {
+                logger.warning("Secure input came up while Touch ID was armed — standing down, hotkey unlock takes priority")
+                passiveAuthSuspended = true
+                disarmPassiveAuth()
+            }
+            return
+        }
+
+        // Nothing armed while the screen is still covered: an evaluation the system
+        // cancelled or expired under us, including after hours of being armed. Re-arming
+        // from the tick rather than from the outcome caps retries at one a second, so an
+        // ending that repeats without user input cannot spin.
+        armPassiveAuth()
     }
 
     private func stopTimer() {
