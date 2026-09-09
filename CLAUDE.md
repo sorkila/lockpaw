@@ -235,38 +235,39 @@ LockpawCLI/                         (sibling of Lockpaw/)
 
 ## Awesome list submissions
 
-Lockpaw has been submitted to the following curated lists. **⚠️ Never delete a fork until its PR is merged** — the 2026-04-19 fork cleanup deleted forks for 13 still-open PRs, which GitHub auto-closed. All 13 were resubmitted from fresh forks on 2026-06-11 (rows below); the forks live under `sorkila/` and stay until each PR merges, then delete:
+Lockpaw has been submitted to the following curated lists. **⚠️ Never delete a fork until its PR is merged** — the 2026-04-19 fork cleanup deleted forks for 13 still-open PRs, which GitHub auto-closed. All 13 were resubmitted from fresh forks on 2026-06-11 (rows below); the forks live under `sorkila/` and stay until each PR merges, then delete. **Status audited 2026-09-09** — a "Pending" row is worthless without checking whether the list still merges anything: of the 2026-06-11 batch, three merged, two were closed, and six sit in lists that are either abandoned or have never merged a PR. Check `pushed_at` and the last merged PR before spending time on a nudge:
 
 | Repo | PR | Category | Status |
 |---|---|---|---|
 | `jaywcjlove/awesome-mac` | #1901 | Security Tools | Merged |
 | `jaywcjlove/awesome-swift-macos-apps` | #27 | Security | Merged |
 | `xyNNN/awesome-mac` | #29 | Security | Merged |
-| `phmullins/awesome-macos` | #199 | Security | Pending (resubmitted 2026-06-11, was #158) |
-| `milanaryal/awesome-macos` | #12 | Utilities | Pending (resubmitted 2026-06-11, was #7; fork is `sorkila/awesome-macos-milanaryal` due to name collision) |
+| `phmullins/awesome-macos` | #199 | Security | Open, list dead — no push since 2025-01-22; stop chasing |
+| `milanaryal/awesome-macos` | #12 | Utilities | Open, has never merged a PR — stop chasing (fork is `sorkila/awesome-macos-milanaryal`) |
 | `iCHAIT/awesome-macOS` | #731 | Security | Merged |
-| `open-saas-directory/awesome-native-macosx-apps` | #87 | Security & Privacy | Pending (resubmitted 2026-06-11, was #48) |
-| `SKaplanOfficial/Mac-Menubar-Megalist` | #18 | Security | Pending (resubmitted 2026-06-11, was #11) |
+| `open-saas-directory/awesome-native-macosx-apps` | #87 | Security & Privacy | Merged 2026-06-14 (fork deleted) |
+| `SKaplanOfficial/Mac-Menubar-Megalist` | #18 | Security | Merged 2026-07-13 (fork deleted) |
 | `ashishb/osx-and-ios-security-awesome` | #48 | macOS Security | Merged |
 | `jeffreyjackson/mac-apps` | #79 | Mac Interface Exclusives | Merged |
 | `kai5263499/osx-security-awesome` | #24 | Useful tools and guides | Merged |
-| `drduh/macOS-Security-and-Privacy-Guide` | #532 | Related software | Pending (resubmitted 2026-06-11, was #523) |
-| `tonnoz/super-awesome-mac` | #7 | Utils | Pending (resubmitted 2026-06-11, was #3) |
-| `guyzyl/awesome-macos-apps` | #25 | Utilities | Pending (resubmitted 2026-06-11, was #19) |
+| `drduh/macOS-Security-and-Privacy-Guide` | #532 | Related software | Rejected 2026-07-25 — "I would like to avoid self-promo content for now"; do not resubmit |
+| `tonnoz/super-awesome-mac` | #7 | Utils | Open, has never merged a PR — stop chasing |
+| `guyzyl/awesome-macos-apps` | #25 | Utilities | Closed unmerged 2026-06-21, no reason given |
 | `serhii-londar/open-source-mac-os-apps` | #1062 | Security + Menubar | Closed |
 | `matteocrippa/awesome-swift` | #1899 | Security | Rejected (libraries only) |
 | `Wolg/awesome-swift` | #283 | Security | Closed |
 | `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Rejected (project too new) |
-| `pluja/awesome-privacy` | #859 | Desktop | Pending (resubmitted 2026-06-11, was #731) |
+| `pluja/awesome-privacy` | #859 | Desktop | Open, nudged 2026-09-09 — alive (merged 2026-07-06) but 576 PRs deep |
 | `onmyway133/awesome-swiftui` | #29 | Open source apps > macOS | Merged |
-| `linsa-io/macos-apps` | #54 | Utilities | Pending (resubmitted 2026-06-11, was #40) |
-| `johnjago/awesome-free-software` | #130 | Utilities | Pending (resubmitted 2026-06-11, was #100) |
-| `unicodeveloper/awesome-opensource-apps` | #183 | Swift | Pending (resubmitted 2026-06-11, was #162; PR also restores the list README clobbered by their #149) |
-| `sbilly/awesome-security` | #594 | Endpoint > Authentication | Pending (resubmitted 2026-06-11, was #471) |
-| `ishanvyas22/awesome-open-source-systems` | #24 | Security | Pending (resubmitted 2026-06-11, was #16) |
-| `Piebald-AI/awesome-gemini-cli` | #58 | Development Tools & Utilities | Pending (submitted 2026-06-12; list merges actively) |
-| `RoggeOhta/awesome-codex-cli` | #88 | GUI & Desktop Apps | Pending (submitted 2026-06-12; ⚠️ list has never merged a PR) |
-| `hesreallyhim/awesome-claude-code` | issue #2015 | Tooling | Pending (submitted 2026-06-12 via their issue form — PRs banned; bot validation passed, awaiting maintainer review; status-update comment posted 2026-08-18 via browser) |
+| `linsa-io/macos-apps` | #54 | Utilities | Open, nudged 2026-09-09 — alive (merged 2026-07-20) |
+| `johnjago/awesome-free-software` | #130 | Utilities | Open, list dead — no push since 2025-04-29; stop chasing |
+| `unicodeveloper/awesome-opensource-apps` | #183 | Swift | Open, nudged 2026-09-09 — alive (merged 2026-08-27); PR also restores the README clobbered by their #149 |
+| `sbilly/awesome-security` | #594 | Endpoint > Authentication | Open, no merge in its recent history — stop chasing |
+| `ishanvyas22/awesome-open-source-systems` | #24 | Security | Open, nudged 2026-09-09 — alive (merged 2026-06-04) |
+| `Piebald-AI/awesome-gemini-cli` | #58 | Development Tools & Utilities | Merged 2026-06-12 (fork deleted) |
+| `RoggeOhta/awesome-codex-cli` | #88 | GUI & Desktop Apps | Open, still has never merged a PR — stop chasing |
+| `hesreallyhim/awesome-claude-code` | issue #2015 | Tooling | **Live in the README** since the July renovation (generous write-up); issue stays open on their process. Test count corrected 2026-09-09 (said 50, now 117) |
+| `GetBindu/awesome-claude-code-and-skills` | #199 | Productivity > Desktop Applications & GUI Tools | Pending (submitted 2026-09-09; list merges actively, last merge 2026-08-19) |
 
 ## Directory listings
 
