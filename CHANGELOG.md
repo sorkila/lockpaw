@@ -1,10 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [1.4.0] - 2026-09-09
 
 ### Added
 
 - Touch ID is armed while locked, so **the first finger press unlocks** — no click first, the way the system lock screen behaves. The prompt it opens sits behind the cover and is never seen; the screen stays locked and input stays blocked until the sensor matches. A rejected finger costs you nothing: a palm or a bag strap on the sensor reads the same as a wrong finger, so it never spends the three attempts that guard the password fallback (Touch ID enforces its own lockout in hardware). Contributed in #16 by @Uzer447. Closes #12.
+
+### Fixed
+
+- The hotkey no longer types its own key into whatever you were using. The global hotkey ran on a listen-only event tap, which can observe a keystroke but cannot swallow it, so locking from a terminal with Cmd+Shift+L also left an `L` at the prompt. The matched keypress is now consumed; every other key passes through untouched.
 
 ### Changed
 

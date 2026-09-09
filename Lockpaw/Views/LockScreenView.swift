@@ -29,11 +29,11 @@ struct LockScreenView: View {
     private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
     private var mascotAssetName: String? { Mascot.resolved(from: selectedMascot).assetName }
 
-    /// The sensor is live when `passiveAuthArmed`, so name the gesture that already works
+    /// The sensor is live when `passiveAuthLive`, so name the gesture that already works
     /// rather than pointing at the button below it — the button stays for the password
     /// fallback and for Macs with no Touch ID.
     private var unlockPrompt: String {
-        if controller.passiveAuthArmed {
+        if controller.passiveAuthLive {
             return requiresAuthenticationToUnlock ? "Touch ID to unlock" : "Touch ID, or your hotkey, to unlock"
         }
         return requiresAuthenticationToUnlock ? "Authentication required to unlock" : "Use your hotkey to unlock, or"

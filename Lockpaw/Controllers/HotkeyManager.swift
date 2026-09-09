@@ -7,7 +7,8 @@ private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "Hot
 /// Manages global hotkey detection using a CGEventTap on a dedicated background thread.
 /// Running on its own thread with its own run loop bypasses the LSUIElement activation
 /// issue where the main run loop doesn't process events until user interaction.
-/// Requires Accessibility permission.
+/// The tap is a `.defaultTap` so the hotkey can be consumed rather than delivered to
+/// whatever is frontmost as well. Requires Accessibility permission.
 class HotkeyManager {
     private var eventTap: CFMachPort?
     private var tapThread: Thread?
@@ -33,7 +34,7 @@ class HotkeyManager {
         eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,
+            options: .defaultTap,
             eventsOfInterest: 1 << CGEventType.keyDown.rawValue,
             callback: { _, type, event, refcon -> Unmanaged<CGEvent>? in
                 // Re-enable if the tap gets disabled by the system
@@ -65,6 +66,12 @@ class HotkeyManager {
                     DispatchQueue.main.async {
                         NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
                     }
+                    // Swallow it. A .listenOnly tap cannot, so the hotkey's own key used to
+                    // reach the frontmost app as well — locking from a terminal with
+                    // Cmd+Shift+L typed an "L" at the prompt. Only the matched keyDown is
+                    // consumed; every other key passes through untouched. The orphaned
+                    // keyUp is harmless (nothing acts on a keyUp alone).
+                    return nil
                 }
 
                 return Unmanaged.passUnretained(event)
