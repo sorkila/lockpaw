@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Touch ID is armed while locked, so **the first finger press unlocks** — no click first, the way the system lock screen behaves. The prompt it opens sits behind the cover and is never seen; the screen stays locked and input stays blocked until the sensor matches. A rejected finger costs you nothing: a palm or a bag strap on the sensor reads the same as a wrong finger, so it never spends the three attempts that guard the password fallback (Touch ID enforces its own lockout in hardware). Contributed in #16 by @Uzer447. Closes #12.
+
+### Changed
+
+- While the sensor is armed the mouse pointer stays visible on the lock screen. macOS hands the biometric prompt the app's activation for as long as it's armed, and the only pointer-hiding call that works needs the app to be active — measured on macOS 26, arming alone redraws the pointer within half a second, and taking activation back conceals it for about one second before the system reclaims it. Fighting for it would flicker the pointer and steal focus every few seconds, so it stays visible. Nothing changes when the sensor isn't armed.
+
 ## [1.3.2] - 2026-09-08
 
 ### Fixed
