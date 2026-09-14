@@ -26,4 +26,14 @@ final class MascotTests: XCTestCase {
         // Settings lists the cases in declaration order; "None" belongs after the two mascots.
         XCTAssertEqual(Mascot.allCases.last, .hidden)
     }
+
+    func testCustomMascotHasNoBundledAsset() {
+        XCTAssertEqual(Mascot.resolved(from: "custom"), .custom)
+        XCTAssertNil(Mascot.custom.assetName)
+        XCTAssertEqual(Mascot.custom.displayName, "Custom")
+    }
+
+    func testCustomSitsBetweenTheBuiltInsAndNone() {
+        XCTAssertEqual(Mascot.allCases, [.dog, .cat, .custom, .hidden])
+    }
 }
