@@ -38,7 +38,7 @@
 - 🌑 **Fade to black** — optionally dim the lock screen to pure black after inactivity (OLED-safe) without ever sleeping the display, so agents keep running
 - 📦 **10 MB** — native Swift, no Electron
 - 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check
-- 🐕🐈 **Dog or cat mode** — choose the metallic origami dog or cat for the lock screen, or no mascot at all
+- 🐕🐈 **Dog, cat, or your own** — choose the metallic origami dog or cat for the lock screen, drop in your own image, or show no mascot at all
 - ⚙️ **Native Settings** — lock screen, shortcuts, updates, permissions, and about in one quiet window
 
 <br>
@@ -52,7 +52,7 @@
 | Fallback unlock | Click *Authenticate with Touch ID* at the bottom of the lock screen |
 | Settings | Menu bar → Settings… |
 | Change hotkey | Settings → Shortcuts → click to record |
-| Change mascot (or turn it off) | Settings → Lock Screen → Mascot |
+| Change mascot, use your own image, or turn it off | Settings → Lock Screen → Mascot |
 | Hide the menu bar icon | Settings → General → Show menu bar icon (open Lockpaw from Applications to bring it back) |
 
 <br>
@@ -123,7 +123,7 @@ The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow.
 
 **Calm by default** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer; the pointer slips away after a moment of stillness. The fallback auth button waits quietly at the bottom — always there, never loud. When an agent pings, the screen breathes two slow waves of teal, then keeps a soft "your agent needs you" hint until you return.
 
-**Mascots** — a metallic origami dog or cat rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the mascot scales up with a teal bloom and fades away.
+**Mascots** — a metallic origami dog or cat rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the mascot scales up with a teal bloom and fades away. Or bring your own: a custom image gets a soft feathered edge so it sits in the same pool of light (transparent backgrounds look best).
 
 **Typography** — system San Francisco throughout. Regular weight message at 55% white. Monospaced timer at 35%. The screen whispers.
 
@@ -218,7 +218,7 @@ Lockpaw/
 │  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
 │  ├─ PingDecision               Pure agent-ping decision (pulse/notify/sound)
 │  ├─ PassiveAuthPolicy          Pure armed-Touch-ID rules (arm/re-arm/stand down)
-│  ├─ Mascot                     Dog/cat/none lock screen preference
+│  ├─ Mascot                     Dog/cat/custom/none lock screen preference
 │  └─ TerminationPolicy          Quit is refused while guarded (+ LockStatus mirror)
 ├─ Views/
 │  ├─ LockScreenView             Dog/cat mascot · agent-ping glow · fallback auth

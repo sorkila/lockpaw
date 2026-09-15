@@ -11,7 +11,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows
 - **Repo:** git@github.com:sorkila/lockpaw.git
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
-- **Current version:** 1.4.1
+- **Current version:** 1.5.0
 - **Size:** ~10 MB DMG download, ~13 MB installed (2.7 MB of that is Sparkle) — keep README/site/marketing claims in sync with the actual DMG when this changes
 
 ## Build
@@ -32,7 +32,7 @@ tccutil reset Accessibility com.eriknielsen.lockpaw
 xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ```
 
-117 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` case), PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, TerminationPolicy (quit refused unless `.unlocked`), OverlayPolicy (no overlay is ever transparent to the pointer; only the primary takes key), and PassiveAuthPolicy (when the Touch ID sensor may be armed × how each LAError ending is scored, including that no ending can spend an unlock attempt).
+135 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` and `custom` cases), CustomMascot store (atomic install, downsampling, rejection leaves the old image intact, cached `hasImage`), PingDecision agent-ping branching, FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, TerminationPolicy (quit refused unless `.unlocked`), OverlayPolicy (no overlay is ever transparent to the pointer; only the primary takes key), and PassiveAuthPolicy (when the Touch ID sensor may be armed × how each LAError ending is scored, including that no ending can spend an unlock attempt).
 
 ## Release
 
@@ -73,13 +73,15 @@ Lockpaw/
 ├── Models/
 │   ├── LockState.swift             .unlocked → .locking → .locked → .unlocking
 │   ├── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection/auth unlock preference
-│   ├── Mascot.swift                Dog/cat lock-screen mascot preference
+│   ├── Mascot.swift                Dog/cat/custom/hidden lock-screen mascot preference
+│   ├── CustomMascot.swift          User image store — Application Support copy, downsampled PNG, cached hasImage
 │   ├── FadeToBlack.swift           Fade-to-black preference + pure presentation reducer (LockPresentation / PresentationLogic)
 │   ├── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
 │   ├── OverlayPolicy.swift         Pure per-screen overlay config (clicks swallowed everywhere; key only on primary)
 │   └── PassiveAuthPolicy.swift     Pure passive Touch ID rules (arm/re-arm/stand down + LAError scoring)
 ├── Views/
 │   ├── OverlayRootView.swift       Per-screen presentation switch — lock UI / pure black / attention pulse
+│   ├── MascotImage.swift           Mascot pixels for a preference — asset catalog or CustomMascot; feathered mask on custom
 │   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
 │   ├── AmbientScreenView.swift     Secondary display — morphing gradient blobs
 │   ├── MenuBarView.swift           Menu bar dropdown
@@ -99,7 +101,8 @@ LockpawTests/                       (sibling of Lockpaw/)
 ├── SleepPreventerTests.swift       Sleep assertion state handling (5 tests)
 ├── FadeToBlackTests.swift          Fade-to-black checkbox/delay resolution + timeout mapping (11 tests)
 ├── PresentationLogicTests.swift    Presentation reducer: blackout/reveal/pulse/error branches (30 tests)
-├── MascotTests.swift               Mascot resolution incl. hidden (5 tests)
+├── MascotTests.swift               Mascot resolution incl. hidden + custom (7 tests)
+├── CustomMascotTests.swift         Store: install/replace/reject/remove, downsampling, revision, cached hasImage (18 tests)
 ├── TerminationPolicyTests.swift    Quit guard + LockStatus mirror (3 tests)
 ├── AgentPingTests.swift            PingDecision branching: locked/unlocked × sound (6 tests)
 ├── OverlayPolicyTests.swift        Per-screen overlay config: mouse events + key status (3 tests)
@@ -166,6 +169,13 @@ LockpawCLI/                         (sibling of Lockpaw/)
 - **Quit is refused while guarded** — `AppDelegate.applicationShouldTerminate` returns `.terminateCancel` unless `TerminationPolicy.allowsQuit(state:)` (pure, tested: only `.unlocked`). Why: the overlay makes Lockpaw the active app and the menu's Quit carries an app-wide Cmd+Q; the input tap normally swallows it, but macOS enables **secure input while the LAContext password sheet is up, and secure input hides keystrokes from event taps** — so Cmd+Q reached the app and quit it (reported in #10 by @moonlit-ds). `LockStatus.shared` mirrors `LockController.state` (a `didSet`) so the delegate can read it without a controller reference. `.terminateCancel` also blocks logout/shutdown while locked — accepted, that is what a lock does; ssh `shutdown` bypasses app replies anyway.
 - **Menu bar icon is optional** — `MenuBarExtra(isInserted:)` bound to `Constants.showMenuBarIconKey` (default on). Ways back in when hidden: the hotkey, the CLI, `lockpaw://settings`, and **reopening the app** (`applicationShouldHandleReopen` re-enables the icon and opens Settings via the `showSettingsWindow:` selector — SwiftUI's Settings scene has no opener outside a View). Onboarding never hides it. (#14)
 - **Mascot `.hidden` (raw value "none")** — `assetName` is optional; the lock screen, onboarding hero and Settings preview all branch on it. Named `hidden`, not `none`, so call sites never collide with `Optional.none`. (#8, #9)
+
+### Custom mascot (v1.5.0, #17 by @berk-karaal)
+- **`Mascot.custom` has no `assetName`; `CustomMascot.shared` owns the pixels** — every mascot render goes through `MascotImage(mascot)`, and call sites gate their glow/shadow on `CustomMascot.shared.canShow(mascot)` so `.custom` with no file draws nothing (never a silent fallback to Dog). Onboarding has no mascot picker, so it can only ever render what Settings stored.
+- **Install decodes, downsamples and re-encodes before writing** — `downsampledPNG(from:maxPixelSize:)` runs the picked file through ImageIO's thumbnail path (max edge `CustomMascot.maxPixelSize` = 1024, EXIF orientation baked in, never upscaled) and writes a real PNG atomically. Junk input throws before the write, so a working mascot is never wiped. A 48 MP photo would otherwise sit decoded at ~200 MB for the hours the lock screen stays up, and decode on the main thread on the first lock.
+- **`hasImage` is a cached `@Published` bool, seeded from disk in `init`** — view bodies read it and the lock screen re-evaluates its body on every breath frame, so a `fileExists` per read was a syscall at animation rate. `install`/`remove` are the only writers.
+- **Custom images get a feathered elliptical mask** — Dog and Cat are cut-outs on transparent ground; a photo is an opaque rectangle and reads as a card sitting on the ping glow. `MascotImage` masks `.custom` only, with an `EllipticalGradient` opaque to 55% and clear at the frame edge. Bundled assets render pixel-identical to before.
+- **Nothing animates** — `Image(nsImage:)` draws one frame, so a GIF costs what a PNG costs (the PNG re-encode drops the other frames anyway). The Settings row offers Remove (calls `remove()`) next to Replace; switching to another mascot keeps the file so switching back restores it.
 
 ### Misc
 - **NSHostingView requires explicit autoresizingMask** — defaults to 0 (no flex). Must set `[.width, .height]` and `frame = window.contentLayoutRect`.

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.0] - 2026-09-15
+
+### Added
+
+- Lock screen: **Mascot → Custom**. Pick any PNG, JPEG or HEIC and it takes the dog's place — on the lock screen, in the Settings preview and in onboarding. The image is copied into Lockpaw's Application Support folder, so the original can move or go, and it is scaled down to 1024px on install so a full-size photo never sits decoded in memory for the hours the screen stays up. Opaque images get a soft feathered edge so a photo melts into the pool of light rather than sitting on top of the ping glow; transparent backgrounds look best. Nothing animates: an animated GIF shows its first frame. Dog stays the default. Contributed in #17 by @berk-karaal. Relates to #9.
+
 ## [1.4.1] - 2026-09-09
 
 ### Fixed
