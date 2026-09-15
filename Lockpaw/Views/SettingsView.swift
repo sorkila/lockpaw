@@ -229,14 +229,28 @@ struct SettingsView: View {
                     SettingsDivider()
 
                     SettingsRow("Custom image", subtitle: customImageSubtitle) {
-                        Button {
-                            chooseCustomMascotImage()
-                        } label: {
-                            Text(customMascot.hasImage ? "Replace\u{2026}" : "Choose Image\u{2026}")
-                                .padding(.horizontal, 8)
+                        HStack(spacing: 8) {
+                            if customMascot.hasImage {
+                                Button {
+                                    customMascot.remove()
+                                    customMascotError = nil
+                                } label: {
+                                    Text("Remove")
+                                        .padding(.horizontal, 8)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.regular)
+                            }
+
+                            Button {
+                                chooseCustomMascotImage()
+                            } label: {
+                                Text(customMascot.hasImage ? "Replace\u{2026}" : "Choose Image\u{2026}")
+                                    .padding(.horizontal, 8)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.regular)
                     }
                 }
 
@@ -308,7 +322,7 @@ struct SettingsView: View {
     }
 
     private var customImageSubtitle: String {
-        customMascotError ?? "PNG, JPEG or HEIC. Copied into Lockpaw, so the original can move or go."
+        customMascotError ?? "PNG, JPEG or HEIC. Copied into Lockpaw and scaled down, so the original can move or go. Transparent backgrounds look best."
     }
 
     private func mascotPreviewCaption(_ mascot: Mascot) -> String {

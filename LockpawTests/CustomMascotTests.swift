@@ -74,6 +74,30 @@ final class CustomMascotTests: XCTestCase {
         XCTAssertFalse(store.hasImage)
     }
 
+    // MARK: - Downsampling (a photo must not sit decoded at full size for hours)
+
+    func testInstallDownsamplesToTheMaximumEdge() throws {
+        try store.install(from: makeImageFile(pixels: CustomMascot.maxPixelSize * 3))
+
+        let size = try XCTUnwrap(store.loadImage()?.size)
+        XCTAssertEqual(max(size.width, size.height), CGFloat(CustomMascot.maxPixelSize))
+    }
+
+    func testInstallNeverUpscalesASmallImage() throws {
+        try store.install(from: makeImageFile(pixels: 24))
+        XCTAssertEqual(store.loadImage()?.size, NSSize(width: 24, height: 24))
+    }
+
+    // MARK: - hasImage is cached, so it must be seeded from disk
+
+    func testHasImageIsSeededFromDiskForANewStore() throws {
+        try store.install(from: makeImageFile(pixels: 8))
+
+        let fresh = CustomMascot(directory: directory)
+        XCTAssertTrue(fresh.hasImage)
+        XCTAssertTrue(fresh.canShow(.custom))
+    }
+
     // MARK: - Remove
 
     func testRemoveDeletesTheImage() throws {
