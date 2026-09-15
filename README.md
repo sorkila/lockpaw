@@ -221,7 +221,7 @@ Lockpaw/
 │  ├─ Mascot                     Dog/cat/custom/none lock screen preference
 │  └─ TerminationPolicy          Quit is refused while guarded (+ LockStatus mirror)
 ├─ Views/
-│  ├─ LockScreenView             Dog/cat mascot · agent-ping glow · fallback auth
+│  ├─ LockScreenView             Mascot (dog/cat/custom) · agent-ping glow · fallback auth
 │  ├─ AmbientScreenView          Secondary display gradient animation
 │  ├─ MenuBarView                Dropdown · lock/unlock/quit
 │  ├─ SettingsView               Native tabs · hotkey recorder · updates
