@@ -3,6 +3,7 @@ import AppKit
 import ServiceManagement
 import Sparkle
 import Carbon
+import UniformTypeIdentifiers
 
 final class UpdateCheckViewModel: NSObject, ObservableObject, SPUUpdaterDelegate {
     @Published var canCheckForUpdates = false
@@ -115,6 +116,7 @@ struct SettingsView: View {
     @AppStorage(Constants.showMenuBarIconKey) private var showMenuBarIcon = true
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
+    @ObservedObject private var customMascot = CustomMascot.shared
 
     @State private var selectedSection: SettingsSection = .lockScreen
     @State private var isRecording = false
@@ -123,6 +125,7 @@ struct SettingsView: View {
     @State private var accessibilityGranted = AccessibilityChecker.isEnabled
     @State private var accessibilityTimer: Timer?
     @State private var agentSetupResults: [String: AgentSetupResult] = [:]
+    @State private var customMascotError: String?
 
     init(viewModel: UpdateCheckViewModel) {
         self.updateCheckViewModel = viewModel
@@ -218,8 +221,23 @@ struct SettingsView: View {
                     SettingsSegmentedControl(
                         selection: $selectedMascot,
                         options: Mascot.allCases.map { ($0.displayName, $0.rawValue) },
-                        width: 240
+                        width: 300
                     )
+                }
+
+                if Mascot.resolved(from: selectedMascot) == .custom {
+                    SettingsDivider()
+
+                    SettingsRow("Custom image", subtitle: customImageSubtitle) {
+                        Button {
+                            chooseCustomMascotImage()
+                        } label: {
+                            Text(customMascot.hasImage ? "Replace\u{2026}" : "Choose Image\u{2026}")
+                                .padding(.horizontal, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                    }
                 }
 
                 SettingsDivider()
@@ -289,6 +307,37 @@ struct SettingsView: View {
         }
     }
 
+    private var customImageSubtitle: String {
+        customMascotError ?? "PNG, JPEG or HEIC. Copied into Lockpaw, so the original can move or go."
+    }
+
+    private func mascotPreviewCaption(_ mascot: Mascot) -> String {
+        switch mascot {
+        case .hidden:
+            return "Only your message and the timer on the primary display."
+        case .custom where !customMascot.hasImage:
+            return "Choose an image to show it on the primary display."
+        default:
+            return "Shown on the primary display while Lockpaw is active."
+        }
+    }
+
+    private func chooseCustomMascotImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.prompt = "Use Image"
+        panel.message = "Choose an image for the lock screen."
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try customMascot.install(from: url)
+            customMascotError = nil
+        } catch {
+            customMascotError = error.localizedDescription
+        }
+    }
+
     private var mascotPreview: some View {
         let mascot = Mascot.resolved(from: selectedMascot)
 
@@ -310,12 +359,13 @@ struct SettingsView: View {
                     endRadius: 120
                 )
 
-                if let asset = mascot.assetName {
-                    Image(asset)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
+                if CustomMascot.shared.canShow(mascot) {
+                    MascotImage(mascot)
                         .padding(18)
+                } else if mascot == .custom {
+                    Text("No image chosen")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.35))
                 } else {
                     // What "None" looks like: just the quiet timer line.
                     Text("00:00")
@@ -334,9 +384,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(mascot == .hidden ? "No mascot" : "\(mascot.displayName) takeover")
                     .font(.system(size: 15, weight: .semibold))
-                Text(mascot == .hidden
-                     ? "Only your message and the timer on the primary display."
-                     : "Shown on the primary display while Lockpaw is active.")
+                Text(mascotPreviewCaption(mascot))
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

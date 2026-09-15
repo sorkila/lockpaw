@@ -17,6 +17,8 @@ struct OnboardingView: View {
 
     private let totalSteps = 5
 
+    private var mascot: Mascot { Mascot.resolved(from: selectedMascot) }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -140,11 +142,8 @@ struct OnboardingView: View {
                 .blur(radius: 18)
                 .offset(y: size * 0.5)
 
-            if let asset = Mascot.resolved(from: selectedMascot).assetName {
-                Image(asset)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
+            if CustomMascot.shared.canShow(mascot) {
+                MascotImage(mascot)
                     .frame(width: size, height: size)
                     .shadow(color: Color("LockpawTeal").opacity(0.18), radius: 24, y: 8)
                     .scaleEffect(mascotBreath ? 1.03 : 1.0)
@@ -308,11 +307,8 @@ struct OnboardingView: View {
                         center: .center, startRadius: 0, endRadius: 95))
                     .blendMode(.plusLighter)
 
-                if let asset = Mascot.resolved(from: selectedMascot).assetName {
-                    Image(asset)
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
+                if CustomMascot.shared.canShow(mascot) {
+                    MascotImage(mascot)
                         .frame(width: 46, height: 46)
                 }
             }

@@ -27,7 +27,7 @@ struct LockScreenView: View {
 
     private var breathe: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.2) }
     private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
-    private var mascotAssetName: String? { Mascot.resolved(from: selectedMascot).assetName }
+    private var mascot: Mascot { Mascot.resolved(from: selectedMascot) }
 
     /// The sensor is live when `passiveAuthLive`, so name the gesture that already works
     /// rather than pointing at the button below it — the button stays for the password
@@ -56,15 +56,13 @@ struct LockScreenView: View {
                     // Mascot + message + time as a tight cohesive group
                     VStack(spacing: unit * 1.2) {
 
-                        // Mascot (absent entirely when the preference is "None")
-                        if let mascotAssetName {
+                        // Mascot (absent entirely when the preference is "None",
+                        // or "Custom" with no image installed)
+                        if CustomMascot.shared.canShow(mascot) {
                         ZStack {
                             if controller.unlockSucceeded {
                                 // Success animation: mascot scales up and fades
-                                Image(mascotAssetName)
-                                    .resizable()
-                                    .interpolation(.high)
-                                    .scaledToFit()
+                                MascotImage(mascot)
                                     .frame(width: mascotSize, height: mascotSize)
                                     .scaleEffect(successScale)
                                     .opacity(2.0 - Double(successScale))
@@ -77,10 +75,7 @@ struct LockScreenView: View {
                                         .blur(radius: 12)
                                         .offset(y: mascotSize * 0.45)
 
-                                    Image(mascotAssetName)
-                                        .resizable()
-                                        .interpolation(.high)
-                                        .scaledToFit()
+                                    MascotImage(mascot)
                                         .frame(width: mascotSize, height: mascotSize)
                                         .shadow(color: Color("LockpawTeal").opacity(0.15 + breathe * 0.08), radius: 35 + breathe * 8, y: 10)
                                         .shadow(color: .black.opacity(0.15), radius: 45, y: 30)

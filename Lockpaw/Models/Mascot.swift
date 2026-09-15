@@ -3,6 +3,8 @@ import Foundation
 enum Mascot: String, CaseIterable, Identifiable {
     case dog
     case cat
+    /// The user's own image, stored by `CustomMascot` rather than the asset catalog.
+    case custom
     /// No mascot at all: the lock screen is just the message and the timer.
     /// Raw value "none" is what Settings stores; the case is named `hidden` so
     /// call sites never collide with `Optional.none`.
@@ -17,16 +19,17 @@ enum Mascot: String, CaseIterable, Identifiable {
         switch self {
         case .dog: return "Dog"
         case .cat: return "Cat"
+        case .custom: return "Custom"
         case .hidden: return "None"
         }
     }
 
-    /// Image asset for the mascot, or nil when no mascot is shown.
+    /// Image asset for the mascot, or nil when there is no bundled asset to show.
     var assetName: String? {
         switch self {
         case .dog: return "Mascot"
         case .cat: return "MascotCat"
-        case .hidden: return nil
+        case .custom, .hidden: return nil
         }
     }
 
