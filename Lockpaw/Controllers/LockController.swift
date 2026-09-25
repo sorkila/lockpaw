@@ -191,13 +191,21 @@ class LockController: ObservableObject {
 
         let mirrorAll = UserDefaults.standard.integer(forKey: "multiDisplayMode") == 1
         let fadeTimeout = FadeToBlack.currentTimeout
+        let showsWallpaper = UserDefaults.standard.bool(forKey: DesktopWallpaper.enabledKey)
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard overlayManager.showOverlay(contentFactory: { [weak self] index, isPrimary in
             guard let self else { return AnyView(Color.black) }
+            // The factory runs once per entry of NSScreen.screens, in order.
+            let screens = NSScreen.screens
+            let wallpaper = showsWallpaper && screens.indices.contains(index)
+                ? DesktopWallpaper.current(for: screens[index], reduceMotion: reduceMotion)
+                : nil
             return AnyView(OverlayRootView(
                 controller: self,
                 presentationController: self.presentationController,
                 showsLockUI: isPrimary || mirrorAll,
-                phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15
+                phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15,
+                wallpaper: wallpaper
             ))
         }) else {
             logger.error("Lock failed — no screens available for overlay")

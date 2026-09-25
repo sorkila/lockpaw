@@ -9,6 +9,9 @@ struct LockScreenView: View {
     @ObservedObject var controller: LockController
     var screenRole: ScreenRole = .primary
     var phaseOffset: CGFloat = 0
+    /// False when the desktop wallpaper sits behind — the dark gradient and color
+    /// pools would paint over it. The ping glow still draws either way.
+    var drawsBackdrop = true
 
     @AppStorage("showMessage") private var showMessage = true
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
@@ -291,17 +294,19 @@ struct LockScreenView: View {
 
     private func background(geo: GeometryProxy) -> some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.01, green: 0.005, blue: 0.025), .black, Color(red: 0.01, green: 0.005, blue: 0.02)],
-                startPoint: .top, endPoint: .bottom
-            ).ignoresSafeArea()
+            if drawsBackdrop {
+                LinearGradient(
+                    colors: [Color(red: 0.01, green: 0.005, blue: 0.025), .black, Color(red: 0.01, green: 0.005, blue: 0.02)],
+                    startPoint: .top, endPoint: .bottom
+                ).ignoresSafeArea()
 
-            RadialGradient(
-                colors: [Color("LockpawTeal").opacity(0.015 + breathe * 0.005), .clear],
-                center: .bottom, startRadius: 0, endRadius: 500
-            ).ignoresSafeArea().allowsHitTesting(false)
+                RadialGradient(
+                    colors: [Color("LockpawTeal").opacity(0.015 + breathe * 0.005), .clear],
+                    center: .bottom, startRadius: 0, endRadius: 500
+                ).ignoresSafeArea().allowsHitTesting(false)
 
-            if !reduceMotion { colorPools(geo: geo) }
+                if !reduceMotion { colorPools(geo: geo) }
+            }
 
             // Attention glow — fires on an agent ping. Bright and full-screen so it
             // reads from across a room while the screen stays covered.

@@ -113,6 +113,7 @@ struct SettingsView: View {
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
     @AppStorage(FadeToBlack.enabledKey) private var fadeToBlackEnabled = FadeToBlack.defaultEnabled
     @AppStorage(FadeToBlack.storageKey) private var fadeToBlackDelay = FadeToBlack.defaultValue
+    @AppStorage(DesktopWallpaper.enabledKey) private var showDesktopWallpaper = DesktopWallpaper.defaultEnabled
     @AppStorage(Constants.showMenuBarIconKey) private var showMenuBarIcon = true
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
@@ -262,6 +263,12 @@ struct SettingsView: View {
                         options: [("Ambient", 0), ("Mirror", 1)],
                         width: 220
                     )
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Desktop wallpaper", subtitle: "Show your macOS wallpaper behind the lock screen. Aerials play.") {
+                    SettingsCheckbox(isOn: $showDesktopWallpaper)
                 }
 
                 SettingsDivider()
