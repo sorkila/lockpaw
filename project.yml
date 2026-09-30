@@ -61,6 +61,9 @@ targets:
     platform: macOS
     sources:
       - path: LockpawCLI
+      # Shared with the app so the hook merge has one definition and the app's
+      # unit tests cover what the CLI runs.
+      - path: Lockpaw/Models/AgentHookConfig.swift
     settings:
       base:
         PRODUCT_NAME: lockpaw

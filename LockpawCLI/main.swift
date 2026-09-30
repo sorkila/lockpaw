@@ -167,11 +167,6 @@ func claudeConfigDirectory() -> URL {
 /// keeps the hook valid when the app moves or updates.
 let claudePingCommand = "\"$HOME/.local/bin/lockpaw\" ping"
 
-/// Matches any hook that runs a lockpaw ping, in whatever form a past version wrote it.
-func isLockpawPingCommand(_ command: String) -> Bool {
-    command.contains("lockpaw") && command.contains("ping")
-}
-
 /// The command points at the ~/.local/bin symlink; bail out if it can't be created.
 func requireCLISymlink() {
     do {
@@ -181,42 +176,13 @@ func requireCLISymlink() {
     }
 }
 
-/// Merge a lockpaw ping into a Claude Code-style `hooks` object — the schema Gemini
-/// CLI adopted too: each event maps to an array of groups, each group holding a
-/// `hooks` array of {type, command} entries. Upgrades any existing lockpaw entry in
-/// place (older versions wrote a bare `lockpaw ping`, which silently fails when
-/// ~/.local/bin isn't on PATH); never touches foreign hooks.
-func mergingPingHook(into root: [String: Any], events: [String]) -> [String: Any] {
-    var root = root
-    var hooks = root["hooks"] as? [String: Any] ?? [:]
-    for event in events {
-        var groups = hooks[event] as? [[String: Any]] ?? []
-        var present = false
-        for g in groups.indices {
-            guard var inner = groups[g]["hooks"] as? [[String: Any]] else { continue }
-            for h in inner.indices {
-                if let cmd = inner[h]["command"] as? String, isLockpawPingCommand(cmd) {
-                    inner[h]["command"] = claudePingCommand
-                    present = true
-                }
-            }
-            groups[g]["hooks"] = inner
-        }
-        if !present {
-            groups.append(["hooks": [["type": "command", "command": claudePingCommand]]])
-        }
-        hooks[event] = groups
-    }
-    root["hooks"] = hooks
-    return root
-}
-
-func claudeStyleSnippet(path: String, events: [String]) -> String {
+func claudeStyleSnippet(path: String, events: [String], matchers: [String: String] = [:]) -> String {
     let escaped = claudePingCommand.replacingOccurrences(of: "\"", with: "\\\"")
     let width = events.map(\.count).max() ?? 0
     let lines = events.map { event in
         let padding = String(repeating: " ", count: width - event.count)
-        return "    \"\(event)\": \(padding)[{ \"hooks\": [{ \"type\": \"command\", \"command\": \"\(escaped)\" }] }]"
+        let matcher = matchers[event].map { "\"matcher\": \"\($0)\", " } ?? ""
+        return "    \"\(event)\": \(padding)[{ \(matcher)\"hooks\": [{ \"type\": \"command\", \"command\": \"\(escaped)\" }] }]"
     }
     return """
     Add to \(path):
@@ -229,11 +195,17 @@ func claudeStyleSnippet(path: String, events: [String]) -> String {
 
 func installClaudeHook(printOnly: Bool) {
     let url = claudeConfigDirectory().appendingPathComponent("settings.json")
-    let events = ["Notification", "Stop"]
-    if printOnly { print(claudeStyleSnippet(path: url.path, events: events)); return }
+    // StopFailure runs instead of Stop when a turn ends on an API error.
+    let events = ["Notification", "Stop", "StopFailure"]
+    let matchers = ["Notification": AgentHookConfig.claudeNotificationMatcher]
+    if printOnly { print(claudeStyleSnippet(path: url.path, events: events, matchers: matchers)); return }
     requireCLISymlink()
-    writeJSON(mergingPingHook(into: readJSONObject(at: url), events: events),
-              to: url, label: "Claude Code")
+    writeJSON(
+        AgentHookConfig.mergingPingHook(
+            into: readJSONObject(at: url), events: events, command: claudePingCommand, matchers: matchers
+        ),
+        to: url, label: "Claude Code"
+    )
 }
 
 func installCodexHook(printOnly: Bool) {
@@ -254,7 +226,7 @@ func installCodexHook(printOnly: Bool) {
 
     if let existing = contents.range(of: #"(?m)^\s*notify\s*=.*$"#, options: .regularExpression) {
         // Upgrade an older lockpaw notify in place; never clobber someone else's.
-        if isLockpawPingCommand(String(contents[existing])) {
+        if AgentHookConfig.isLockpawPingCommand(String(contents[existing])) {
             if contents[existing] != Substring(line) {
                 contents.replaceSubrange(existing, with: line)
                 backupFile(at: url)
@@ -297,7 +269,7 @@ func installGeminiHook(printOnly: Bool) {
     let events = ["Notification", "AfterAgent"]
     if printOnly { print(claudeStyleSnippet(path: url.path, events: events)); return }
     requireCLISymlink()
-    writeJSON(mergingPingHook(into: readJSONObject(at: url), events: events),
+    writeJSON(AgentHookConfig.mergingPingHook(into: readJSONObject(at: url), events: events, command: claudePingCommand),
               to: url, label: "Gemini CLI")
 }
 
@@ -323,7 +295,7 @@ func installCursorHook(printOnly: Bool) {
     var groups = hooks["stop"] as? [[String: Any]] ?? []
     var present = false
     for g in groups.indices {
-        if let cmd = groups[g]["command"] as? String, isLockpawPingCommand(cmd) {
+        if let cmd = groups[g]["command"] as? String, AgentHookConfig.isLockpawPingCommand(cmd) {
             groups[g]["command"] = command
             present = true
         }
@@ -390,7 +362,7 @@ func installAiderHook(printOnly: Bool) {
 
     if let existing = contents.range(of: #"(?m)^\s*notifications-command\s*:.*$"#, options: .regularExpression) {
         // Upgrade an older lockpaw command in place; never clobber someone else's.
-        guard isLockpawPingCommand(String(contents[existing])) else {
+        guard AgentHookConfig.isLockpawPingCommand(String(contents[existing])) else {
             print("""
             ⚠️  \(url.path) already defines `notifications-command` — leaving it untouched.
             To route Aider through Lockpaw, set it to:
