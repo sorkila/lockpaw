@@ -64,6 +64,11 @@ the locked screen **glows from across the room** and a notification fires. You s
 covered (and private) until *you* unlock. The glow is always silent; turn on a sound in
 **Settings → General** if you want one (off by default for shared offices).
 
+The lock screen says who is waiting and why, one line per session — *Claude Code needs
+permission in my-app*, *Claude Code finished in other-repo* — with how long each has been
+waiting. The glow is teal when an agent is done, amber when it is blocked on you, red
+when its turn died on an API error such as a rate limit.
+
 **Easiest:** open **Settings → General → Connect your agent** and click your agent —
 done. Prefer the terminal? Lockpaw ships a tiny `lockpaw` command-line tool
 (`Lockpaw.app/Contents/SharedSupport/lockpaw`); one command wires everything up,
@@ -71,13 +76,13 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 
 | Agent | Setup | What it hooks |
 |-------|-------|---------------|
-| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`) |
+| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` + `StopFailure` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`); `Notification` is matched to the types that need you, so `auth_success` and the like stay quiet |
 | **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` |
 | **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json` |
 | **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` |
 | **Copilot CLI** | `lockpaw install-hook copilot` | `agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json` (honors `$COPILOT_HOME`) |
 | **Aider** | `lockpaw install-hook aider` | `notifications-command` in `~/.aider.conf.yml` |
-| **Anything else** | append `; lockpaw ping` to your command | runs after your agent finishes |
+| **Anything else** | append `; lockpaw ping --agent my-tool` to your command | runs after your agent finishes |
 
 The hooks reference `~/.local/bin/lockpaw` by path, so they work no matter what's on
 your PATH, and keep working when the app moves or updates. Re-running `install-hook`

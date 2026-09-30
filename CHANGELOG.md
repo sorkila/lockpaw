@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Agent alerts say **who is waiting and why**. The lock screen lists one line per session — *Claude Code needs permission in my-app*, *Claude Code finished in other-repo* — with how long each has waited, newest first, and the notification carries the same sentence. The glow takes the colour of the latest ping: teal for finished, amber for blocked on you, red for a turn that died on an API error such as a rate limit. `lockpaw ping` reads the hook's JSON payload from stdin and forwards only the working directory, event, notification or error type and session id; `--agent <name>` names the agent, and `--print` shows what would be sent. A bare `lockpaw ping` behaves as before. Re-run `lockpaw install-hook <tool>` to upgrade an existing hook.
+
+### Changed
+
+- Claude Code's `Notification` hook is now matched to the notification types that need you (permission prompts, MCP dialogs, background agents waiting or done, a usage-limit wait that did not resume). Previously every notification glowed, including `auth_success`. `idle_prompt` no longer pings: it fires a minute after every finished turn, which `Stop` already reports.
+- `lockpaw install-hook claude` also hooks `StopFailure`, so a turn that ends on an API error pings too. Before, it ended silently.
+
 ## [1.5.0] - 2026-09-15
 
 ### Added

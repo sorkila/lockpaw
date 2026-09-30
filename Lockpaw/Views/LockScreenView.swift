@@ -136,24 +136,12 @@ struct LockScreenView: View {
                         .opacity(controller.isAuthenticating || controller.unlockSucceeded ? 0.15 : 1)
                         .allowsHitTesting(false)
 
-                        // Standing agent hint — quiet, persistent companion to the
-                        // glow pulses; stays until unlock.
-                        if controller.agentAttention && !controller.unlockSucceeded {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(Color("LockpawTeal"))
-                                    .frame(width: 5, height: 5)
-                                    .opacity(0.55 + breathe * 0.3)
-                                Text("Your agent needs you")
-                                    .font(.lockCaption)
-                                    .foregroundStyle(.white.opacity(0.4))
-                                    .tracking(0.5)
-                            }
-                            .transition(.opacity)
-                            .allowsHitTesting(false)
+                        if !controller.agentPings.isEmpty && !controller.unlockSucceeded {
+                            AgentPingList(pings: controller.agentPings.pings, breathe: breathe)
+                                .transition(.opacity)
                         }
                     }
-                    .animation(Constants.Anim.gentle, value: controller.agentAttention)
+                    .animation(Constants.Anim.gentle, value: controller.agentPings)
 
                     Spacer()
 
@@ -227,7 +215,7 @@ struct LockScreenView: View {
         .onAppear {
             // Fade-to-black reveals remount this view with fresh @State — restore the
             // resting glow after a ping (onChange(of: pingPulse) won't refire on mount).
-            if controller.agentAttention { pingGlow = Constants.Timing.pingGlowRest }
+            if !controller.agentPings.isEmpty { pingGlow = Constants.Timing.pingGlowRest }
             withAnimation(reduceMotion ? .none : .timingCurve(0.16, 1, 0.3, 1, duration: 0.6)) { appeared = true }
             guard !reduceMotion else { return }
             withAnimation(Constants.Anim.breathe) { phase = Constants.Anim.breathePhaseTarget }
@@ -310,8 +298,8 @@ struct LockScreenView: View {
                 // stop-to-clear ramp washed the brand green toward pale cyan.
                 RadialGradient(
                     stops: [
-                        .init(color: Color("LockpawTeal").opacity(0.30 * pingGlow), location: 0),
-                        .init(color: Color("LockpawTeal").opacity(0.14 * pingGlow), location: 0.45),
+                        .init(color: controller.agentPings.glowColor.opacity(0.30 * pingGlow), location: 0),
+                        .init(color: controller.agentPings.glowColor.opacity(0.14 * pingGlow), location: 0.45),
                         .init(color: .clear, location: 1)
                     ],
                     center: .center, startRadius: 0,

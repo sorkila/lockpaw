@@ -109,8 +109,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // scheme — means a background ping never launches the app when it isn't running.
         pingDistributedObserver = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name(Constants.pingDistributedName), object: nil, queue: .main
-        ) { _ in
-            NotificationCenter.default.post(name: .lockpawPing, object: nil)
+        ) { notification in
+            NotificationCenter.default.post(name: .lockpawPing, object: nil, userInfo: notification.userInfo)
         }
 
         openSettingsObserver = NotificationCenter.default.addObserver(

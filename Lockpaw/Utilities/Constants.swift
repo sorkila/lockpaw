@@ -71,6 +71,15 @@ enum Constants {
         return String(format: "%ds", seconds)
     }
 
+    /// Coarse age of an agent ping. Minute resolution: the row only has to say
+    /// roughly how long the agent has been waiting.
+    static func formatWaitTime(_ interval: TimeInterval) -> String {
+        let minutes = Int(interval) / 60
+        if minutes < 1 { return "now" }
+        if minutes < 60 { return "\(minutes)m" }
+        return formatElapsedTime(interval)
+    }
+
     static func formatElapsedTimeAccessible(_ interval: TimeInterval) -> String {
         let hours = Int(interval) / 3600
         let minutes = (Int(interval) % 3600) / 60
