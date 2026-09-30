@@ -62,7 +62,9 @@
 Lock your screen and walk away — when your AI agent pauses for permission or finishes,
 the locked screen **glows from across the room** and a notification fires. You stay
 covered (and private) until *you* unlock. The glow is always silent; turn on a sound in
-**Settings → General** if you want one (off by default for shared offices).
+**Settings → General** if you want one (off by default for shared offices). The
+notification says who and why: *Claude Code needs permission in my-app*, *Claude Code
+finished in other-repo*.
 
 **Easiest:** open **Settings → General → Connect your agent** and click your agent —
 done. Prefer the terminal? Lockpaw ships a tiny `lockpaw` command-line tool
@@ -77,7 +79,7 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 | **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` |
 | **Copilot CLI** | `lockpaw install-hook copilot` | `agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json` (honors `$COPILOT_HOME`) |
 | **Aider** | `lockpaw install-hook aider` | `notifications-command` in `~/.aider.conf.yml` |
-| **Anything else** | append `; lockpaw ping` to your command | runs after your agent finishes |
+| **Anything else** | append `; lockpaw ping --agent my-tool` to your command | runs after your agent finishes |
 
 The hooks reference `~/.local/bin/lockpaw` by path, so they work no matter what's on
 your PATH, and keep working when the app moves or updates. Re-running `install-hook`

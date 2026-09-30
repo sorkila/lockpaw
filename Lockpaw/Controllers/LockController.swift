@@ -155,10 +155,11 @@ class LockController: ObservableObject {
 
         pingObserver = NotificationCenter.default.addObserver(
             forName: .lockpawPing, object: nil, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             guard let self else { return }
+            let ping = AgentPing.from(userInfo: notification.userInfo)
             Task { @MainActor [weak self] in
-                self?.handlePing()
+                self?.handlePing(ping)
             }
         }
     }
@@ -351,7 +352,7 @@ class LockController: ObservableObject {
 
     /// React to an agent ping. Debounces chatty agents, then pulses the lock screen
     /// and/or posts a notification per `PingDecision` (no-op when unlocked).
-    private func handlePing() {
+    private func handlePing(_ ping: AgentPing) {
         let now = Date()
         if let last = lastPingTime, now.timeIntervalSince(last) < Constants.Timing.pingDebounce { return }
         lastPingTime = now
@@ -363,7 +364,7 @@ class LockController: ObservableObject {
             agentAttention = true
             presentationController.notePing()
         }
-        if decision.shouldNotify { AgentNotifier.shared.notify(withSound: decision.withSound) }
+        if decision.shouldNotify { AgentNotifier.shared.notify(body: ping.summary + ".", withSound: decision.withSound) }
     }
 
     private func handleAuthFailure() {
