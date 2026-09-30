@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Agent alerts say **who is done and why**. `lockpaw ping` reads the hook's JSON payload from stdin and forwards only the working directory, the event, the notification or error type and the session id; a new `--agent <name>` flag names the agent. The notification then reads *Claude Code needs permission in my-app.* or *Claude Code finished in other-repo.* instead of *Your agent needs you.* Add `--print` to see what a ping would send. Every installer now passes `--agent`; re-run `lockpaw install-hook <tool>` to upgrade an existing hook. A bare `lockpaw ping` behaves as before.
+
 ### Changed
 
 - `lockpaw install-hook claude` now matches the `Notification` hook to the notification types that need you: permission prompts, MCP dialogs, background agents waiting or done, a usage-limit wait that did not resume. Before, every notification glowed, including `auth_success`. `idle_prompt` is left out on purpose: it fires a minute after every finished turn, which `Stop` already reports.

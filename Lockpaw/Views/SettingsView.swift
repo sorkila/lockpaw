@@ -622,7 +622,7 @@ struct SettingsView: View {
 
                 SettingsRow("Test agent ping", subtitle: "Send a sample notification to confirm alerts work.") {
                     Button {
-                        AgentNotifier.shared.notify(withSound: agentPingSound)
+                        AgentNotifier.shared.notify(body: "Claude Code finished in lockpaw.", withSound: agentPingSound)
                     } label: {
                         Text("Send")
                             .padding(.horizontal, 8)

@@ -26,18 +26,18 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
         completionHandler([.banner, .list, .sound])
     }
 
-    /// Fire a "your agent needs you" notification. Sound is attached only when the
-    /// user has opted in (off by default for shared/open-plan spaces).
-    func notify(withSound: Bool) {
+    /// Fire an agent notification saying who needs the user and why. Sound is attached
+    /// only when the user has opted in (off by default for shared/open-plan spaces).
+    func notify(body: String, withSound: Bool) {
         center.getNotificationSettings { [weak self] settings in
             guard let self else { return }
             switch settings.authorizationStatus {
             case .authorized, .provisional:
-                self.post(withSound: withSound)
+                self.post(body: body, withSound: withSound)
             case .notDetermined:
                 self.center.requestAuthorization(options: [.alert, .sound]) { granted, error in
                     if let error { logger.error("Notification auth error: \(error.localizedDescription)") }
-                    if granted { self.post(withSound: withSound) }
+                    if granted { self.post(body: body, withSound: withSound) }
                 }
             default:
                 logger.info("Notifications not authorized — relying on lock-screen glow only")
@@ -51,10 +51,10 @@ final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
         center.removeAllDeliveredNotifications()
     }
 
-    private func post(withSound: Bool) {
+    private func post(body: String, withSound: Bool) {
         let content = UNMutableNotificationContent()
         content.title = "Lockpaw"
-        content.body = "Your agent needs you."
+        content.body = body
         content.sound = withSound ? .default : nil
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
