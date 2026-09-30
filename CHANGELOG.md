@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `lockpaw install-hook claude` now matches the `Notification` hook to the notification types that need you: permission prompts, MCP dialogs, background agents waiting or done, a usage-limit wait that did not resume. Before, every notification glowed, including `auth_success`. `idle_prompt` is left out on purpose: it fires a minute after every finished turn, which `Stop` already reports.
+- It also hooks `StopFailure`, so a turn that ends on an API error (a rate limit, say) pings too. Before, it ended silently.
+
 ## [1.5.0] - 2026-09-15
 
 ### Added
