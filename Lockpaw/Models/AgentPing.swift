@@ -3,7 +3,7 @@ import Foundation
 /// One agent's request for attention, decoded from the payload its hook handed to
 /// `lockpaw ping`. Also compiled into the CLI target, so the wire format lives in
 /// one place — keep this file Foundation-only.
-struct AgentPing: Equatable {
+struct AgentPing: Equatable, Identifiable {
     enum Kind: Equatable {
         case finished
         case permission
@@ -43,6 +43,10 @@ struct AgentPing: Equatable {
     let kind: Kind
     let sessionID: String?
     let receivedAt: Date
+
+    /// One row per session on the lock screen. Pings without a session (agents whose
+    /// hooks send no payload) collapse per agent and project instead.
+    var id: String { sessionID ?? "\(agent ?? "")|\(project ?? "")" }
 
     var summary: String {
         let subject = agent ?? "Your agent"

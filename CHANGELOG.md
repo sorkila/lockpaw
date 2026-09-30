@@ -5,6 +5,7 @@
 ### Added
 
 - Agent alerts say **who is done and why**. `lockpaw ping` reads the hook's JSON payload from stdin and forwards only the working directory, the event, the notification or error type and the session id; a new `--agent <name>` flag names the agent. The notification then reads *Claude Code needs permission in my-app.* or *Claude Code finished in other-repo.* instead of *Your agent needs you.* Add `--print` to see what a ping would send. Every installer now passes `--agent`; re-run `lockpaw install-hook <tool>` to upgrade an existing hook. A bare `lockpaw ping` behaves as before.
+- The lock screen lists **who is waiting**, one line per session under the timer — *Claude Code needs permission in my-app · 2m*, *Claude Code finished in other-repo · 12m* — newest first, four rows then "and N more", kept until you unlock. The glow takes the colour of the latest ping: teal when an agent is done, amber when it is blocked on you, red when its turn died on an API error.
 
 ### Changed
 

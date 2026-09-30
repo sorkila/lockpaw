@@ -62,9 +62,13 @@
 Lock your screen and walk away — when your AI agent pauses for permission or finishes,
 the locked screen **glows from across the room** and a notification fires. You stay
 covered (and private) until *you* unlock. The glow is always silent; turn on a sound in
-**Settings → General** if you want one (off by default for shared offices). The
-notification says who and why: *Claude Code needs permission in my-app*, *Claude Code
-finished in other-repo*.
+**Settings → General** if you want one (off by default for shared offices).
+
+The lock screen says who is waiting and why, one line per session — *Claude Code needs
+permission in my-app*, *Claude Code finished in other-repo* — with how long each has been
+waiting, and the notification carries the same sentence. The glow is teal when an agent
+is done, amber when it is blocked on you, red when its turn died on an API error such as
+a rate limit.
 
 **Easiest:** open **Settings → General → Connect your agent** and click your agent —
 done. Prefer the terminal? Lockpaw ships a tiny `lockpaw` command-line tool

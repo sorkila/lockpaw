@@ -22,9 +22,9 @@ class LockController: ObservableObject {
     /// screen watches this token to trigger a one-shot attention glow.
     @Published private(set) var pingPulse: Int = 0
 
-    /// True from the first agent ping until unlock — after the glow pulses finish,
-    /// the lock screen keeps a subtle "your agent needs you" hint from this flag.
-    @Published private(set) var agentAttention = false
+    /// Every agent that pinged since the screen was locked, kept until unlock — after
+    /// the glow pulses finish, the lock screen lists who is waiting and why.
+    @Published private(set) var agentPings = AgentPingQueue()
 
     /// True while the armed-Touch-ID path is live for this lock session — deliberately not
     /// the precise in-flight state of one evaluation. The lock screen reads it for its
@@ -350,20 +350,21 @@ class LockController: ObservableObject {
 
     // MARK: - Private
 
-    /// React to an agent ping. Debounces chatty agents, then pulses the lock screen
-    /// and/or posts a notification per `PingDecision` (no-op when unlocked).
+    /// React to an agent ping per `PingDecision` (no-op when unlocked). Every ping is
+    /// recorded, so two agents finishing together both get a row; only the glow and
+    /// the notification are debounced against chatty agents.
     private func handlePing(_ ping: AgentPing) {
+        let soundEnabled = UserDefaults.standard.bool(forKey: Constants.agentPingSoundKey)
+        let decision = PingDecision.make(state: state, soundEnabled: soundEnabled)
+        guard decision.shouldPulse else { return }
+        agentPings.record(ping)
+
         let now = Date()
         if let last = lastPingTime, now.timeIntervalSince(last) < Constants.Timing.pingDebounce { return }
         lastPingTime = now
 
-        let soundEnabled = UserDefaults.standard.bool(forKey: Constants.agentPingSoundKey)
-        let decision = PingDecision.make(state: state, soundEnabled: soundEnabled)
-        if decision.shouldPulse {
-            pingPulse &+= 1
-            agentAttention = true
-            presentationController.notePing()
-        }
+        pingPulse &+= 1
+        presentationController.notePing()
         if decision.shouldNotify { AgentNotifier.shared.notify(body: ping.summary + ".", withSound: decision.withSound) }
     }
 
@@ -562,9 +563,9 @@ class LockController: ObservableObject {
     }
 
     /// Once unlocked, the agent banners in Notification Center are stale — the user
-    /// is back at the machine. Drop the flag and the delivered notifications together.
+    /// is back at the machine. Drop the queue and the delivered notifications together.
     private func clearAgentAttention() {
-        agentAttention = false
+        agentPings.clear()
         AgentNotifier.shared.clearDelivered()
     }
 
