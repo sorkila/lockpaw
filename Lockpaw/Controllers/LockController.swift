@@ -273,7 +273,7 @@ class LockController: ObservableObject {
         lastError = nil
 
         overlayManager.allowSystemDialogs()
-        inputBlocker.stopBlocking()
+        inputBlocker.startBlocking(gesturesOnly: true)
 
         Task { @MainActor in
             let authenticated = await authenticator.authenticate()
@@ -319,7 +319,7 @@ class LockController: ObservableObject {
         lastError = nil
 
         overlayManager.allowSystemDialogs()
-        inputBlocker.stopBlocking()
+        inputBlocker.startBlocking(gesturesOnly: true)
 
         Task { @MainActor in
             let authenticated = await authenticator.authenticateWithPassword()
