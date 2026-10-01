@@ -243,7 +243,15 @@ class LockController: ObservableObject {
         startAccessibilityMonitoring()
         sessionWasLost = false
         transitionTo(.locked)
-        armPassiveAuth()
+
+        // Arm only once the cover is opaque. The Touch ID prompt opens the moment the
+        // sensor is armed and would show through the overlay while it is still fading in;
+        // after that it sits behind the cover. A lock ended inside the delay is refused by
+        // PassiveAuthPolicy (state is no longer .locked).
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Constants.Timing.passiveAuthArmDelayNs)
+            self?.armPassiveAuth()
+        }
     }
 
     /// Quick unlock via hotkey — no auth.

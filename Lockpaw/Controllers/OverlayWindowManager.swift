@@ -145,7 +145,7 @@ class OverlayWindowManager {
             window.orderFrontRegardless()
 
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.3
+                context.duration = Constants.Timing.overlayFadeIn
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 window.animator().alphaValue = 1
             }
