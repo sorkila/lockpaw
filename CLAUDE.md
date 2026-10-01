@@ -77,6 +77,8 @@ Lockpaw/
 │   ├── CustomMascot.swift          User image store — Application Support copy, downsampled PNG, cached hasImage
 │   ├── FadeToBlack.swift           Fade-to-black preference + pure presentation reducer (LockPresentation / PresentationLogic)
 │   ├── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
+│   ├── LockdownPolicy.swift        Pure lock-time lockdown (kiosk presentation options + swallowed gesture types; #18)
+│   ├── ScreenLayout.swift          Display set overlays were built for — rebuild only on real screen changes
 │   ├── OverlayPolicy.swift         Pure per-screen overlay config (clicks swallowed everywhere; key only on primary)
 │   └── PassiveAuthPolicy.swift     Pure passive Touch ID rules (arm/re-arm/stand down + LAError scoring)
 ├── Views/

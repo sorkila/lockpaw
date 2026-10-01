@@ -35,6 +35,8 @@ class OverlayWindowManager {
     private var cursorRehideTimer: Timer?
     /// Presentation options in force before locking, restored on dismiss. nil while unlocked.
     private var savedPresentationOptions: NSApplication.PresentationOptions?
+    /// Display setup the current overlays were built for — see ScreenLayout.
+    private var builtLayout: ScreenLayout?
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
@@ -117,6 +119,7 @@ class OverlayWindowManager {
             return
         }
         let screens = NSScreen.screens
+        builtLayout = ScreenLayout.current
         guard !screens.isEmpty else {
             logger.critical("No screens available — cannot create overlay")
             return
@@ -244,6 +247,12 @@ class OverlayWindowManager {
             self.screenChangeWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
+                // Dock / menu bar visibility changes post this too; only rebuild when the
+                // screens themselves changed, or the overlays flash the desktop.
+                guard ScreenLayout.current != self.builtLayout else {
+                    logger.debug("Screen parameters changed — layout unchanged, keeping overlays")
+                    return
+                }
                 logger.info("Screen parameters changed — recreating overlay windows")
                 // Do NOT call window.close() — closing during a fade-in animation
                 // causes EXC_BAD_ACCESS in _NSWindowTransformAnimation dealloc.
