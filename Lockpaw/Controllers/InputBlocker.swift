@@ -22,13 +22,15 @@ class InputBlocker {
 
     private var hotkeyObserver: NSObjectProtocol?
 
+    /// Trackpad gestures are swallowed too: a three-finger swipe switches Spaces, and the
+    /// incoming Space is drawn uncovered for the length of the slide (#18).
     private static let eventMask: CGEventMask = {
         let types: [CGEventType] = [
             .keyDown, .keyUp, .flagsChanged,
             .scrollWheel,
             .tabletPointer, .tabletProximity
         ]
-        return types.reduce(CGEventMask(0)) { mask, type in mask | (1 << type.rawValue) }
+        return types.reduce(LockdownPolicy.gestureEventMask) { mask, type in mask | (1 << type.rawValue) }
     }()
 
     init() {

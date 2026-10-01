@@ -33,6 +33,8 @@ class OverlayWindowManager {
     private var screenChangeWork: DispatchWorkItem?
     private var mouseMoveMonitors: [Any] = []
     private var cursorRehideTimer: Timer?
+    /// Presentation options in force before locking, restored on dismiss. nil while unlocked.
+    private var savedPresentationOptions: NSApplication.PresentationOptions?
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
@@ -47,6 +49,7 @@ class OverlayWindowManager {
         }
         startObservingScreenChanges()
         startObservingSessionChanges()
+        enterLockdown()
         startCursorConcealment()
         return true
     }
@@ -55,6 +58,7 @@ class OverlayWindowManager {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
         stopCursorConcealment()
+        exitLockdown()
 
         if animated {
             let windowsToClose = windows
@@ -90,6 +94,21 @@ class OverlayWindowManager {
 
     func blockSystemDialogs() {
         for window in windows { window.level = shieldLevel }
+    }
+
+    // MARK: - Lockdown
+
+    /// See LockdownPolicy. Saved once per lock so a screen-change rebuild can't
+    /// overwrite the user's own options with the lockdown set.
+    private func enterLockdown() {
+        if savedPresentationOptions == nil { savedPresentationOptions = NSApp.presentationOptions }
+        NSApp.presentationOptions = LockdownPolicy.presentationOptions
+    }
+
+    private func exitLockdown() {
+        guard let saved = savedPresentationOptions else { return }
+        NSApp.presentationOptions = saved
+        savedPresentationOptions = nil
     }
 
     private func createWindows() {
@@ -270,6 +289,7 @@ class OverlayWindowManager {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
         stopCursorConcealment()
+        exitLockdown()
         for window in windows {
             window.orderOut(nil)
             window.contentView = nil
