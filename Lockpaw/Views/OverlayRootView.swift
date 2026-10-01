@@ -14,6 +14,8 @@ struct OverlayRootView: View {
     @ObservedObject var presentationController: PresentationController
     /// Primary screen, or any screen in Mirror mode — shows the full lock UI.
     let showsLockUI: Bool
+    /// Which screen this overlay covers — routes Authenticate to the right display.
+    let screenIndex: Int
     let phaseOffset: CGFloat
 
     @State private var lockUIMounted = true
@@ -31,7 +33,7 @@ struct OverlayRootView: View {
             if lockUIMounted {
                 Group {
                     if showsLockUI {
-                        LockScreenView(controller: controller, screenRole: .primary, phaseOffset: phaseOffset)
+                        LockScreenView(controller: controller, screenRole: .primary, phaseOffset: phaseOffset, screenIndex: screenIndex)
                     } else {
                         AmbientScreenView(phaseOffset: phaseOffset)
                     }
