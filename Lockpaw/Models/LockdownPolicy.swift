@@ -8,11 +8,13 @@ import AppKit
 enum LockdownPolicy {
     /// Kiosk-style presentation while locked: the Dock — which drives Spaces, Mission
     /// Control and App Exposé — and the menu bar are suppressed, and Cmd+Tab, the force-quit
-    /// panel and Hide are disabled. These only apply while Lockpaw is the active app, so
-    /// they are a second layer behind the gesture swallowing in the input blocker, not a
-    /// replacement for it. AppKit throws on invalid combinations (process switching and a
-    /// hidden menu bar both require a hidden Dock; a disabled Apple menu requires a hidden
-    /// menu bar); `testPresentationOptionsAreAValidCombination` pins that.
+    /// panel and Hide are disabled. Best effort only: these apply only while Lockpaw is the
+    /// active app, and the LocalAuthentication agent holds activation for as long as Touch ID
+    /// is armed — on Touch ID Macs that is most of a lock. The gesture swallowing in the
+    /// input blocker is the defence that always holds; never rely on this layer alone.
+    /// AppKit throws on invalid combinations (process switching and a hidden menu bar both
+    /// require a hidden Dock; a disabled Apple menu requires a hidden menu bar);
+    /// `testPresentationOptionsAreAValidCombination` pins that.
     static let presentationOptions: NSApplication.PresentationOptions = [
         .hideDock,
         .hideMenuBar,
