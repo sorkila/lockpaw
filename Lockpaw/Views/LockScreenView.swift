@@ -9,6 +9,8 @@ struct LockScreenView: View {
     @ObservedObject var controller: LockController
     var screenRole: ScreenRole = .primary
     var phaseOffset: CGFloat = 0
+    /// Overlay screen index, so Authenticate opens its dialog on this display.
+    var screenIndex: Int = 0
 
     @AppStorage("showMessage") private var showMessage = true
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
@@ -188,7 +190,7 @@ struct LockScreenView: View {
 
                                 Button {
                                     NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-                                    controller.requestUnlock()
+                                    controller.requestUnlock(onScreen: screenIndex)
                                 } label: {
                                     Text(requiresAuthenticationToUnlock ? "Authenticate to Unlock" : "Authenticate with Touch ID")
                                         .font(.lockLabel)
