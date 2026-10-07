@@ -49,20 +49,5 @@ struct MenuBarView: View {
             }
             .keyboardShortcut("q")
         }
-        .onReceive(NotificationCenter.default.publisher(for: .lockpawLock)) { _ in
-            if controller.state == .unlocked {
-                controller.lock()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .lockpawUnlock)) { _ in
-            if controller.state == .locked {
-                controller.requestUnlock()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .lockpawUnlockPassword)) { _ in
-            if controller.state == .locked {
-                controller.requestPasswordUnlock()
-            }
-        }
     }
 }

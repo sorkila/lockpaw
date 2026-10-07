@@ -17,4 +17,12 @@ enum OverlayPolicy {
     static func config(isPrimary: Bool) -> OverlayWindowConfig {
         OverlayWindowConfig(ignoresMouseEvents: false, acceptsKey: isPrimary)
     }
+
+    /// Key routing with Mirror mode's one exception: for a single auth attempt the overlay
+    /// whose Authenticate was clicked takes key, so the system dialog opens on the screen
+    /// the user is looking at. Otherwise only the primary does.
+    static func acceptsKey(index: Int, focusedIndex: Int?) -> Bool {
+        guard let focusedIndex else { return config(isPrimary: index == 0).acceptsKey }
+        return index == focusedIndex
+    }
 }

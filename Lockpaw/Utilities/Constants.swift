@@ -21,7 +21,6 @@ enum Constants {
     enum Timing {
         static let inputBlockerDelayNs: UInt64 = 50_000_000           // 50ms
         static let overlayFadeIn: TimeInterval = 0.3                  // seconds; cover fades in on lock
-        static let passiveAuthArmDelayNs: UInt64 = 400_000_000        // 400ms; arm Touch ID once the cover is opaque
         static let unlockSuccessAnimNs: UInt64 = 400_000_000          // 400ms
         static let errorDisplayBeforeForceUnlockNs: UInt64 = 1_500_000_000 // 1.5s
         static let errorAutoClearNs: UInt64 = 5_000_000_000           // 5s

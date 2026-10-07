@@ -3,31 +3,20 @@ import XCTest
 
 final class LockdownPolicyTests: XCTestCase {
 
-    /// AppKit raises if presentation options are combined illegally; a bad set would
-    /// crash at lock time, so pin the dependencies here.
-    func testPresentationOptionsAreAValidCombination() {
-        let options = LockdownPolicy.presentationOptions
-        if options.contains(.disableProcessSwitching) || options.contains(.hideMenuBar) {
-            XCTAssertTrue(options.contains(.hideDock) || options.contains(.autoHideDock))
-        }
-        if options.contains(.disableAppleMenu) {
-            XCTAssertTrue(options.contains(.hideMenuBar) || options.contains(.autoHideMenuBar))
-        }
-        XCTAssertFalse(options.contains(.hideDock) && options.contains(.autoHideDock))
-        XCTAssertFalse(options.contains(.hideMenuBar) && options.contains(.autoHideMenuBar))
-    }
-
-    /// The Dock owns Spaces and Mission Control; hiding it is what takes them away.
-    func testLockdownSuppressesDockAndProcessSwitching() {
-        XCTAssertTrue(LockdownPolicy.presentationOptions.contains(.hideDock))
-        XCTAssertTrue(LockdownPolicy.presentationOptions.contains(.disableProcessSwitching))
-    }
-
     /// Space swipes arrive as `.gesture` events — the one type that must never be dropped
     /// from the mask (#18).
     func testGestureMaskCoversSpaceSwipes() {
         let gesture = CGEventMask(1) << UInt32(NSEvent.EventType.gesture.rawValue)
         XCTAssertNotEqual(LockdownPolicy.gestureEventMask & gesture, 0)
+    }
+
+    /// The Dock's private control stream (`kCGSEventDockControl`, 30) is what drives Space
+    /// switching. It shares a raw value with `.magnify`, so pin it by name: removing pinch
+    /// from the list must not quietly reopen #18.
+    func testGestureMaskCoversDockControlStream() {
+        XCTAssertEqual(LockdownPolicy.dockControlEventType, 30)
+        let dock = CGEventMask(1) << LockdownPolicy.dockControlEventType
+        XCTAssertNotEqual(LockdownPolicy.gestureEventMask & dock, 0)
     }
 
     /// Every type fits a 64-bit CGEventMask and none collide with the pointer events the
@@ -37,6 +26,27 @@ final class LockdownPolicyTests: XCTestCase {
         let pointer: [CGEventType] = [.leftMouseDown, .leftMouseUp, .mouseMoved, .leftMouseDragged]
         for type in pointer {
             XCTAssertEqual(LockdownPolicy.gestureEventMask & (CGEventMask(1) << type.rawValue), 0)
+        }
+    }
+
+    /// Locked: everything the tap sees is swallowed.
+    func testLockedSwallowsKeysAndGestures() {
+        let types: [UInt32] = [
+            CGEventType.keyDown.rawValue, CGEventType.flagsChanged.rawValue,
+            CGEventType.scrollWheel.rawValue, UInt32(NSEvent.EventType.gesture.rawValue),
+        ]
+        for type in types {
+            XCTAssertTrue(LockdownPolicy.swallows(eventType: type, gesturesOnly: false), "type \(type)")
+        }
+    }
+
+    /// Auth dialog up: keys reach it, but gestures still can't switch Spaces.
+    func testAuthDialogLetsKeysThroughButKeepsGesturesBlocked() {
+        XCTAssertFalse(LockdownPolicy.swallows(eventType: CGEventType.keyDown.rawValue, gesturesOnly: true))
+        XCTAssertFalse(LockdownPolicy.swallows(eventType: CGEventType.keyUp.rawValue, gesturesOnly: true))
+        XCTAssertFalse(LockdownPolicy.swallows(eventType: CGEventType.scrollWheel.rawValue, gesturesOnly: true))
+        for type in LockdownPolicy.gestureEventTypes {
+            XCTAssertTrue(LockdownPolicy.swallows(eventType: type, gesturesOnly: true), "gesture \(type)")
         }
     }
 }

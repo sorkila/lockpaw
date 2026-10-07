@@ -32,4 +32,22 @@ final class OverlayPolicyTests: XCTestCase {
             OverlayWindowConfig(ignoresMouseEvents: false, acceptsKey: false)
         )
     }
+
+    /// Mirror mode: for one auth attempt the clicked screen takes key so the system dialog
+    /// opens where the user is looking; nothing else does.
+    func testFocusedScreenTakesKeyForOneAttempt() {
+        XCTAssertTrue(OverlayPolicy.acceptsKey(index: 1, focusedIndex: 1))
+        XCTAssertFalse(OverlayPolicy.acceptsKey(index: 0, focusedIndex: 1))
+        XCTAssertFalse(OverlayPolicy.acceptsKey(index: 2, focusedIndex: 1))
+    }
+
+    /// With no attempt in flight, routing falls back to the primary-only rule.
+    func testUnfocusedRoutingMatchesPrimaryOnlyRule() {
+        for index in 0..<3 {
+            XCTAssertEqual(
+                OverlayPolicy.acceptsKey(index: index, focusedIndex: nil),
+                OverlayPolicy.config(isPrimary: index == 0).acceptsKey
+            )
+        }
+    }
 }

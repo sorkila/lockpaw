@@ -55,6 +55,10 @@ class LockController: ObservableObject {
     private var errorClearTask: Task<Void, Never>?
     private var toggleObserver: Any?
     private var pingObserver: Any?
+    /// `lockpaw://lock|unlock|unlock-password`. Here, not in MenuBarView: SwiftUI builds the
+    /// MenuBarExtra content lazily, so observers there didn't exist until the menu had been
+    /// opened once — and never with the menu bar icon hidden. Same reason as toggleObserver.
+    private var urlSchemeObservers: [Any] = []
     private var authenticationInProgress = false
     private var sessionWasLost = false
     private var lastAuthFailTime: Date?
@@ -153,6 +157,20 @@ class LockController: ObservableObject {
             }
         }
 
+        let urlActions: [(Notification.Name, LockState, (LockController) -> Void)] = [
+            (.lockpawLock, .unlocked, { $0.lock() }),
+            (.lockpawUnlock, .locked, { $0.requestUnlock() }),
+            (.lockpawUnlockPassword, .locked, { $0.requestPasswordUnlock() }),
+        ]
+        urlSchemeObservers = urlActions.map { name, requiredState, action in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.state == requiredState else { return }
+                    action(self)
+                }
+            }
+        }
+
         pingObserver = NotificationCenter.default.addObserver(
             forName: .lockpawPing, object: nil, queue: .main
         ) { [weak self] _ in
@@ -174,6 +192,7 @@ class LockController: ObservableObject {
         if let obs = sessionActiveObserver { NSWorkspace.shared.notificationCenter.removeObserver(obs) }
         if let obs = inputBlockerFailedObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = pingObserver { NotificationCenter.default.removeObserver(obs) }
+        for obs in urlSchemeObservers { NotificationCenter.default.removeObserver(obs) }
     }
 
     // MARK: - Public
@@ -200,6 +219,13 @@ class LockController: ObservableObject {
                 screenIndex: index,
                 phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15
             ))
+        }, onOpaque: { [weak self] in
+            // Arm only once the cover is opaque: the Touch ID prompt opens the moment the
+            // sensor arms and would show through an overlay still fading in; after that it
+            // sits behind the cover. The overlay manager drops this callback when the
+            // overlay is dismissed, so a lock that ended (or was replaced) inside the fade
+            // can't arm a later session early. A refusal here is covered by the tick.
+            self?.armPassiveAuth()
         }) else {
             logger.error("Lock failed — no screens available for overlay")
             sleepPreventer.allowSleep()
@@ -244,15 +270,6 @@ class LockController: ObservableObject {
         startAccessibilityMonitoring()
         sessionWasLost = false
         transitionTo(.locked)
-
-        // Arm only once the cover is opaque. The Touch ID prompt opens the moment the
-        // sensor is armed and would show through the overlay while it is still fading in;
-        // after that it sits behind the cover. A lock ended inside the delay is refused by
-        // PassiveAuthPolicy (state is no longer .locked).
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: Constants.Timing.passiveAuthArmDelayNs)
-            self?.armPassiveAuth()
-        }
     }
 
     /// Quick unlock via hotkey — no auth.
@@ -276,9 +293,11 @@ class LockController: ObservableObject {
             return
         }
 
-        if let screenIndex { overlayManager.focus(screenAt: screenIndex) }
         disarmPassiveAuth()
         guard transitionTo(.unlocking) else { return }
+        // Only once the attempt is really starting: a refused request must not move focus,
+        // since nothing would move it back.
+        if let screenIndex { overlayManager.focus(screenAt: screenIndex) }
         authenticationInProgress = true
         isAuthenticating = true
         lastError = nil

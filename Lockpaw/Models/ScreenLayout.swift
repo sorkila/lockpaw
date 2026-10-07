@@ -3,9 +3,9 @@ import AppKit
 /// The parts of the display setup the overlays depend on: which screens exist, where,
 /// and at what scale. Deliberately not `visibleFrame` — the Dock or menu bar showing or
 /// hiding posts `didChangeScreenParametersNotification` too, and rebuilding the overlays
-/// for that tears them down and fades them back in, flashing the desktop. Locking applies
-/// LockdownPolicy (Dock and menu bar hidden) and Touch ID arming hands activation away
-/// (restoring them), so without this every lock flashed once or twice.
+/// for that tears them down and fades them back in, flashing the desktop. Activation
+/// changes (Touch ID arming hands activation to the LocalAuthentication agent) can show
+/// or hide an auto-hidden Dock or menu bar mid-lock, so without this a lock could flash.
 struct ScreenLayout: Equatable {
     struct Screen: Equatable {
         let displayID: UInt32

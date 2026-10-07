@@ -33,17 +33,25 @@ class OverlayWindowManager {
     private var screenChangeWork: DispatchWorkItem?
     private var mouseMoveMonitors: [Any] = []
     private var cursorRehideTimer: Timer?
-    /// Presentation options in force before locking, restored on dismiss. nil while unlocked.
-    private var savedPresentationOptions: NSApplication.PresentationOptions?
+    /// Overlay holding key for the current auth attempt (Mirror mode), or nil when the
+    /// primary has it as usual — see OverlayPolicy.acceptsKey.
+    private var focusedIndex: Int?
+    /// Called once when the lock's initial fade-in completes — the cover is opaque.
+    private var onCoverOpaque: (() -> Void)?
     /// Display setup the current overlays were built for — see ScreenLayout.
     private var builtLayout: ScreenLayout?
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
     @discardableResult
-    func showOverlay(contentFactory factory: @escaping (Int, Bool) -> AnyView) -> Bool {
+    func showOverlay(
+        contentFactory factory: @escaping (Int, Bool) -> AnyView,
+        onOpaque: (() -> Void)? = nil
+    ) -> Bool {
         contentFactory = factory
         dismissOverlay()
+        focusedIndex = nil
+        onCoverOpaque = onOpaque
         createWindows()
         guard !windows.isEmpty else {
             logger.error("showOverlay failed — no windows created")
@@ -51,7 +59,6 @@ class OverlayWindowManager {
         }
         startObservingScreenChanges()
         startObservingSessionChanges()
-        enterLockdown()
         startCursorConcealment()
         return true
     }
@@ -60,7 +67,8 @@ class OverlayWindowManager {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
         stopCursorConcealment()
-        exitLockdown()
+        onCoverOpaque = nil
+        focusedIndex = nil
 
         if animated {
             let windowsToClose = windows
@@ -98,9 +106,13 @@ class OverlayWindowManager {
     /// undoing any `focus(screenAt:)` for the attempt that just ended.
     func blockSystemDialogs() {
         for window in windows { window.level = shieldLevel }
-        for (index, window) in windows.enumerated() {
-            (window as? OverlayWindow)?.acceptsKey = OverlayPolicy.config(isPrimary: index == 0).acceptsKey
-        }
+        guard focusedIndex != nil else { return }
+        focusedIndex = nil
+        applyKeyRouting()
+        // Restoring acceptsKey only governs future key changes; the focused secondary
+        // would otherwise stay key and the next hotkey or menu unlock would open its
+        // dialog there.
+        windows.first?.makeKey()
     }
 
     /// Hand key status to the overlay on screen `index` (the order `contentFactory` was
@@ -110,25 +122,16 @@ class OverlayWindowManager {
     /// which read as the button doing nothing.
     func focus(screenAt index: Int) {
         guard windows.indices.contains(index) else { return }
-        let target = windows[index]
-        for case let overlay as OverlayWindow in windows { overlay.acceptsKey = overlay === target }
+        focusedIndex = index
+        applyKeyRouting()
         NSApp.activate(ignoringOtherApps: true)
-        target.makeKey()
+        windows[index].makeKey()
     }
 
-    // MARK: - Lockdown
-
-    /// See LockdownPolicy. Saved once per lock so a screen-change rebuild can't
-    /// overwrite the user's own options with the lockdown set.
-    private func enterLockdown() {
-        if savedPresentationOptions == nil { savedPresentationOptions = NSApp.presentationOptions }
-        NSApp.presentationOptions = LockdownPolicy.presentationOptions
-    }
-
-    private func exitLockdown() {
-        guard let saved = savedPresentationOptions else { return }
-        NSApp.presentationOptions = saved
-        savedPresentationOptions = nil
+    private func applyKeyRouting() {
+        for (index, window) in windows.enumerated() {
+            (window as? OverlayWindow)?.acceptsKey = OverlayPolicy.acceptsKey(index: index, focusedIndex: focusedIndex)
+        }
     }
 
     private func createWindows() {
@@ -167,7 +170,7 @@ class OverlayWindowManager {
             // the cover were still clickable while locked. Rules in OverlayPolicy.
             let config = OverlayPolicy.config(isPrimary: isPrimary)
             window.ignoresMouseEvents = config.ignoresMouseEvents
-            window.acceptsKey = config.acceptsKey
+            window.acceptsKey = OverlayPolicy.acceptsKey(index: index, focusedIndex: focusedIndex)
             window.hasShadow = false
 
             // NSHostingView defaults to autoresizingMask=0 (no flex), which can cause
@@ -183,15 +186,22 @@ class OverlayWindowManager {
 
             window.alphaValue = 0
             window.orderFrontRegardless()
-
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = Constants.Timing.overlayFadeIn
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                window.animator().alphaValue = 1
-            }
-
             windows.append(window)
         }
+
+        // One group for every screen, so its completion means the whole cover is opaque.
+        // Touch ID arms from there: its prompt opens the instant the sensor arms and would
+        // show through a cover that is still fading in (#28).
+        let fadingIn = windows
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = Constants.Timing.overlayFadeIn
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            for window in fadingIn { window.animator().alphaValue = 1 }
+        }, completionHandler: { [weak self] in
+            guard let self, let opaque = self.onCoverOpaque else { return }
+            self.onCoverOpaque = nil
+            opaque()
+        })
     }
 
     // MARK: - Cursor concealment
@@ -316,7 +326,6 @@ class OverlayWindowManager {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
         stopCursorConcealment()
-        exitLockdown()
         for window in windows {
             window.orderOut(nil)
             window.contentView = nil

@@ -9,8 +9,9 @@ class InputBlocker {
     private var runLoopSource: CFRunLoopSource?
     private var isBlocking = false
     /// True while the system auth dialog is up: keys must reach it, but Space swipes
-    /// stay swallowed — the dialog can sit open indefinitely (#18).
-    private var gesturesOnly = false
+    /// stay swallowed — the dialog can sit open indefinitely (#18). Read by the tap
+    /// callback, which runs on the main run loop that installed it, so no locking.
+    var gesturesOnly = false
     private static let inputQueue = DispatchQueue(label: "com.eriknielsen.lockpaw.input", qos: .userInteractive)
 
     /// Cached hotkey values — read once, used in the event tap callback
@@ -63,11 +64,11 @@ class InputBlocker {
     }
 
     /// `gesturesOnly` keeps just trackpad gestures blocked — used while the auth dialog
-    /// needs the keyboard. Calling again with a different mode swaps the tap.
+    /// needs the keyboard. Switching modes flips a flag the running tap reads; the tap is
+    /// never torn down and recreated for it, which would let input through in between.
     func startBlocking(gesturesOnly: Bool = false) {
-        if isBlocking, self.gesturesOnly != gesturesOnly { stopBlocking() }
-        guard !isBlocking else { return }
         self.gesturesOnly = gesturesOnly
+        guard !isBlocking else { return }
 
         // Ensure cached values are fresh before installing the tap.
         reloadHotkeyConfig()
@@ -76,7 +77,7 @@ class InputBlocker {
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: gesturesOnly ? LockdownPolicy.gestureEventMask : Self.eventMask,
+            eventsOfInterest: Self.eventMask,
             callback: { proxy, type, event, refcon -> Unmanaged<CGEvent>? in
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                     DispatchQueue.main.async {
@@ -86,6 +87,14 @@ class InputBlocker {
                         }
                     }
                     return nil
+                }
+
+                if let refcon,
+                   !LockdownPolicy.swallows(
+                       eventType: type.rawValue,
+                       gesturesOnly: Unmanaged<InputBlocker>.fromOpaque(refcon).takeUnretainedValue().gesturesOnly
+                   ) {
+                    return Unmanaged.passUnretained(event)
                 }
 
                 // Physical (hardware) events carry eventSourceUnixProcessID == 0;
