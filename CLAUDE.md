@@ -340,4 +340,3 @@ Lockpaw has been submitted to the following curated lists. **⚠️ Never delete
 | AlternativeTo | Screen Lock | Live: [alternativeto.net/software/lockpaw](https://alternativeto.net/software/lockpaw/) (zero likes/reviews yet) |
 
 Queued (browser forms, ready-to-paste copy in MARKETING.md round-2 section): MacMenuBar.com, macosmenubar.com, OpenAlternative, opensourcealternative.to, Softpedia — anytime; Uneed/Fazier/MicroLaunch/OpenHunts — save for the coordinated launch morning. Repo topics include `claude-code` (added 2026-06-12) since auto-curated lists scrape by topic. Skipped deliberately: jqueryscript/awesome-claude-code (never merges PRs), Console.dev (pre-1.0 tools only), AI-tool directories (wrong category).
-

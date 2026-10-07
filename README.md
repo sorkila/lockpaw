@@ -29,20 +29,18 @@
 
 ## Features
 
-- ⌨️ **One hotkey** — lock and unlock with ⌘⇧L (customizable)
-- 🔒 **Touch ID unlock** — just rest your finger on the sensor, no button first; password fallback like your Mac
-- 🖥️ **Every screen covered** — all displays, auto-detects new monitors
-- 🤖 **Agents keep running** — AI coding tools, builds, downloads, SSH sessions
-- 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot, or Aider needs you
-- 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
-- 💻 **Lid closed, still running** — optional: close the MacBook lid while locked and your agents keep going, no external display needed (one small helper you approve; sleep comes back on unlock, when hot, or at 20% battery)
-- 📱 **Pings to your phone** — optional: forward agent pings to ntfy, Pushover, or any webhook such as Home Assistant
-- ⚡ **Shortcuts & Spotlight** — *Lock Screen* and *Is Lockpaw Locked?* actions (no unlock action, on purpose)
-- 🌑 **Fade to black** — optionally dim the lock screen to pure black after inactivity (OLED-safe) without ever sleeping the display, so agents keep running
-- 📦 **14 MB** — native Swift, no Electron
-- 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check (plus anything you switch on yourself)
-- 🐕🐈 **Dog, cat, or your own** — choose the metallic origami dog or cat for the lock screen, drop in your own image, or show no mascot at all
-- ⚙️ **Native Settings** — lock screen, agents, shortcuts, updates, permissions, and about in one quiet window
+- **One hotkey.** Lock and unlock with ⌘⇧L, or record your own.
+- **Touch ID unlock.** Rest a finger on the sensor, nothing to click first. Password fallback like your Mac.
+- **Every screen covered.** All displays, including ones you plug in while locked.
+- **Agents keep running.** AI coding tools, builds, downloads and SSH sessions carry on underneath.
+- **Agent alerts.** The locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot or Aider needs you, and the notification says which agent and why.
+- **Lid closed, still running.** Optional. Close the MacBook lid while locked and your agents keep going, no external display needed. It uses one small helper you approve once, and sleep comes back when you unlock, when the Mac runs hot, or at 20% battery.
+- **Pings on your phone.** Optional. Forward agent pings to ntfy, Pushover or any webhook, such as Home Assistant.
+- **Shortcuts and Spotlight.** *Lock Screen* and *Is Lockpaw Locked?* actions. There's no unlock action, on purpose.
+- **Fade to black.** Optionally dims the lock screen to pure black after a while (good for OLED) without sleeping the display.
+- **Small and native.** About 14 MB of Swift. No Electron.
+- **No analytics.** No accounts, and the only network call is the signed update check, plus anything you switch on yourself.
+- **Dog, cat, or your own.** Pick the origami dog or cat, drop in your own image, or show no mascot at all.
 
 <br>
 
@@ -140,9 +138,9 @@ The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow.
 
 ## Under the hood
 
-**Hotkey** — `CGEvent.tapCreate` with `.listenOnly` on a dedicated background thread. Bypasses the LSUIElement activation issue that affects Carbon hotkeys in menu bar apps. Requires Accessibility permission.
+**Hotkey** — `CGEvent.tapCreate` on a dedicated background thread. Bypasses the LSUIElement activation issue that affects Carbon hotkeys in menu bar apps. The tap consumes the matched keystroke so it never reaches the app in front. Requires Accessibility permission.
 
-**Input blocking** — separate `CGEventTap` intercepts all keyboard, scroll, and tablet events system-wide while locked. Mouse events pass through to the overlay (SwiftUI buttons need clicks). If macOS disables the tap, it re-enables synchronously in the callback.
+**Input blocking** — a separate `CGEventTap` intercepts keyboard, scroll, tablet and trackpad-gesture events system-wide while locked, including the Dock's own gesture stream, so a three-finger swipe can't slide another Space in. Mouse events pass through to the overlay (SwiftUI buttons need clicks). If macOS disables the tap, it re-enables synchronously in the callback.
 
 **Window level** — `CGShieldingWindowLevel()`, the highest level in the system. Above Spotlight, Notification Center, screen savers, everything.
 
@@ -150,7 +148,7 @@ The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow.
 
 **State machine** — `LockState` enum with validated transitions. Every `transitionTo()` call is checked. State is verified again after async authentication returns.
 
-**Sleep prevention** — `IOPMAssertion` keeps the Mac awake while locked.
+**Sleep prevention** — `IOPMAssertion` keeps the Mac awake while locked. With the lid closed that isn't enough, so the optional `LockpawHelper` LaunchDaemon (registered with `SMAppService`) sets `pmset disablesleep` while locked and clears it on unlock, at boot, and a minute after the app goes away. Its XPC interface is that one switch, and both ends check each other's code signature. See [SECURITY.md](SECURITY.md).
 
 **Auth** — while locked, a biometrics-only `LAContext` is already armed behind the overlay, so the first finger press unlocks with nothing to click. The button path uses `.deviceOwnerAuthentication` for Touch ID with password fallback, rate-limited to a 30s cooldown after 3 failed attempts. A rejected finger on the armed sensor costs no attempt — it may be a palm or a bag strap, and Touch ID enforces its own lockout in hardware.
 
@@ -169,7 +167,8 @@ It guards against the accidental — a colleague, a cat, your own muscle memory 
 <br>
 
 - Overlay at highest system window level
-- Event tap blocks all keyboard/scroll input
+- Event tap blocks all keyboard, scroll and trackpad-gesture input
+- Quit is refused while locked
 - Fast User Switching cancels auth, keeps lock active
 - Accessibility revocation detected and handled (force unlock with warning)
 - URL scheme rate-limited (100ms debounce)
