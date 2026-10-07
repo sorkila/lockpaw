@@ -339,5 +339,6 @@ Lockpaw has been submitted to the following curated lists. **⚠️ Never delete
 |---|---|---|
 | MacUpdate | Security | Resubmitted 2026-06-11 (icon + screenshots), awaiting review — first submission never went live |
 | AlternativeTo | Screen Lock | Live: [alternativeto.net/software/lockpaw](https://alternativeto.net/software/lockpaw/) (zero likes/reviews yet) |
+| OpenAlternative | Alternative to Amphetamine | Submitted 2026-10-07 (free queue), awaiting review |
 
-Queued (browser forms, ready-to-paste copy in MARKETING.md round-2 section): MacMenuBar.com, macosmenubar.com, OpenAlternative, opensourcealternative.to, Softpedia — anytime; Uneed/Fazier/MicroLaunch/OpenHunts — save for the coordinated launch morning. Repo topics include `claude-code` (added 2026-06-12) since auto-curated lists scrape by topic. Skipped deliberately: jqueryscript/awesome-claude-code (never merges PRs), Console.dev (pre-1.0 tools only), AI-tool directories (wrong category).
+Queued (browser forms, ready-to-paste copy in MARKETING.md and the launch kit's "Directories and lists" section): MacMenuBar.com, macosmenubar.com, opensourcealternative.to, Softpedia — anytime; Uneed/Fazier/MicroLaunch/OpenHunts — save for the coordinated launch morning. Repo topics include `claude-code` (added 2026-06-12) since auto-curated lists scrape by topic. Skipped deliberately: jqueryscript/awesome-claude-code (never merges PRs), Console.dev (pre-1.0 tools only), AI-tool directories (wrong category).
