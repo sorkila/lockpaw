@@ -197,6 +197,7 @@ class LockController: ObservableObject {
                 controller: self,
                 presentationController: self.presentationController,
                 showsLockUI: isPrimary || mirrorAll,
+                screenIndex: index,
                 phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15
             ))
         }) else {
@@ -261,8 +262,9 @@ class LockController: ObservableObject {
         unlock()
     }
 
-    /// Fallback unlock via Touch ID / Mac password.
-    func requestUnlock() {
+    /// Fallback unlock via Touch ID / Mac password. `screenIndex` is the overlay the
+    /// request came from, so the system dialog opens on the screen the user is looking at.
+    func requestUnlock(onScreen screenIndex: Int? = nil) {
         guard state == .locked, !authenticationInProgress else { return }
 
         // Rate limit after 3 failures
@@ -274,6 +276,7 @@ class LockController: ObservableObject {
             return
         }
 
+        if let screenIndex { overlayManager.focus(screenAt: screenIndex) }
         disarmPassiveAuth()
         guard transitionTo(.unlocking) else { return }
         authenticationInProgress = true

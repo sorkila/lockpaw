@@ -94,8 +94,26 @@ class OverlayWindowManager {
         for window in windows { window.level = .statusBar }
     }
 
+    /// Auth is over and the lock resumes — also hands key status back to the primary,
+    /// undoing any `focus(screenAt:)` for the attempt that just ended.
     func blockSystemDialogs() {
         for window in windows { window.level = shieldLevel }
+        for (index, window) in windows.enumerated() {
+            (window as? OverlayWindow)?.acceptsKey = OverlayPolicy.config(isPrimary: index == 0).acceptsKey
+        }
+    }
+
+    /// Hand key status to the overlay on screen `index` (the order `contentFactory` was
+    /// called in) for one auth attempt. The fallback-auth dialog opens on the screen
+    /// holding the key window, so in Mirror mode a click on a secondary display's
+    /// Authenticate button otherwise raised the dialog on the primary — out of view,
+    /// which read as the button doing nothing.
+    func focus(screenAt index: Int) {
+        guard windows.indices.contains(index) else { return }
+        let target = windows[index]
+        for case let overlay as OverlayWindow in windows { overlay.acceptsKey = overlay === target }
+        NSApp.activate(ignoringOtherApps: true)
+        target.makeKey()
     }
 
     // MARK: - Lockdown
