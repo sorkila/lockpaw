@@ -86,3 +86,23 @@ final class MascotTests: XCTestCase {
         XCTAssertNil(Mascot.hidden.displayAssetName(season: .halloween, seasonalEnabled: true, isSupporter: true, assetExists: allAssets))
     }
 }
+
+/// The art ships with the app: every supporter mascot and every seasonal Dog/Cat skin
+/// resolves from the asset catalog. Code tolerates missing art (falls back to Dog or the
+/// plain mascot), so without this a dropped imageset would fail silently.
+final class MascotArtTests: XCTestCase {
+    @MainActor func testSupporterMascotArtIsBundled() {
+        for mascot in Mascot.supporterCases {
+            XCTAssertTrue(Mascot.bundledAssetExists(mascot.assetName!), mascot.rawValue)
+        }
+    }
+
+    @MainActor func testSeasonalSkinsAreBundledForDogAndCat() {
+        for mascot in [Mascot.dog, .cat] {
+            for season in SeasonalSkin.allCases {
+                let name = season.assetName(base: mascot.assetName!)
+                XCTAssertTrue(Mascot.bundledAssetExists(name), name)
+            }
+        }
+    }
+}
