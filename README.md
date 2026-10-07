@@ -71,7 +71,7 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 
 | Agent | Setup | What it hooks |
 |-------|-------|---------------|
-| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`) |
+| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` + `StopFailure` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`); `Notification` is matched to the types that need you, so `auth_success` and the like stay quiet |
 | **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` |
 | **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json` |
 | **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` |
