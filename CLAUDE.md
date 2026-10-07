@@ -323,11 +323,11 @@ Lockpaw has been submitted to the following curated lists. **⚠️ Never delete
 | `Lissy93/awesome-privacy` | #444 | Mac OS Defences | Rejected (project too new) |
 | `pluja/awesome-privacy` | #859 | Desktop | Open, nudged 2026-09-09 — alive (merged 2026-07-06) but 576 PRs deep |
 | `onmyway133/awesome-swiftui` | #29 | Open source apps > macOS | Merged |
-| `linsa-io/macos-apps` | #54 | Utilities | Open, nudged 2026-09-09 — alive (merged 2026-07-20) |
+| `linsa-io/macos-apps` | #54 | Utilities | Merged 2026-09-09 (after the nudge) |
 | `johnjago/awesome-free-software` | #130 | Utilities | Open, list dead — no push since 2025-04-29; stop chasing |
 | `unicodeveloper/awesome-opensource-apps` | #183 | Swift | Open, nudged 2026-09-09 — alive (merged 2026-08-27); PR also restores the README clobbered by their #149 |
 | `sbilly/awesome-security` | #594 | Endpoint > Authentication | Open, no merge in its recent history — stop chasing |
-| `ishanvyas22/awesome-open-source-systems` | #24 | Security | Open, nudged 2026-09-09 — alive (merged 2026-06-04) |
+| `ishanvyas22/awesome-open-source-systems` | #24 | Security | Closed unmerged 2026-09-09, a few hours after the nudge |
 | `Piebald-AI/awesome-gemini-cli` | #58 | Development Tools & Utilities | Merged 2026-06-12 (fork deleted) |
 | `RoggeOhta/awesome-codex-cli` | #88 | GUI & Desktop Apps | Open, still has never merged a PR — stop chasing |
 | `hesreallyhim/awesome-claude-code` | issue #2015 | Tooling | **Live in the README** since the July renovation (generous write-up); issue stays open on their process. Test count corrected 2026-09-09 (said 50, now 117) |
