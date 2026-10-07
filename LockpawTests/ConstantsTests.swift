@@ -65,4 +65,11 @@ final class ConstantsTests: XCTestCase {
     func testFormatElapsedTimeAccessiblePluralHours() {
         XCTAssertEqual(Constants.formatElapsedTimeAccessible(7200), "2 hours 0 minutes")
     }
+
+    /// Touch ID's prompt opens the instant the sensor arms; arming before the cover is
+    /// fully faded in lets it show through the overlay.
+    func testTouchIDArmsOnlyAfterTheCoverIsOpaque() {
+        let armDelay = Double(Constants.Timing.passiveAuthArmDelayNs) / 1_000_000_000
+        XCTAssertGreaterThan(armDelay, Constants.Timing.overlayFadeIn)
+    }
 }
