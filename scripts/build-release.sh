@@ -4,7 +4,6 @@ set -e
 APP_NAME="Lockpaw"
 BUNDLE_ID="com.eriknielsen.lockpaw"
 SIGNING_IDENTITY="Developer ID Application: Erik Nielsen (78ACS592J2)"
-APPLE_ID="${APPLE_ID:-}"
 TEAM_ID="78ACS592J2"
 
 echo "==> Generating Xcode project..."
