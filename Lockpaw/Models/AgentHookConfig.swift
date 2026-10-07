@@ -6,10 +6,13 @@ enum AgentHookConfig {
     /// Claude Code `Notification` types worth a glow. Without a matcher every
     /// notification pings, including ones that need nothing from the user
     /// (`auth_success`, a quota wait that resumed by itself, elicitation bookkeeping).
-    /// `idle_prompt` is left out on purpose: it fires a minute after every `Stop`, so
-    /// it would only repeat what `Stop` already said.
+    /// `idle_prompt` is included and decodes as *finished*: it fires a minute after a
+    /// turn ends with no reply, which covers a `Stop` that landed just before the screen
+    /// was locked (pings while unlocked are dropped). Per-session de-duplication on the
+    /// lock screen keeps it from reading as a second event.
     static let claudeNotificationMatcher = [
         "permission_prompt",
+        "idle_prompt",
         "elicitation_dialog",
         "elicitation_url_dialog",
         "agent_needs_input",
@@ -34,7 +37,8 @@ enum AgentHookConfig {
         into root: [String: Any],
         events: [String],
         command: String,
-        matchers: [String: String] = [:]
+        matchers: [String: String] = [:],
+        hookFields: [String: Any] = [:]
     ) -> [String: Any] {
         var root = root
         var hooks = root["hooks"] as? [String: Any] ?? [:]
@@ -47,6 +51,7 @@ enum AgentHookConfig {
                 for h in inner.indices {
                     if let cmd = inner[h]["command"] as? String, isLockpawPingCommand(cmd) {
                         inner[h]["command"] = command
+                        inner[h].merge(hookFields) { _, new in new }
                         present = true
                     } else {
                         ownsGroup = false
@@ -56,7 +61,9 @@ enum AgentHookConfig {
                 if ownsGroup, let matcher = matchers[event] { groups[g]["matcher"] = matcher }
             }
             if !present {
-                var group: [String: Any] = ["hooks": [["type": "command", "command": command]]]
+                let base: [String: Any] = ["type": "command", "command": command]
+                let hook = base.merging(hookFields) { _, new in new }
+                var group: [String: Any] = ["hooks": [hook]]
                 if let matcher = matchers[event] { group["matcher"] = matcher }
                 groups.append(group)
             }

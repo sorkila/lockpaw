@@ -394,7 +394,7 @@ class LockController: ObservableObject {
             agentAttention = true
             presentationController.notePing()
         }
-        if decision.shouldNotify { AgentNotifier.shared.notify(body: ping.summary + ".", withSound: decision.withSound) }
+        if decision.shouldNotify { AgentNotifier.shared.notify(body: ping.summary() + ".", withSound: decision.withSound) }
     }
 
     private func handleAuthFailure() {

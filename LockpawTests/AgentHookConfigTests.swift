@@ -85,4 +85,31 @@ final class AgentHookConfigTests: XCTestCase {
         XCTAssertFalse(AgentHookConfig.isLockpawPingCommand("lockpaw install-cli"))
         XCTAssertFalse(AgentHookConfig.isLockpawPingCommand("say hi"))
     }
+
+    /// Codex's hooks.json takes per-hook fields (a short timeout); they land on a fresh
+    /// hook and on an upgraded one alike.
+    func testHookFieldsLandOnNewAndUpgradedHooks() {
+        let fresh = AgentHookConfig.mergingPingHook(
+            into: [:], events: ["PermissionRequest"], command: command, hookFields: ["timeout": 5]
+        )
+        let hook = (groups(fresh, "PermissionRequest")[0]["hooks"] as? [[String: Any]])?[0]
+        XCTAssertEqual(hook?["timeout"] as? Int, 5)
+        XCTAssertEqual(hook?["command"] as? String, command)
+
+        let old: [String: Any] = ["hooks": ["PermissionRequest": [["hooks": [["type": "command", "command": "lockpaw ping"]]]]]]
+        let upgraded = AgentHookConfig.mergingPingHook(
+            into: old, events: ["PermissionRequest"], command: command, hookFields: ["timeout": 5]
+        )
+        let groupsAfter = groups(upgraded, "PermissionRequest")
+        XCTAssertEqual(groupsAfter.count, 1)
+        XCTAssertEqual((groupsAfter[0]["hooks"] as? [[String: Any]])?[0]["timeout"] as? Int, 5)
+    }
+
+    /// `idle_prompt` covers a turn that ended just before the screen was locked.
+    func testClaudeMatcherIncludesIdlePromptButNotAuthSuccess() {
+        let types = AgentHookConfig.claudeNotificationMatcher.split(separator: "|").map(String.init)
+        XCTAssertTrue(types.contains("idle_prompt"))
+        XCTAssertTrue(types.contains("permission_prompt"))
+        XCTAssertFalse(types.contains("auth_success"))
+    }
 }

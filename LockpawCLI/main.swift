@@ -32,7 +32,8 @@ func printUsage() {
       lockpaw ping                  Signal Lockpaw (locked screen glows + notification)
                                     --agent <name> says who is pinging; a hook payload
                                     on stdin adds the project and the reason.
-                                    Add --print to show what would be sent.
+                                    --done | --waiting | --error say what happened when
+                                    the payload doesn't. --print shows what would be sent.
       lockpaw install-cli           Symlink this tool into your PATH (~/.local/bin)
       lockpaw install-hook <tool>   Wire up an agent. <tool>: claude | codex | gemini |
                                     cursor | copilot | aider
@@ -51,20 +52,31 @@ func printUsage() {
 // MARK: - ping
 
 /// The JSON payload an agent's hook pipes in. Skipped on a terminal so a hand-typed
-/// `lockpaw ping` never waits for input, and bounded so a hook runner that keeps the
-/// pipe open without writing cannot hang the hook. The wait is generous: a payload
-/// that arrives late would be sent as a bare ping, which reads as "needs you".
-func readHookPayload() -> [String: Any] {
+/// `lockpaw ping` never waits for input. The whole read shares one deadline, not just
+/// the first byte: a hook runner that writes and then keeps the pipe open must not hang
+/// the hook, and a closed or broken stdin (POLLNVAL / POLLERR) is simply no payload.
+/// Stdin at /dev/null (Codex notify) reads EOF at once. A payload cut off by the
+/// deadline or the size cap fails to parse and is sent as a bare ping.
+func readHookPayload(deadline seconds: TimeInterval = 2, limit: Int = 4 << 20) -> [String: Any] {
     guard isatty(STDIN_FILENO) == 0 else { return [:] }
-    var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
-    guard poll(&descriptor, 1, 2_000) > 0 else { return [:] }
-    let data = FileHandle.standardInput.readDataToEndOfFile()
+    let end = Date().addingTimeInterval(seconds)
+    var data = Data()
+    var buffer = [UInt8](repeating: 0, count: 64 << 10)
+    while data.count < limit {
+        let remainingMs = Int32(end.timeIntervalSinceNow * 1_000)
+        guard remainingMs > 0 else { break }
+        var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
+        guard poll(&descriptor, 1, remainingMs) > 0,
+              descriptor.revents & Int16(POLLNVAL | POLLERR) == 0 else { break }
+        let count = read(STDIN_FILENO, &buffer, buffer.count)
+        guard count > 0 else { break }
+        data.append(buffer, count: count)
+    }
     return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
 }
 
 func sendPing(arguments: [String], printOnly: Bool) {
-    let agent = zip(arguments, arguments.dropFirst()).first { $0.0 == "--agent" }?.1
-    let info = AgentPing.userInfo(agent: agent, hookPayload: readHookPayload())
+    let info = AgentPing.userInfo(arguments: arguments, stdinPayload: readHookPayload())
 
     if printOnly {
         for key in info.keys.sorted() { print("\(key): \(info[key] ?? "")") }
@@ -187,8 +199,8 @@ func claudeConfigDirectory() -> URL {
 /// so the hook works even when `~/.local/bin` isn't on the agent's PATH; the shell
 /// that runs hook commands expands `$HOME`. The symlink (not the app bundle path)
 /// keeps the hook valid when the app moves or updates.
-func shellPingCommand(agent: String) -> String {
-    "\"$HOME/.local/bin/lockpaw\" ping --agent \(agent)"
+func shellPingCommand(agent: String, kind: AgentPing.KindFlag? = nil) -> String {
+    "\"$HOME/.local/bin/lockpaw\" ping --agent \(agent)" + (kind.map { " \($0.flag)" } ?? "")
 }
 
 /// The command points at the ~/.local/bin symlink; bail out if it can't be created.
@@ -236,7 +248,52 @@ func installClaudeHook(printOnly: Bool) {
     )
 }
 
+/// Codex's config directory: $CODEX_HOME if set, otherwise ~/.codex.
+func codexHomeDirectory() -> URL {
+    if let dir = ProcessInfo.processInfo.environment["CODEX_HOME"], !dir.isEmpty {
+        return URL(fileURLWithPath: (dir as NSString).expandingTildeInPath, isDirectory: true)
+    }
+    return homeDirectory().appendingPathComponent(".codex", isDirectory: true)
+}
+
+/// Codex gets two hooks, split by role. `notify` says a turn finished: stable, no trust
+/// step, and still supported. `PermissionRequest` in hooks.json says it is blocked on you
+/// — the amber signal notify can't give. Hooks stay skipped until the user trusts them in
+/// Codex's `/hooks`, so a Codex that never trusts it still has the core signal; and
+/// `Stop` is deliberately not hooked, since it would double-fire with notify.
 func installCodexHook(printOnly: Bool) {
+    installCodexNotify(printOnly: printOnly)
+    installCodexPermissionHook(printOnly: printOnly)
+}
+
+func installCodexPermissionHook(printOnly: Bool) {
+    let url = codexHomeDirectory().appendingPathComponent("hooks.json")
+    // Literal path: Codex doesn't document a shell for hook commands. Empty stdout and
+    // exit 0 is "no decision", so the normal approval prompt still appears.
+    let linkPath = homeDirectory().appendingPathComponent(".local/bin/lockpaw").path
+    let command = "\(linkPath) ping --agent codex"
+    let events = ["PermissionRequest"]
+    if printOnly {
+        print(claudeStyleSnippet(path: url.path, events: events, command: command))
+        print("Then run /hooks in Codex and trust the Lockpaw hook.")
+        return
+    }
+    requireCLISymlink()
+    writeJSON(
+        AgentHookConfig.mergingPingHook(
+            into: readJSONObject(at: url), events: events, command: command,
+            hookFields: ["timeout": 5]
+        ),
+        to: url, label: "Codex hooks"
+    )
+    print("""
+    → One more step: Codex skips new hooks until you trust them. Run /hooks in Codex
+      and trust the Lockpaw PermissionRequest hook, so the screen turns amber when
+      Codex is waiting for your approval.
+    """)
+}
+
+func installCodexNotify(printOnly: Bool) {
     // Codex executes `notify` as an argv array (no shell), so the path must be
     // literal — the ~/.local/bin symlink keeps it stable across app moves/updates.
     let linkPath = homeDirectory().appendingPathComponent(".local/bin/lockpaw").path
@@ -249,7 +306,7 @@ func installCodexHook(printOnly: Bool) {
     requireCLISymlink()
 
     let fm = FileManager.default
-    let url = homeDirectory().appendingPathComponent(".codex/config.toml")
+    let url = codexHomeDirectory().appendingPathComponent("config.toml")
     var contents = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
 
     if let existing = contents.range(of: #"(?m)^\s*notify\s*=.*$"#, options: .regularExpression) {
@@ -308,7 +365,8 @@ func installCursorHook(printOnly: Bool) {
     // document a shell guarantee for hook commands, so the command uses the literal
     // symlink path: no $HOME expansion needed, and macOS home paths have no spaces.
     let linkPath = homeDirectory().appendingPathComponent(".local/bin/lockpaw").path
-    let command = "\(linkPath) ping --agent cursor"
+    // Cursor's stop payload isn't Claude-shaped, so say what happened explicitly.
+    let command = "\(linkPath) ping --agent cursor --done"
     let url = homeDirectory().appendingPathComponent(".cursor/hooks.json")
     let snippet = """
     Add to \(url.path):
@@ -350,24 +408,29 @@ func installCopilotHook(printOnly: Bool) {
     // agentStop = turn finished; notification = permission prompts and other alerts.
     // The `bash` key guarantees a shell on macOS, so the $HOME form works.
     let url = copilotHooksDirectory().appendingPathComponent("lockpaw.json")
-    let command = shellPingCommand(agent: "copilot")
-    let escaped = command.replacingOccurrences(of: "\"", with: "\\\"")
+    // Copilot's payload field names aren't documented to match Claude's, so each event
+    // says what happened explicitly.
+    let done = shellPingCommand(agent: "copilot", kind: .done)
+    let waiting = shellPingCommand(agent: "copilot", kind: .waiting)
+    let escape = { (command: String) in command.replacingOccurrences(of: "\"", with: "\\\"") }
     let snippet = """
     Write \(url.path):
 
       {
         "version": 1,
         "hooks": {
-          "agentStop":    [{ "type": "command", "bash": "\(escaped)" }],
-          "notification": [{ "type": "command", "bash": "\(escaped)" }]
+          "agentStop":    [{ "type": "command", "bash": "\(escape(done))" }],
+          "notification": [{ "type": "command", "bash": "\(escape(waiting))" }]
         }
       }
     """
     if printOnly { print(snippet); return }
     requireCLISymlink()
-    let hook: [String: Any] = ["type": "command", "bash": command]
     writeJSON(
-        ["version": 1, "hooks": ["agentStop": [hook], "notification": [hook]]],
+        ["version": 1, "hooks": [
+            "agentStop": [["type": "command", "bash": done]],
+            "notification": [["type": "command", "bash": waiting]],
+        ]],
         to: url, label: "Copilot CLI"
     )
 }
@@ -379,7 +442,7 @@ func installAiderHook(printOnly: Bool) {
     // reasoning as Cursor.
     let linkPath = homeDirectory().appendingPathComponent(".local/bin/lockpaw").path
     let enableLine = "notifications: true"
-    let commandLine = "notifications-command: \"\(linkPath) ping --agent aider\""
+    let commandLine = "notifications-command: \"\(linkPath) ping --agent aider --done\""
     let url = homeDirectory().appendingPathComponent(".aider.conf.yml")
     if printOnly {
         print("Add to \(url.path):\n\n  \(enableLine)\n  \(commandLine)")

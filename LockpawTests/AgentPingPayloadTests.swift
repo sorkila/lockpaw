@@ -16,7 +16,7 @@ final class AgentPingPayloadTests: XCTestCase {
         XCTAssertEqual(bare.kind, .attention)
         XCTAssertNil(bare.agent)
         XCTAssertNil(bare.project)
-        XCTAssertEqual(bare.summary, "Your agent needs you")
+        XCTAssertEqual(bare.summary(), "Your agent needs you")
         XCTAssertEqual(bare.receivedAt, now)
     }
 
@@ -31,7 +31,7 @@ final class AgentPingPayloadTests: XCTestCase {
         XCTAssertEqual(stop.agent, "Claude Code")
         XCTAssertEqual(stop.project, "croq-app")
         XCTAssertEqual(stop.sessionID, "abc")
-        XCTAssertEqual(stop.summary, "Claude Code finished in croq-app")
+        XCTAssertEqual(stop.summary(), "Claude Code finished in croq-app")
     }
 
     func testEmptyFields_areTreatedAsAbsent() {
@@ -42,7 +42,7 @@ final class AgentPingPayloadTests: XCTestCase {
     }
 
     func testSummaryWithoutProject() {
-        XCTAssertEqual(ping(["agent": "codex"]).summary, "Codex needs you")
+        XCTAssertEqual(ping(["agent": "codex"]).summary(), "Codex needs you")
     }
 
     // MARK: - Kind
@@ -69,7 +69,7 @@ final class AgentPingPayloadTests: XCTestCase {
         let failure = ping([
             "agent": "claude", "hook_event_name": "StopFailure", "error": "rate_limit", "cwd": "/w/croq-app",
         ])
-        XCTAssertEqual(failure.summary, "Claude Code hit a rate limit in croq-app")
+        XCTAssertEqual(failure.summary(), "Claude Code hit a rate limit in croq-app")
     }
 
     func testNotificationTypes() {
@@ -79,6 +79,8 @@ final class AgentPingPayloadTests: XCTestCase {
             "elicitation_dialog": .needsInput,
             "quota_auto_resume_stale": .needsInput,
             "agent_completed": .finished,
+            "idle_prompt": .finished,
+            "ToolPermission": .permission,
         ]
         for (type, kind) in expected {
             XCTAssertEqual(
@@ -112,14 +114,34 @@ final class AgentPingPayloadTests: XCTestCase {
         XCTAssertNil(AgentPing.projectName(fromWorkingDirectory: "/"))
     }
 
+    func testCodexPermissionRequestHook_isPermission() {
+        XCTAssertEqual(AgentPing.kind(hookEvent: "PermissionRequest", notificationType: nil, error: nil), .permission)
+    }
+
+    func testExplicitFlagBeatsThePayload() {
+        XCTAssertEqual(AgentPing.kind(flag: .done, hookEvent: "Notification", notificationType: "permission_prompt", error: nil), .finished)
+        XCTAssertEqual(AgentPing.kind(flag: .waiting, hookEvent: nil, notificationType: nil, error: nil), .needsInput)
+        XCTAssertEqual(AgentPing.kind(flag: .error, hookEvent: nil, notificationType: nil, error: nil), .failed)
+    }
+
+    func testSummaryCanLeaveTheProjectOut() {
+        let stop = ping(["agent": "claude", "hook_event_name": "Stop", "project": "client-x"])
+        XCTAssertEqual(stop.summary(), "Claude Code finished in client-x")
+        XCTAssertEqual(stop.summary(includingProject: false), "Claude Code finished")
+    }
+
+    func testLegacyCwdStillDecodesToTheBasename() {
+        XCTAssertEqual(ping(["cwd": "/Users/me/w/croq-app"]).project, "croq-app")
+    }
+
     // MARK: - CLI side
 
-    func testUserInfo_forwardsOnlyTheKnownStringFields() {
-        let info = AgentPing.userInfo(agent: "claude", hookPayload: [
+    func testUserInfo_forwardsOnlyTheKnownStringFieldsAndTheBasename() {
+        let info = AgentPing.userInfo(arguments: ["ping", "--agent", "claude"], stdinPayload: [
             "hook_event_name": "StopFailure",
             "error": "rate_limit",
             "error_details": "429 Too Many Requests",
-            "cwd": "/w/croq-app",
+            "cwd": "/Users/me/w/croq-app",
             "session_id": "abc",
             "last_assistant_message": "a long private message",
             "transcript_path": "/somewhere.jsonl",
@@ -129,21 +151,41 @@ final class AgentPingPayloadTests: XCTestCase {
             "agent": "claude",
             "hook_event_name": "StopFailure",
             "error": "rate_limit",
-            "cwd": "/w/croq-app",
+            "project": "croq-app",
             "session_id": "abc",
         ])
     }
 
     func testUserInfo_isEmptyForABarePing() {
-        XCTAssertTrue(AgentPing.userInfo(agent: nil, hookPayload: [:]).isEmpty)
+        XCTAssertTrue(AgentPing.userInfo(arguments: ["ping"], stdinPayload: [:]).isEmpty)
     }
 
     func testUserInfoRoundTripsThroughDecoding() {
-        let info = AgentPing.userInfo(agent: "claude", hookPayload: [
+        let info = AgentPing.userInfo(arguments: ["ping", "--agent", "claude"], stdinPayload: [
             "hook_event_name": "Notification",
             "notification_type": "permission_prompt",
             "cwd": "/w/Pupitre",
         ])
-        XCTAssertEqual(ping(info).summary, "Claude Code needs permission in Pupitre")
+        XCTAssertEqual(ping(info).summary(), "Claude Code needs permission in Pupitre")
+    }
+
+    /// Codex `notify` passes its payload as the last argument, with stdin at /dev/null.
+    func testCodexNotifyArgvPayload() {
+        let payload = #"{"type":"agent-turn-complete","thread-id":"t-1","turn-id":"9","cwd":"/Users/me/w/billing","input-messages":["secret"],"last-assistant-message":"secret"}"#
+        let info = AgentPing.userInfo(arguments: ["ping", "--agent", "codex", payload], stdinPayload: [:])
+        XCTAssertEqual(info, ["agent": "codex", "kind": "done", "project": "billing", "session_id": "t-1"])
+        XCTAssertEqual(ping(info).summary(), "Codex finished in billing")
+    }
+
+    func testArgvThatIsNotACodexPayloadIsIgnored() {
+        XCTAssertEqual(AgentPing.userInfo(arguments: ["ping", "{not json"], stdinPayload: [:]), [:])
+        XCTAssertEqual(AgentPing.userInfo(arguments: ["ping", #"{"no":"type"}"#], stdinPayload: [:]), [:])
+    }
+
+    func testKindFlagsReachTheWire() {
+        XCTAssertEqual(AgentPing.userInfo(arguments: ["ping", "--agent", "cursor", "--done"], stdinPayload: [:]),
+                       ["agent": "cursor", "kind": "done"])
+        XCTAssertEqual(AgentPing.userInfo(arguments: ["ping", "--waiting"], stdinPayload: [:])["kind"], "waiting")
+        XCTAssertEqual(AgentPing.userInfo(arguments: ["ping", "--error"], stdinPayload: [:])["kind"], "error")
     }
 }
