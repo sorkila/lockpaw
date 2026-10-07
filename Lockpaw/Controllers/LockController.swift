@@ -292,6 +292,7 @@ class LockController: ObservableObject {
         startAccessibilityMonitoring()
         sessionWasLost = false
         systemLockSeenDuringLock = false
+        WebhookRelayController.shared.lockSessionBegan()
         transitionTo(.locked)
         LidSleepController.shared.lockBegan()
     }
@@ -417,7 +418,10 @@ class LockController: ObservableObject {
             agentAttention = true
             presentationController.notePing()
         }
-        if decision.shouldNotify { AgentNotifier.shared.notify(body: ping.summary() + ".", withSound: decision.withSound) }
+        if decision.shouldNotify {
+            AgentNotifier.shared.notify(body: ping.summary() + ".", withSound: decision.withSound)
+            WebhookRelayController.shared.relay(ping)
+        }
     }
 
     /// macOS itself was unlocked. With "unlock with your Mac" on, and a macOS lock that began

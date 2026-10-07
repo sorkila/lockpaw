@@ -62,6 +62,7 @@ private let settingsAccentColor = Color("LockpawTeal")
 
 private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case lockScreen
+    case agents
     case shortcuts
     case general
     case permissions
@@ -72,6 +73,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .lockScreen: return "Lock Screen"
+        case .agents: return "Agents"
         case .shortcuts: return "Shortcuts"
         case .general: return "General"
         case .permissions: return "Permissions"
@@ -82,6 +84,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     var systemImage: String {
         switch self {
         case .lockScreen: return "lock.display"
+        case .agents: return "terminal"
         case .shortcuts: return "command"
         case .general: return "gearshape"
         case .permissions: return "hand.raised"
@@ -91,7 +94,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     var subtitle: String {
         switch self {
-        case .lockScreen: return "Mascot, displays, and lock message"
+        case .lockScreen: return "Mascot, displays, lid, and lock message"
+        case .agents: return "Connect agents, alerts, and where pings go"
         case .shortcuts: return "Hotkey and unlock options"
         case .general: return "Startup, appearance, and updates"
         case .permissions: return "System access"
@@ -178,6 +182,8 @@ struct SettingsView: View {
         switch selectedSection {
         case .lockScreen:
             settingsPage(.lockScreen) { lockScreenSettings }
+        case .agents:
+            settingsPage(.agents) { agentSettings }
         case .shortcuts:
             settingsPage(.shortcuts) { shortcutSettings }
         case .general:
@@ -677,6 +683,37 @@ struct SettingsView: View {
             }
 
             SettingsPanel {
+                SettingsRow("Software updates", subtitle: "Check for signed updates from Lockpaw.") {
+                    Button {
+                        updateCheckViewModel.checkForUpdates()
+                    } label: {
+                        if updateCheckViewModel.isChecking {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("Checking\u{2026}")
+                            }
+                            .padding(.horizontal, 8)
+                        } else {
+                            Text("Check Now")
+                                .padding(.horizontal, 8)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!updateCheckViewModel.canCheckForUpdates || updateCheckViewModel.isChecking)
+                }
+
+                if let status = updateCheckViewModel.updateStatus {
+                    SettingsDivider()
+                    updateStatusView(status)
+                }
+            }
+
+        }
+    }
+
+    private var agentSettings: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsPanel {
                 SettingsRow("Play a sound on agent ping", subtitle: "Off by default for shared spaces. The locked screen always glows.") {
                     SettingsCheckbox(isOn: $agentPingSound)
                 }
@@ -695,7 +732,7 @@ struct SettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow("Connect your agent", subtitle: "One click sets up everything — the command-line tool and the agent's ping hook (a .bak backup is kept).") {
+                SettingsRow("Connect your agent", subtitle: "One click sets up everything — the command-line tool and the agent's ping hook (a .bak backup is kept). Codex: afterwards, run /hooks in Codex and trust the Lockpaw hook, so the screen turns amber while it waits for your approval.") {
                     VStack(alignment: .trailing, spacing: 8) {
                         ForEach([["claude", "codex", "gemini"], ["cursor", "copilot", "aider"]], id: \.self) { row in
                             HStack(spacing: 8) {
@@ -734,32 +771,7 @@ struct SettingsView: View {
                 }
             }
 
-            SettingsPanel {
-                SettingsRow("Software updates", subtitle: "Check for signed updates from Lockpaw.") {
-                    Button {
-                        updateCheckViewModel.checkForUpdates()
-                    } label: {
-                        if updateCheckViewModel.isChecking {
-                            HStack(spacing: 6) {
-                                ProgressView().controlSize(.small)
-                                Text("Checking\u{2026}")
-                            }
-                            .padding(.horizontal, 8)
-                        } else {
-                            Text("Check Now")
-                                .padding(.horizontal, 8)
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!updateCheckViewModel.canCheckForUpdates || updateCheckViewModel.isChecking)
-                }
-
-                if let status = updateCheckViewModel.updateStatus {
-                    SettingsDivider()
-                    updateStatusView(status)
-                }
-            }
-
+            RelaySettingsPanel()
         }
     }
 
@@ -1165,5 +1177,124 @@ private struct SettingsDivider: View {
     var body: some View {
         Divider()
             .padding(.leading, 0)
+    }
+}
+
+/// Settings → Agents → "Send pings to your phone". Off by default: this is the one feature
+/// that sends ping data over the network. Secrets are written to the Keychain as they are
+/// committed (on submit or when a field loses focus), never to UserDefaults.
+private struct RelaySettingsPanel: View {
+    @AppStorage(WebhookRelayController.providerKey) private var provider = WebhookRelay.Provider.off.rawValue
+    @AppStorage(WebhookRelayController.includeProjectKey) private var includeProject = false
+    @ObservedObject private var relay = WebhookRelayController.shared
+
+    @State private var ntfyServer = ""
+    @State private var ntfyTopic = ""
+    @State private var ntfyToken = ""
+    @State private var pushoverUser = ""
+    @State private var pushoverToken = ""
+    @State private var webhookURL = ""
+
+    private var selected: WebhookRelay.Provider { WebhookRelay.Provider(rawValue: provider) ?? .off }
+
+    var body: some View {
+        SettingsPanel {
+            SettingsRow(
+                "Send pings off this Mac",
+                subtitle: "Optional. Forwards each ping while locked to your phone (ntfy, Pushover) or any webhook, such as Home Assistant. Sends the agent and what happened; nothing else unless you add the project below."
+            ) {
+                SettingsSegmentedControl(
+                    selection: $provider,
+                    options: WebhookRelay.Provider.allCases.map { ($0.displayName, $0.rawValue) },
+                    width: 390
+                )
+                .onChange(of: provider) { _, newValue in
+                    if newValue == WebhookRelay.Provider.ntfy.rawValue {
+                        relay.ensureNtfyTopic()
+                        load()
+                    }
+                }
+            }
+
+            switch selected {
+            case .off:
+                EmptyView()
+            case .ntfy:
+                SettingsDivider()
+                field("Server", text: $ntfyServer, secret: .ntfyServer, prompt: "https://ntfy.sh")
+                SettingsDivider()
+                field("Topic", subtitle: "Subscribe to this topic in the ntfy app. It was generated at random \u{2014} on a public server the name is the password.", text: $ntfyTopic, secret: .ntfyTopic, prompt: "lockpaw-\u{2026}")
+                SettingsDivider()
+                field("Access token", subtitle: "Only for servers that require one.", text: $ntfyToken, secret: .ntfyToken, prompt: "optional", isSecure: true)
+            case .pushover:
+                SettingsDivider()
+                field("User key", text: $pushoverUser, secret: .pushoverUser, prompt: "u\u{2026}", isSecure: true)
+                SettingsDivider()
+                field("App token", subtitle: "Create an application at pushover.net to get one.", text: $pushoverToken, secret: .pushoverToken, prompt: "a\u{2026}", isSecure: true)
+            case .webhook:
+                SettingsDivider()
+                field("URL", subtitle: "Receives a JSON POST: source, agent, kind (done / waiting / error), message, timestamp.", text: $webhookURL, secret: .webhookURL, prompt: "https://\u{2026}", isSecure: true)
+            }
+
+            if selected != .off {
+                SettingsDivider()
+
+                SettingsRow("Include the project name", subtitle: "Off: \u{201C}Claude Code finished\u{201D}. On: \u{201C}Claude Code finished in web-app\u{201D}.") {
+                    SettingsCheckbox(isOn: $includeProject)
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Test", subtitle: relay.lastResult ?? "Send a sample ping now.") {
+                    Button {
+                        commitAll()
+                        relay.sendTest()
+                    } label: {
+                        Text("Send Test").padding(.horizontal, 8)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .onAppear(perform: load)
+        .onDisappear(perform: commitAll)
+    }
+
+    private func field(
+        _ title: String, subtitle: String? = nil, text: Binding<String>,
+        secret: WebhookRelayController.Secret, prompt: String, isSecure: Bool = false
+    ) -> some View {
+        SettingsRow(title, subtitle: subtitle) {
+            Group {
+                if isSecure {
+                    SecureField(title, text: text, prompt: Text(prompt))
+                } else {
+                    TextField(title, text: text, prompt: Text(prompt))
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 300)
+            .labelsHidden()
+            .onSubmit { relay.setSecret(secret, text.wrappedValue) }
+            .onChange(of: text.wrappedValue) { _, newValue in relay.setSecret(secret, newValue) }
+        }
+    }
+
+    private func load() {
+        ntfyServer = relay.secret(.ntfyServer).isEmpty ? "https://ntfy.sh" : relay.secret(.ntfyServer)
+        ntfyTopic = relay.secret(.ntfyTopic)
+        ntfyToken = relay.secret(.ntfyToken)
+        pushoverUser = relay.secret(.pushoverUser)
+        pushoverToken = relay.secret(.pushoverToken)
+        webhookURL = relay.secret(.webhookURL)
+    }
+
+    private func commitAll() {
+        relay.setSecret(.ntfyServer, ntfyServer)
+        relay.setSecret(.ntfyTopic, ntfyTopic)
+        relay.setSecret(.ntfyToken, ntfyToken)
+        relay.setSecret(.pushoverUser, pushoverUser)
+        relay.setSecret(.pushoverToken, pushoverToken)
+        relay.setSecret(.webhookURL, webhookURL)
     }
 }
