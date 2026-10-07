@@ -12,9 +12,10 @@ enum SupporterLicence {
     static let keychainService = "com.eriknielsen.lockpaw.supporter"
     static let keychainAccount = "licence"
 
-    /// Polar organization that sells the licence. Set once the Polar storefront exists;
-    /// while empty, entering a key reports that the store isn't open yet.
-    static let polarOrganizationID = ""
+    /// Polar organization that sells the licence (Sorkila on polar.sh). Public by design: the
+    /// validate endpoint takes it in the clear and needs no token. Emptying it makes entering a
+    /// key report that the store isn't open.
+    static let polarOrganizationID = "c66e5bb4-83ad-4ff0-b3d9-3eaaf8024d87"
     static let validateURL = URL(string: "https://api.polar.sh/v1/customer-portal/license-keys/validate")!
     /// Where "Support Lockpaw" goes: a page on the site that links the Polar checkout, so
     /// the store can move without an app update.
