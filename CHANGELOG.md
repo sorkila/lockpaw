@@ -4,12 +4,27 @@
 
 ### Added
 
-- Agent alerts say **who is done and why**. `lockpaw ping` reads the hook's JSON payload from stdin and forwards only the working directory, the event, the notification or error type and the session id; a new `--agent <name>` flag names the agent. The notification then reads *Claude Code needs permission in my-app.* or *Claude Code finished in other-repo.* instead of *Your agent needs you.* Add `--print` to see what a ping would send. Every installer now passes `--agent`; re-run `lockpaw install-hook <tool>` to upgrade an existing hook. A bare `lockpaw ping` behaves as before.
+- **Stay awake with the lid closed** (Settings → Lock Screen, off by default). While locked, close the lid and your agents keep running, no external display needed. macOS offers no way to do that short of `pmset disablesleep`, which needs root, so this installs one small helper that you allow once in System Settings → Login Items. It does exactly one thing, turning sleep off and on, and it only accepts Lockpaw. Sleep comes back when you unlock, when the Mac runs hot, at 20% battery, a minute after Lockpaw goes away (crash, force quit), and at every boot. Opening the lid onto the same display puts the cover straight back with no desktop flash. See SECURITY.md for exactly what the helper can do.
+- **Unlock with your Mac** (Settings → Lock Screen, off by default). If macOS locks its own session while Lockpaw is up, which closing the lid usually does, unlocking your Mac unlocks Lockpaw too. Off: Lockpaw stays locked and one more Touch ID press opens it.
+- Agent alerts say **who and why**. `lockpaw ping` reads the hook's JSON payload and forwards only the event, the notification or error type, the session id, and the *name* of the project folder (never its path); `--agent <name>` names the agent. The notification reads *Claude Code needs permission in my-app.* instead of *Your agent needs you.* Agents whose payload doesn't say what happened get `--done` / `--waiting` / `--error` from their installer. Add `--print` to see what a ping would send. Re-run `lockpaw install-hook <tool>` to upgrade an existing hook. A bare `lockpaw ping` behaves as before. Contributed in #24 by @BkOff-fr.
+- **Codex says when it's waiting for you.** `install-hook codex` keeps `notify` for "finished" and adds a `PermissionRequest` hook in `~/.codex/hooks.json` for "needs your approval". Codex skips new hooks until you trust them, so run `/hooks` in Codex once and trust Lockpaw's. Codex pings now carry the project and session too: its payload arrives as an argument, not on stdin, and was being dropped. Honors `$CODEX_HOME`.
+- **Send pings to your phone** (Settings → Agents, off by default): ntfy, Pushover, or any webhook such as Home Assistant. Only while locked, at most one ping per session every 30 seconds unless what happened changes. It sends the agent and what happened, plus the project name only if you tick the box. Never a path, session id or transcript. Topics, tokens and URLs are kept in the Keychain, and choosing ntfy generates an unguessable topic for you.
+- **Shortcuts, Spotlight and Siri**: *Lock Screen* and *Is Lockpaw Locked?* There is no unlock action, on purpose: Siri works while the screen is covered.
+- **Supporter licence**, pay what you want. Everything in Lockpaw is free and stays free. Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no once-a-year line in the menu asking you to consider it. The key is checked once with Polar when you enter it, then works offline. Contributors get one on the house.
+- Settings has an **Agents** tab: connecting agents, the ping sound and test, and where pings go now live together instead of inside General.
+
+### Fixed
+
+- **Swiping between Spaces revealed what was behind the cover.** A three-finger swipe slid another Space in uncovered, and holding the swipe kept it on screen. Trackpad gestures, including the Dock's own control stream, are now swallowed while locked, and still while the password dialog has the keyboard. Contributed in #26 by @Benjaber-98. Refs #18.
+- The Touch ID prompt no longer flashes through the cover as it fades in: the sensor is armed once the cover is opaque. Contributed in #28 by @Benjaber-98.
+- Mirror mode: clicking *Authenticate* on a secondary display opens the dialog on that display, not off-screen on the primary. Contributed in #27 by @Benjaber-98.
+- `lockpaw://lock`, `lockpaw://unlock` and `lockpaw://unlock-password` did nothing until the menu bar menu had been opened once, and never with the menu bar icon hidden.
+- A hook runner that writes to `lockpaw ping` and then keeps the pipe open can no longer hang the hook. The whole read now has a two-second limit.
 
 ### Changed
 
-- `lockpaw install-hook claude` now matches the `Notification` hook to the notification types that need you: permission prompts, MCP dialogs, background agents waiting or done, a usage-limit wait that did not resume. Before, every notification glowed, including `auth_success`. `idle_prompt` is left out on purpose: it fires a minute after every finished turn, which `Stop` already reports.
-- It also hooks `StopFailure`, so a turn that ends on an API error (a rate limit, say) pings too. Before, it ended silently.
+- `lockpaw install-hook claude` matches the `Notification` hook to the types that need you: permission prompts, MCP dialogs, background agents waiting or done, a usage-limit wait that didn't resume, and `idle_prompt` (a turn that ended just before you locked). Before, every notification glowed, including `auth_success`. It also hooks `StopFailure`, so a turn that ends on an API error pings instead of ending silently. Contributed in #23 by @BkOff-fr.
+- The only network calls are still the signed update check, plus things you switch on yourself: the phone relay, and entering a supporter licence.
 
 ## [1.5.0] - 2026-09-15
 

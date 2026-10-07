@@ -35,11 +35,14 @@
 - 🤖 **Agents keep running** — AI coding tools, builds, downloads, SSH sessions
 - 🔔 **Agent alerts** — the locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot, or Aider needs you
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
+- 💻 **Lid closed, still running** — optional: close the MacBook lid while locked and your agents keep going, no external display needed (one small helper you approve; sleep comes back on unlock, when hot, or at 20% battery)
+- 📱 **Pings to your phone** — optional: forward agent pings to ntfy, Pushover, or any webhook such as Home Assistant
+- ⚡ **Shortcuts & Spotlight** — *Lock Screen* and *Is Lockpaw Locked?* actions (no unlock action, on purpose)
 - 🌑 **Fade to black** — optionally dim the lock screen to pure black after inactivity (OLED-safe) without ever sleeping the display, so agents keep running
 - 📦 **10 MB** — native Swift, no Electron
 - 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check (plus anything you switch on yourself)
 - 🐕🐈 **Dog, cat, or your own** — choose the metallic origami dog or cat for the lock screen, drop in your own image, or show no mascot at all
-- ⚙️ **Native Settings** — lock screen, shortcuts, updates, permissions, and about in one quiet window
+- ⚙️ **Native Settings** — lock screen, agents, shortcuts, updates, permissions, and about in one quiet window
 
 <br>
 
@@ -54,6 +57,8 @@
 | Change hotkey | Settings → Shortcuts → click to record |
 | Change mascot, use your own image, or turn it off | Settings → Lock Screen → Mascot |
 | Hide the menu bar icon | Settings → General → Show menu bar icon (open Lockpaw from Applications to bring it back) |
+| Keep agents running with the lid closed | Settings → Lock Screen → Stay awake with the lid closed |
+| Send pings to your phone | Settings → Agents → Send pings off this Mac |
 
 <br>
 
@@ -62,11 +67,11 @@
 Lock your screen and walk away — when your AI agent pauses for permission or finishes,
 the locked screen **glows from across the room** and a notification fires. You stay
 covered (and private) until *you* unlock. The glow is always silent; turn on a sound in
-**Settings → General** if you want one (off by default for shared offices). The
+**Settings → Agents** if you want one (off by default for shared offices). The
 notification says who and why: *Claude Code needs permission in my-app*, *Claude Code
 finished in other-repo*.
 
-**Easiest:** open **Settings → General → Connect your agent** and click your agent —
+**Easiest:** open **Settings → Agents → Connect your agent** and click your agent —
 done. Prefer the terminal? Lockpaw ships a tiny `lockpaw` command-line tool
 (`Lockpaw.app/Contents/SharedSupport/lockpaw`); one command wires everything up,
 including installing itself into `~/.local/bin` (add `--print` to just see the snippet):
@@ -74,12 +79,12 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 | Agent | Setup | What it hooks |
 |-------|-------|---------------|
 | **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` + `StopFailure` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`); `Notification` is matched to the types that need you, so `auth_success` and the like stay quiet |
-| **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` |
+| **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` for *finished*, plus a `PermissionRequest` hook in `~/.codex/hooks.json` for *waiting* — trust it once via `/hooks` in Codex (honors `$CODEX_HOME`) |
 | **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json` |
-| **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` |
+| **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` (`--done`) |
 | **Copilot CLI** | `lockpaw install-hook copilot` | `agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json` (honors `$COPILOT_HOME`) |
 | **Aider** | `lockpaw install-hook aider` | `notifications-command` in `~/.aider.conf.yml` |
-| **Anything else** | append `; lockpaw ping --agent my-tool` to your command | runs after your agent finishes |
+| **Anything else** | append `; lockpaw ping --agent my-tool --done` to your command | runs after your agent finishes (`--waiting` / `--error` for the other two) |
 
 The hooks reference `~/.local/bin/lockpaw` by path, so they work no matter what's on
 your PATH, and keep working when the app moves or updates. Re-running `install-hook`
@@ -214,13 +219,20 @@ Lockpaw/
 │  ├─ HotkeyManager               CGEventTap · global hotkey detection
 │  ├─ OverlayWindowManager        NSWindow · multi-display · shielding level
 │  ├─ SleepPreventer              IOKit · idle sleep assertion
+│  ├─ LidSleepController          Lid-closed mode · SMAppService helper · XPC · power cutouts
+│  ├─ WebhookRelayController      Optional ping relay · ntfy / Pushover / webhook · Keychain
 │  └─ AgentNotifier               UNUserNotificationCenter · agent-ping notifications
 ├─ Models/
 │  ├─ LockState                  .unlocked → .locking → .locked → .unlocking
 │  ├─ HotkeyConfig               Centralized hotkey UserDefaults access
 │  ├─ PingDecision               Pure agent-ping decision (pulse/notify/sound)
 │  ├─ PassiveAuthPolicy          Pure armed-Touch-ID rules (arm/re-arm/stand down)
-│  ├─ Mascot                     Dog/cat/custom/none lock screen preference
+│  ├─ AgentPing                  Typed ping: hook payload → agent · project · kind (shared with the CLI)
+│  ├─ LockdownPolicy             Pure gesture lockdown (Space swipes)
+│  ├─ LidSleepPolicy             Pure lid-closed rules (thermal, battery) + macOS lock handling
+│  ├─ WebhookRelay               Pure relay request builder + per-session throttle
+│  ├─ SupporterLicence           Polar key check · supporter state
+│  ├─ Mascot                     Dog/cat/custom/none lock screen preference (+ supporter mascots, seasonal skins)
 │  └─ TerminationPolicy          Quit is refused while guarded (+ LockStatus mirror)
 ├─ Views/
 │  ├─ LockScreenView             Mascot (dog/cat/custom) · agent-ping glow · fallback auth
@@ -237,13 +249,15 @@ Lockpaw/
 
 LockpawCLI/
 └─ main                           `lockpaw` CLI · ping · install-cli · install-hook
+
+LockpawHelper/                    Lid-closed mode's root LaunchDaemon (opt-in) · one XPC call: sleep on/off
 ```
 
 <br>
 
 ## CI
 
-Pushes to `main` and PRs run build + 96 unit tests via GitHub Actions. Shipped DMGs are Developer ID-signed, notarized, and published to [GitHub Releases](https://github.com/sorkila/lockpaw/releases); auto-updates are delivered through Sparkle with EdDSA-signed appcasts.
+Pushes to `main` and PRs run the build and the full unit test suite via GitHub Actions. Shipped DMGs are Developer ID-signed, notarized, and published to [GitHub Releases](https://github.com/sorkila/lockpaw/releases); auto-updates are delivered through Sparkle with EdDSA-signed appcasts.
 
 <br>
 

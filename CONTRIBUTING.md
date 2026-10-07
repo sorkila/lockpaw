@@ -26,8 +26,14 @@ tccutil reset Accessibility com.eriknielsen.lockpaw
 xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ```
 
-There are 34 unit tests covering LockState transitions, Constants formatting,
-and HotkeyConfig conflict detection. All tests must pass before submitting a PR.
+The unit tests cover the pure policies the app's behaviour hangs on: lock state
+transitions, the passive Touch ID rules, overlay and gesture lockdown, agent ping
+decoding and hook merging, lid-closed sleep rules, the ping relay's payload, and
+more. Security-relevant decisions live in pure, tested types (see `Lockpaw/Models/`),
+so a new one should too. All tests must pass before submitting a PR.
+
+Lid-closed mode's helper only accepts a team-signed app, so it can't be exercised
+from a Debug build; everything around it is covered by `LidSleepPolicyTests`.
 
 ## Pull request expectations
 
