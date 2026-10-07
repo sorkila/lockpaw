@@ -33,6 +33,10 @@ class OverlayWindowManager {
     private var screenChangeWork: DispatchWorkItem?
     private var mouseMoveMonitors: [Any] = []
     private var cursorRehideTimer: Timer?
+    /// Presentation options in force before locking, restored on dismiss. nil while unlocked.
+    private var savedPresentationOptions: NSApplication.PresentationOptions?
+    /// Display setup the current overlays were built for — see ScreenLayout.
+    private var builtLayout: ScreenLayout?
 
     private let shieldLevel = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
 
@@ -47,6 +51,7 @@ class OverlayWindowManager {
         }
         startObservingScreenChanges()
         startObservingSessionChanges()
+        enterLockdown()
         startCursorConcealment()
         return true
     }
@@ -55,6 +60,7 @@ class OverlayWindowManager {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
         stopCursorConcealment()
+        exitLockdown()
 
         if animated {
             let windowsToClose = windows
@@ -92,12 +98,28 @@ class OverlayWindowManager {
         for window in windows { window.level = shieldLevel }
     }
 
+    // MARK: - Lockdown
+
+    /// See LockdownPolicy. Saved once per lock so a screen-change rebuild can't
+    /// overwrite the user's own options with the lockdown set.
+    private func enterLockdown() {
+        if savedPresentationOptions == nil { savedPresentationOptions = NSApp.presentationOptions }
+        NSApp.presentationOptions = LockdownPolicy.presentationOptions
+    }
+
+    private func exitLockdown() {
+        guard let saved = savedPresentationOptions else { return }
+        NSApp.presentationOptions = saved
+        savedPresentationOptions = nil
+    }
+
     private func createWindows() {
         guard let factory = contentFactory else {
             logger.error("No content factory to display in overlay")
             return
         }
         let screens = NSScreen.screens
+        builtLayout = ScreenLayout.current
         guard !screens.isEmpty else {
             logger.critical("No screens available — cannot create overlay")
             return
@@ -225,6 +247,12 @@ class OverlayWindowManager {
             self.screenChangeWork?.cancel()
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
+                // Dock / menu bar visibility changes post this too; only rebuild when the
+                // screens themselves changed, or the overlays flash the desktop.
+                guard ScreenLayout.current != self.builtLayout else {
+                    logger.debug("Screen parameters changed — layout unchanged, keeping overlays")
+                    return
+                }
                 logger.info("Screen parameters changed — recreating overlay windows")
                 // Do NOT call window.close() — closing during a fade-in animation
                 // causes EXC_BAD_ACCESS in _NSWindowTransformAnimation dealloc.
@@ -270,6 +298,7 @@ class OverlayWindowManager {
         stopObservingScreenChanges()
         stopObservingSessionChanges()
         stopCursorConcealment()
+        exitLockdown()
         for window in windows {
             window.orderOut(nil)
             window.contentView = nil

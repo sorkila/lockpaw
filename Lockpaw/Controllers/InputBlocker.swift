@@ -8,6 +8,9 @@ class InputBlocker {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isBlocking = false
+    /// True while the system auth dialog is up: keys must reach it, but Space swipes
+    /// stay swallowed — the dialog can sit open indefinitely (#18).
+    private var gesturesOnly = false
     private static let inputQueue = DispatchQueue(label: "com.eriknielsen.lockpaw.input", qos: .userInteractive)
 
     /// Cached hotkey values — read once, used in the event tap callback
@@ -22,14 +25,24 @@ class InputBlocker {
 
     private var hotkeyObserver: NSObjectProtocol?
 
+    /// Trackpad gestures are swallowed too: a three-finger swipe switches Spaces, and the
+    /// incoming Space is drawn uncovered for the length of the slide (#18).
     private static let eventMask: CGEventMask = {
         let types: [CGEventType] = [
             .keyDown, .keyUp, .flagsChanged,
             .scrollWheel,
             .tabletPointer, .tabletProximity
         ]
-        return types.reduce(CGEventMask(0)) { mask, type in mask | (1 << type.rawValue) }
+        return types.reduce(LockdownPolicy.gestureEventMask) { mask, type in mask | (1 << type.rawValue) }
     }()
+
+    /// Rest of the gesture stream (a resting finger produces it too) — not proof that
+    /// someone is at the keyboard, so it doesn't count toward `.lockpawPhysicalInput`.
+    private static let passiveGestureTypes: Set<UInt32> = [
+        UInt32(NSEvent.EventType.gesture.rawValue),
+        UInt32(NSEvent.EventType.beginGesture.rawValue),
+        UInt32(NSEvent.EventType.endGesture.rawValue),
+    ]
 
     init() {
         reloadHotkeyConfig()
@@ -49,8 +62,12 @@ class InputBlocker {
         cachedModifiers = HotkeyConfig.modifiers
     }
 
-    func startBlocking() {
+    /// `gesturesOnly` keeps just trackpad gestures blocked — used while the auth dialog
+    /// needs the keyboard. Calling again with a different mode swaps the tap.
+    func startBlocking(gesturesOnly: Bool = false) {
+        if isBlocking, self.gesturesOnly != gesturesOnly { stopBlocking() }
         guard !isBlocking else { return }
+        self.gesturesOnly = gesturesOnly
 
         // Ensure cached values are fresh before installing the tap.
         reloadHotkeyConfig()
@@ -59,7 +76,7 @@ class InputBlocker {
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: Self.eventMask,
+            eventsOfInterest: gesturesOnly ? LockdownPolicy.gestureEventMask : Self.eventMask,
             callback: { proxy, type, event, refcon -> Unmanaged<CGEvent>? in
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                     DispatchQueue.main.async {
@@ -75,7 +92,8 @@ class InputBlocker {
                 // synthetic posts carry the poster's PID. Best-effort heuristic —
                 // signal fade-to-black that the user is present, throttled. The
                 // event is still swallowed below; blocking semantics are unchanged.
-                if event.getIntegerValueField(.eventSourceUnixProcessID) == 0, let refcon {
+                if event.getIntegerValueField(.eventSourceUnixProcessID) == 0,
+                   !InputBlocker.passiveGestureTypes.contains(type.rawValue), let refcon {
                     let blocker = Unmanaged<InputBlocker>.fromOpaque(refcon).takeUnretainedValue()
                     let now = Date()
                     if now.timeIntervalSince(blocker.lastPhysicalInputPost) >= Constants.Timing.physicalInputThrottle {
