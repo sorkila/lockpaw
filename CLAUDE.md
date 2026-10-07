@@ -12,7 +12,7 @@ macOS menu bar screen guard. Lock/unlock with a hotkey; the covered screen glows
 - **Requires:** macOS 14+, Xcode 16+, XcodeGen
 - **Dependencies:** Sparkle (SPM, auto-updates with EdDSA signing)
 - **Current version:** 1.5.0
-- **Size:** ~10 MB DMG download, ~13 MB installed (2.7 MB of that is Sparkle) — keep README/site/marketing claims in sync with the actual DMG when this changes
+- **Size:** ~14 MB DMG download, ~17 MB installed (2.8 MB of that is Sparkle; 2.4 MB is the 1.6 mascot art) — keep README/site/marketing claims in sync with the actual DMG when this changes
 
 ## Build
 
