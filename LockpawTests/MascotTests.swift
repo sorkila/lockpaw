@@ -23,8 +23,8 @@ final class MascotTests: XCTestCase {
     }
 
     func testHiddenIsLastOption() {
-        // Settings lists the cases in declaration order; "None" belongs after the two mascots.
-        XCTAssertEqual(Mascot.allCases.last, .hidden)
+        // Settings lists the free cases in order; "None" belongs last.
+        XCTAssertEqual(Mascot.freeCases.last, .hidden)
     }
 
     func testCustomMascotHasNoBundledAsset() {
@@ -34,6 +34,55 @@ final class MascotTests: XCTestCase {
     }
 
     func testCustomSitsBetweenTheBuiltInsAndNone() {
-        XCTAssertEqual(Mascot.allCases, [.dog, .cat, .custom, .hidden])
+        XCTAssertEqual(Mascot.freeCases, [.dog, .cat, .custom, .hidden])
+    }
+
+    // MARK: - Supporter mascots
+
+    private let allAssets: (String) -> Bool = { _ in true }
+    private let noAssets: (String) -> Bool = { _ in false }
+
+    func testSupporterMascotsAreTheFourAndNotFree() {
+        XCTAssertEqual(Mascot.supporterCases, [.fox, .owl, .redPanda, .bunny])
+        for mascot in Mascot.supporterCases {
+            XCTAssertTrue(mascot.isSupporterOnly)
+            XCTAssertFalse(Mascot.freeCases.contains(mascot))
+            XCTAssertNotNil(mascot.assetName)
+        }
+        for mascot in Mascot.freeCases { XCTAssertFalse(mascot.isSupporterOnly) }
+    }
+
+    func testSupporterMascotNeedsASupporter() {
+        XCTAssertEqual(Mascot.resolved(from: "fox", isSupporter: true, assetExists: allAssets), .fox)
+        XCTAssertEqual(Mascot.resolved(from: "fox", isSupporter: false, assetExists: allAssets), .dog)
+    }
+
+    func testSupporterMascotNeedsItsArt() {
+        XCTAssertEqual(Mascot.resolved(from: "redpanda", isSupporter: true, assetExists: noAssets), .dog)
+    }
+
+    func testFreeMascotsIgnoreSupporterState() {
+        for mascot in Mascot.freeCases {
+            XCTAssertEqual(Mascot.resolved(from: mascot.rawValue, isSupporter: false, assetExists: noAssets), mascot)
+        }
+    }
+
+    // MARK: - Seasonal skins
+
+    func testSeasonalVariantForSupportersOnly() {
+        XCTAssertEqual(Mascot.dog.displayAssetName(season: .halloween, seasonalEnabled: true, isSupporter: true, assetExists: allAssets), "Mascot-halloween")
+        XCTAssertEqual(Mascot.cat.displayAssetName(season: .winter, seasonalEnabled: true, isSupporter: true, assetExists: allAssets), "MascotCat-winter")
+        XCTAssertEqual(Mascot.dog.displayAssetName(season: .halloween, seasonalEnabled: true, isSupporter: false, assetExists: allAssets), "Mascot")
+        XCTAssertEqual(Mascot.dog.displayAssetName(season: .halloween, seasonalEnabled: false, isSupporter: true, assetExists: allAssets), "Mascot")
+    }
+
+    func testSeasonalFallsBackToBaseWithoutArtOrSeason() {
+        XCTAssertEqual(Mascot.dog.displayAssetName(season: .midsummer, seasonalEnabled: true, isSupporter: true, assetExists: noAssets), "Mascot")
+        XCTAssertEqual(Mascot.dog.displayAssetName(season: nil, seasonalEnabled: true, isSupporter: true, assetExists: allAssets), "Mascot")
+    }
+
+    func testOnlyDogAndCatGetSeasons() {
+        XCTAssertEqual(Mascot.fox.displayAssetName(season: .halloween, seasonalEnabled: true, isSupporter: true, assetExists: allAssets), "MascotFox")
+        XCTAssertNil(Mascot.hidden.displayAssetName(season: .halloween, seasonalEnabled: true, isSupporter: true, assetExists: allAssets))
     }
 }

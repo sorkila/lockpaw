@@ -124,6 +124,9 @@ struct SettingsView: View {
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
     @ObservedObject private var customMascot = CustomMascot.shared
     @ObservedObject private var lidSleep = LidSleepController.shared
+    @ObservedObject private var supporter = Supporter.shared
+    @AppStorage(SeasonalSkin.enabledKey) private var seasonalMascots = true
+    @State private var licenceKey = ""
 
     @State private var selectedSection: SettingsSection = .lockScreen
     @State private var isRecording = false
@@ -231,9 +234,34 @@ struct SettingsView: View {
                 SettingsRow("Mascot") {
                     SettingsSegmentedControl(
                         selection: $selectedMascot,
-                        options: Mascot.allCases.map { ($0.displayName, $0.rawValue) },
+                        options: Mascot.freeCases.map { ($0.displayName, $0.rawValue) },
                         width: 300
                     )
+                }
+
+                if !availableSupporterMascots.isEmpty {
+                    SettingsDivider()
+
+                    SettingsRow(
+                        "Supporter mascots",
+                        subtitle: supporter.isSupporter ? "A thank-you for supporting Lockpaw." : "A thank-you for supporters \u{2014} see About."
+                    ) {
+                        SettingsSegmentedControl(
+                            selection: $selectedMascot,
+                            options: availableSupporterMascots.map { ($0.displayName, $0.rawValue) },
+                            width: 300
+                        )
+                        .disabled(!supporter.isSupporter)
+                        .opacity(supporter.isSupporter ? 1 : 0.5)
+                    }
+                }
+
+                if supporter.isSupporter {
+                    SettingsDivider()
+
+                    SettingsRow("Seasonal mascots", subtitle: "Dog and Cat dress up for Halloween, the winter holidays, Lunar New Year and Midsummer.") {
+                        SettingsCheckbox(isOn: $seasonalMascots)
+                    }
                 }
 
                 if Mascot.resolved(from: selectedMascot) == .custom {
@@ -361,6 +389,10 @@ struct SettingsView: View {
         }
     }
 
+    private var availableSupporterMascots: [Mascot] {
+        Mascot.supporterCases.filter { $0.assetName.map(Mascot.bundledAssetExists) ?? false }
+    }
+
     private var lidHelperSubtitle: String {
         switch lidSleep.helperStatus {
         case .enabled: return lidSleep.sleepHeld ? "Holding sleep off while locked." : "Ready. Active only while Lockpaw is locked."
@@ -422,7 +454,7 @@ struct SettingsView: View {
     }
 
     private var mascotPreview: some View {
-        let mascot = Mascot.resolved(from: selectedMascot)
+        let mascot = Mascot.effective(from: selectedMascot)
 
         return HStack(spacing: 18) {
             ZStack {
@@ -860,15 +892,64 @@ struct SettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow("Support Lockpaw") {
-                    Button {
-                        NSWorkspace.shared.open(buyMeACoffeeURL)
-                    } label: {
-                        Text("Buy Me a Coffee")
-                            .padding(.horizontal, 8)
+                SettingsRow("Support Lockpaw", subtitle: "Everything in Lockpaw is free and stays free. Supporters get a few thank-yous: extra mascots, seasonal skins, and no yearly ask.") {
+                    HStack(spacing: 8) {
+                        Button {
+                            NSWorkspace.shared.open(buyMeACoffeeURL)
+                        } label: {
+                            Text("Buy Me a Coffee")
+                                .padding(.horizontal, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+
+                        Button {
+                            NSWorkspace.shared.open(SupporterLicence.supportPageURL)
+                        } label: {
+                            Text("Become a Supporter")
+                                .padding(.horizontal, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
+                }
+            }
+
+            SettingsPanel {
+                if supporter.isSupporter {
+                    SettingsRow("Supporter", subtitle: supporter.message ?? "Thank you. Your licence is saved on this Mac.") {
+                        HStack(spacing: 10) {
+                            Label("Supporter", systemImage: "heart.fill")
+                                .foregroundStyle(Color("LockpawTeal"))
+                            Button {
+                                supporter.removeLicence()
+                            } label: {
+                                Text("Remove Licence").padding(.horizontal, 8)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                } else {
+                    SettingsRow("Supporter licence", subtitle: supporter.message ?? "Paste the key from your receipt. It's checked once with Polar, then works offline.") {
+                        HStack(spacing: 8) {
+                            TextField("Licence key", text: $licenceKey, prompt: Text("Licence key"))
+                                .textFieldStyle(.roundedBorder)
+                                .labelsHidden()
+                                .frame(width: 220)
+                                .onSubmit { supporter.enter(key: licenceKey) }
+                            Button {
+                                supporter.enter(key: licenceKey)
+                            } label: {
+                                if supporter.isChecking {
+                                    ProgressView().controlSize(.small).padding(.horizontal, 8)
+                                } else {
+                                    Text("Activate").padding(.horizontal, 8)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(licenceKey.trimmingCharacters(in: .whitespaces).isEmpty || supporter.isChecking)
+                        }
+                    }
                 }
             }
         }

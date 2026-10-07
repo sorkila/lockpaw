@@ -1,5 +1,4 @@
 import Foundation
-import Security
 import os.log
 
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "WebhookRelay")
@@ -14,6 +13,7 @@ final class WebhookRelayController: ObservableObject {
 
     static let providerKey = "webhookProvider"
     static let includeProjectKey = "webhookIncludeProject"
+    static let keychainService = "com.eriknielsen.lockpaw.relay"
 
     enum Secret: String, CaseIterable {
         case ntfyServer, ntfyTopic, ntfyToken, pushoverUser, pushoverToken, webhookURL
@@ -41,21 +41,25 @@ final class WebhookRelayController: ObservableObject {
     var config: WebhookRelay.Config {
         WebhookRelay.Config(
             provider: provider,
-            ntfyServer: Keychain.read(.ntfyServer) ?? "https://ntfy.sh",
-            ntfyTopic: Keychain.read(.ntfyTopic) ?? "",
-            ntfyToken: Keychain.read(.ntfyToken) ?? "",
-            pushoverUser: Keychain.read(.pushoverUser) ?? "",
-            pushoverToken: Keychain.read(.pushoverToken) ?? "",
-            webhookURL: Keychain.read(.webhookURL) ?? "",
+            ntfyServer: secret(.ntfyServer).isEmpty ? "https://ntfy.sh" : secret(.ntfyServer),
+            ntfyTopic: secret(.ntfyTopic),
+            ntfyToken: secret(.ntfyToken),
+            pushoverUser: secret(.pushoverUser),
+            pushoverToken: secret(.pushoverToken),
+            webhookURL: secret(.webhookURL),
             includeProject: UserDefaults.standard.bool(forKey: Self.includeProjectKey)
         )
     }
 
-    func secret(_ secret: Secret) -> String { Keychain.read(secret) ?? "" }
+    func secret(_ secret: Secret) -> String { Keychain.read(service: Self.keychainService, account: secret.rawValue) ?? "" }
 
     func setSecret(_ secret: Secret, _ value: String) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { Keychain.delete(secret) } else { Keychain.write(secret, trimmed) }
+        if trimmed.isEmpty {
+            Keychain.delete(service: Self.keychainService, account: secret.rawValue)
+        } else {
+            Keychain.write(service: Self.keychainService, account: secret.rawValue, value: trimmed)
+        }
     }
 
     /// A fresh unguessable topic the first time ntfy is chosen.
@@ -100,41 +104,5 @@ final class WebhookRelayController: ObservableObject {
             guard reportResult else { return }
             Task { @MainActor in self?.lastResult = outcome }
         }.resume()
-    }
-}
-
-/// Generic-password items under one service, one account per secret.
-private enum Keychain {
-    static let service = "com.eriknielsen.lockpaw.relay"
-
-    private static func query(_ secret: WebhookRelayController.Secret) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: secret.rawValue]
-    }
-
-    static func read(_ secret: WebhookRelayController.Secret) -> String? {
-        var query = query(secret)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func write(_ secret: WebhookRelayController.Secret, _ value: String) {
-        let data = Data(value.utf8)
-        let status = SecItemUpdate(query(secret) as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        if status == errSecItemNotFound {
-            var add = query(secret)
-            add[kSecValueData as String] = data
-            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            SecItemAdd(add as CFDictionary, nil)
-        }
-    }
-
-    static func delete(_ secret: WebhookRelayController.Secret) {
-        SecItemDelete(query(secret) as CFDictionary)
     }
 }

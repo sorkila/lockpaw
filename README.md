@@ -247,6 +247,14 @@ Pushes to `main` and PRs run build + 96 unit tests via GitHub Actions. Shipped D
 
 <br>
 
+## Support
+
+Everything in Lockpaw is free and MIT-licensed, and everything that ships stays free. No feature is ever moved behind a payment.
+
+If Lockpaw earns its place on your Mac, you can [buy me a coffee](https://www.buymeacoffee.com/eriknielsen) or become a supporter (pay what you want). Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no once-a-year "consider supporting" line in the menu. Contributors get a supporter licence on the house.
+
+<br>
+
 ## Pairs with
 
 [**Tintpad**](https://tintpad.com) is the other half of the loop: one hotkey opens your terminal at the right repo with Claude Code, Codex, or any agent already running. Tintpad starts your agents. Lockpaw covers for you while they run. Also free, also MIT.

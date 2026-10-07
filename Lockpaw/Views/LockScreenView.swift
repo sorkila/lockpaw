@@ -29,7 +29,7 @@ struct LockScreenView: View {
 
     private var breathe: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.2) }
     private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
-    private var mascot: Mascot { Mascot.resolved(from: selectedMascot) }
+    private var mascot: Mascot { Mascot.effective(from: selectedMascot) }
 
     /// The sensor is live when `passiveAuthLive`, so name the gesture that already works
     /// rather than pointing at the button below it — the button stays for the password

@@ -479,6 +479,9 @@ class LockController: ObservableObject {
     }
 
     private func unlock() {
+        // An unlock after an agent ping is Lockpaw having done its job — the one moment
+        // the yearly support ask may come up (in the menu, never here).
+        if agentAttention { SupportAskController.shared.noteUnlockAfterPing() }
         presentationController.stop()
         disarmPassiveAuth(endingSession: true)
         stopAccessibilityMonitoring()

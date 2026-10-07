@@ -17,7 +17,7 @@ struct OnboardingView: View {
 
     private let totalSteps = 5
 
-    private var mascot: Mascot { Mascot.resolved(from: selectedMascot) }
+    private var mascot: Mascot { Mascot.effective(from: selectedMascot) }
 
     var body: some View {
         VStack(spacing: 0) {

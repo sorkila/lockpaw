@@ -34,7 +34,12 @@ struct MascotImage: View {
     }
 
     private var image: Image? {
-        if let assetName = mascot.assetName { return Image(assetName) }
+        if let assetName = mascot.displayAssetName(
+            season: SeasonalSkin.current(on: Date()),
+            seasonalEnabled: UserDefaults.standard.object(forKey: SeasonalSkin.enabledKey) as? Bool ?? true,
+            isSupporter: Supporter.shared.isSupporter,
+            assetExists: Mascot.bundledAssetExists
+        ) { return Image(assetName) }
         if mascot == .custom, let custom = CustomMascot.shared.loadImage() { return Image(nsImage: custom) }
         return nil
     }
@@ -51,5 +56,22 @@ struct MascotImage: View {
             startRadiusFraction: 0,
             endRadiusFraction: 0.5
         )
+    }
+}
+
+extension Mascot {
+    /// Asset-catalog lookup, cached: the lock screen re-evaluates its body every breath frame.
+    @MainActor static func bundledAssetExists(_ name: String) -> Bool {
+        if let known = assetCache[name] { return known }
+        let exists = NSImage(named: name) != nil
+        assetCache[name] = exists
+        return exists
+    }
+
+    @MainActor private static var assetCache: [String: Bool] = [:]
+
+    /// The mascot that actually shows for a stored preference — see `resolved(from:isSupporter:assetExists:)`.
+    @MainActor static func effective(from rawValue: String) -> Mascot {
+        resolved(from: rawValue, isSupporter: Supporter.shared.isSupporter, assetExists: bundledAssetExists)
     }
 }
