@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.6.0] - 2026-10-07
 
 ### Added
 
@@ -11,6 +11,7 @@
 - **Send pings to your phone** (Settings → Agents, off by default): ntfy, Pushover, or any webhook such as Home Assistant. Only while locked, at most one ping per session every 30 seconds unless what happened changes. It sends the agent and what happened, plus the project name only if you tick the box. Never a path, session id or transcript. Topics, tokens and URLs are kept in the Keychain, and choosing ntfy generates an unguessable topic for you.
 - **Shortcuts, Spotlight and Siri**: *Lock Screen* and *Is Lockpaw Locked?* There is no unlock action, on purpose: Siri works while the screen is covered.
 - **Supporter licence**, pay what you want. Everything in Lockpaw is free and stays free. Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no once-a-year line in the menu asking you to consider it. The key is checked once with Polar when you enter it, then works offline. Contributors get one on the house.
+- **Glow strength** (Settings → Agents): Subtle, Normal or Bright. Normal, the new default, holds a clearly brighter resting glow after a ping, because the old one (now Subtle) couldn't be seen from across a room. Asked for in #19 by @sidpangtey.
 - Settings has an **Agents** tab: connecting agents, the ping sound and test, and where pings go now live together instead of inside General.
 
 ### Fixed

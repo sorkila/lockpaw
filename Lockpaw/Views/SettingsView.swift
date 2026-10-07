@@ -126,6 +126,7 @@ struct SettingsView: View {
     @ObservedObject private var lidSleep = LidSleepController.shared
     @ObservedObject private var supporter = Supporter.shared
     @AppStorage(SeasonalSkin.enabledKey) private var seasonalMascots = true
+    @AppStorage(GlowIntensity.storageKey) private var glowIntensity = GlowIntensity.defaultValue.rawValue
     @State private var licenceKey = ""
 
     @State private var selectedSection: SettingsSection = .lockScreen
@@ -746,6 +747,16 @@ struct SettingsView: View {
     private var agentSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsPanel {
+                SettingsRow("Glow strength", subtitle: "How brightly the locked screen glows when an agent needs you. Subtle is the quieter 1.5 look.") {
+                    SettingsSegmentedControl(
+                        selection: $glowIntensity,
+                        options: GlowIntensity.allCases.map { ($0.displayName, $0.rawValue) },
+                        width: 260
+                    )
+                }
+
+                SettingsDivider()
+
                 SettingsRow("Play a sound on agent ping", subtitle: "Off by default for shared spaces. The locked screen always glows.") {
                     SettingsCheckbox(isOn: $agentPingSound)
                 }

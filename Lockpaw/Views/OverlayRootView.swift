@@ -106,14 +106,16 @@ struct OverlayRootView: View {
 /// Under Reduce Motion the glow holds at the floor with no motion.
 private struct AttentionPulseView: View {
     @State private var glow: CGFloat = 0
+    @AppStorage(GlowIntensity.storageKey) private var glowIntensityRaw = GlowIntensity.defaultValue.rawValue
+    private var glowIntensity: GlowIntensity { GlowIntensity.resolved(from: glowIntensityRaw) }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
             RadialGradient(
                 stops: [
-                    .init(color: Color("LockpawTeal").opacity(0.30 * glow), location: 0),
-                    .init(color: Color("LockpawTeal").opacity(0.14 * glow), location: 0.45),
+                    .init(color: Color("LockpawTeal").opacity(glowIntensity.centreOpacity(at: glow)), location: 0),
+                    .init(color: Color("LockpawTeal").opacity(min(0.14 * glow * glowIntensity.peakScale, 0.25)), location: 0.45),
                     .init(color: .clear, location: 1)
                 ],
                 center: .center,

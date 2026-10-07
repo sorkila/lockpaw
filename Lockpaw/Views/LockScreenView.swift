@@ -23,6 +23,8 @@ struct LockScreenView: View {
     @State private var shakeOffset: CGFloat = 0
     @State private var successScale: CGFloat = 1.0
     @State private var pingGlow: CGFloat = 0
+    @AppStorage(GlowIntensity.storageKey) private var glowIntensityRaw = GlowIntensity.defaultValue.rawValue
+    private var glowIntensity: GlowIntensity { GlowIntensity.resolved(from: glowIntensityRaw) }
     @State private var pingGlowGeneration = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -229,7 +231,7 @@ struct LockScreenView: View {
         .onAppear {
             // Fade-to-black reveals remount this view with fresh @State — restore the
             // resting glow after a ping (onChange(of: pingPulse) won't refire on mount).
-            if controller.agentAttention { pingGlow = Constants.Timing.pingGlowRest }
+            if controller.agentAttention { pingGlow = glowIntensity.restLevel }
             withAnimation(reduceMotion ? .none : .timingCurve(0.16, 1, 0.3, 1, duration: 0.6)) { appeared = true }
             guard !reduceMotion else { return }
             withAnimation(Constants.Anim.breathe) { phase = Constants.Anim.breathePhaseTarget }
@@ -265,7 +267,7 @@ struct LockScreenView: View {
             withAnimation(Constants.Anim.standard) { pingGlow = 1 }
             DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.pingPulsePeriod) {
                 guard generation == pingGlowGeneration else { return }
-                withAnimation(Constants.Anim.gentle) { pingGlow = Constants.Timing.pingGlowRest }
+                withAnimation(Constants.Anim.gentle) { pingGlow = glowIntensity.restLevel }
             }
             return
         }
@@ -283,7 +285,7 @@ struct LockScreenView: View {
                 // Settle to a faint resting glow, not black — the agent still
                 // needs attention; the hint under the timer carries the message.
                 withAnimation(.easeInOut(duration: isLast ? half * 1.4 : half)) {
-                    pingGlow = isLast ? Constants.Timing.pingGlowRest : Constants.Timing.pingPulseFloor
+                    pingGlow = isLast ? glowIntensity.restLevel : Constants.Timing.pingPulseFloor
                 }
             }
         }
@@ -312,8 +314,8 @@ struct LockScreenView: View {
                 // stop-to-clear ramp washed the brand green toward pale cyan.
                 RadialGradient(
                     stops: [
-                        .init(color: Color("LockpawTeal").opacity(0.30 * pingGlow), location: 0),
-                        .init(color: Color("LockpawTeal").opacity(0.14 * pingGlow), location: 0.45),
+                        .init(color: Color("LockpawTeal").opacity(glowIntensity.centreOpacity(at: pingGlow)), location: 0),
+                        .init(color: Color("LockpawTeal").opacity(min(0.14 * pingGlow * glowIntensity.peakScale, 0.25)), location: 0.45),
                         .init(color: .clear, location: 1)
                     ],
                     center: .center, startRadius: 0,
