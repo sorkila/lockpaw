@@ -59,6 +59,12 @@ class LockController: ObservableObject {
     /// MenuBarExtra content lazily, so observers there didn't exist until the menu had been
     /// opened once — and never with the menu bar icon hidden. Same reason as toggleObserver.
     private var urlSchemeObservers: [Any] = []
+    private var systemLockObservers: [Any] = []
+    /// macOS has locked its own session (lid closed with "require password", say). The
+    /// Accessibility check reads false while it is, which must not force-unlock.
+    private var systemScreenLocked = false
+    /// A macOS lock began during this Lockpaw lock — what "unlock with your Mac" requires.
+    private var systemLockSeenDuringLock = false
     private var authenticationInProgress = false
     private var sessionWasLost = false
     private var lastAuthFailTime: Date?
@@ -171,6 +177,20 @@ class LockController: ObservableObject {
             }
         }
 
+        let distributed = DistributedNotificationCenter.default()
+        systemLockObservers = [
+            distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.systemScreenLocked = true
+                    if self.state == .locked || self.state == .unlocking { self.systemLockSeenDuringLock = true }
+                }
+            },
+            distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.handleSystemUnlock() }
+            },
+        ]
+
         pingObserver = NotificationCenter.default.addObserver(
             forName: .lockpawPing, object: nil, queue: .main
         ) { [weak self] notification in
@@ -194,6 +214,7 @@ class LockController: ObservableObject {
         if let obs = inputBlockerFailedObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = pingObserver { NotificationCenter.default.removeObserver(obs) }
         for obs in urlSchemeObservers { NotificationCenter.default.removeObserver(obs) }
+        for obs in systemLockObservers { DistributedNotificationCenter.default().removeObserver(obs) }
     }
 
     // MARK: - Public
@@ -270,7 +291,9 @@ class LockController: ObservableObject {
 
         startAccessibilityMonitoring()
         sessionWasLost = false
+        systemLockSeenDuringLock = false
         transitionTo(.locked)
+        LidSleepController.shared.lockBegan()
     }
 
     /// Quick unlock via hotkey — no auth.
@@ -397,6 +420,29 @@ class LockController: ObservableObject {
         if decision.shouldNotify { AgentNotifier.shared.notify(body: ping.summary() + ".", withSound: decision.withSound) }
     }
 
+    /// macOS itself was unlocked. With "unlock with your Mac" on, and a macOS lock that began
+    /// during this Lockpaw lock, Lockpaw comes down too; otherwise it stays up and gets its
+    /// taps and sensor back — a locked session can kill both.
+    private func handleSystemUnlock() {
+        systemScreenLocked = false
+        let unlocksToo = SystemLockPolicy.unlocksAfterSystemUnlock(
+            state: state,
+            systemLockSeenDuringLock: systemLockSeenDuringLock,
+            settingEnabled: UserDefaults.standard.bool(forKey: Constants.unlockWithMacKey)
+        )
+        systemLockSeenDuringLock = false
+        guard state == .locked else { return }
+        if unlocksToo {
+            logger.info("macOS unlocked after a macOS lock during this session — unlocking (setting on)")
+            unlock()
+            return
+        }
+        inputBlocker.stopBlocking()
+        inputBlocker.startBlocking()
+        overlayManager.blockSystemDialogs()
+        armPassiveAuthAfterInterruption()
+    }
+
     private func handleAuthFailure() {
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
         failCount += 1
@@ -441,6 +487,7 @@ class LockController: ObservableObject {
         overlayManager.dismissOverlay(animated: true)
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
+        LidSleepController.shared.lockEnded()
     }
 
     private func forceUnlock() {
@@ -459,6 +506,7 @@ class LockController: ObservableObject {
         overlayManager.dismissOverlay()
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
+        LidSleepController.shared.lockEnded()
     }
 
     // MARK: - Passive Touch ID
@@ -603,7 +651,10 @@ class LockController: ObservableObject {
         accessibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [weak self] in
-                guard let self, self.state == .locked, !AccessibilityChecker.isEnabled else { return }
+                guard let self, self.state == .locked,
+                      SystemLockPolicy.forceUnlocksForAccessibility(
+                          trusted: AccessibilityChecker.isEnabled, systemScreenLocked: self.systemScreenLocked
+                      ) else { return }
                 logger.critical("Accessibility revoked while locked — force unlocking")
                 self.lastError = "Accessibility permission revoked"
                 try? await Task.sleep(nanoseconds: Constants.Timing.errorDisplayBeforeForceUnlockNs)

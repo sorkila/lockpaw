@@ -54,10 +54,21 @@ sign_item "${SPARKLE_FW}"
 # Sign the embedded lockpaw CLI before the outer app (inside-out)
 [ -f "${APP_PATH}/Contents/SharedSupport/lockpaw" ] && sign_item "${APP_PATH}/Contents/SharedSupport/lockpaw"
 
+# Lid-closed mode's root helper. Its identifier is pinned by the app's XPC requirement
+# (SleepHelper.helperIdentifier), so sign it explicitly — a tool otherwise signs with its
+# product name. Hard failure if missing: a DMG without it would ship a dead setting.
+HELPER="${APP_PATH}/Contents/Library/LaunchDaemons/LockpawHelper"
+[ -f "${HELPER}" ] || { echo "error: ${HELPER} missing"; exit 1; }
+[ -f "${APP_PATH}/Contents/Library/LaunchDaemons/com.eriknielsen.lockpaw.helper.plist" ] || { echo "error: helper launchd plist missing"; exit 1; }
+codesign --force --sign "${SIGNING_IDENTITY}" --options runtime --timestamp \
+  --identifier com.eriknielsen.lockpaw.helper "${HELPER}"
+
 sign_item "${APP_PATH}"
 
 echo "==> Verifying signature..."
-codesign --verify --verbose "${APP_PATH}"
+codesign --verify --deep --strict --verbose "${APP_PATH}"
+codesign -dv "${HELPER}" 2>&1 | grep -q "Identifier=com.eriknielsen.lockpaw.helper" || { echo "error: helper identifier wrong"; exit 1; }
+codesign -dv "${HELPER}" 2>&1 | grep -q "TeamIdentifier=${TEAM_ID}" || { echo "error: helper team wrong"; exit 1; }
 spctl --assess --type exec "${APP_PATH}" && echo "   Gatekeeper: ACCEPTED" || echo "   Gatekeeper: will pass after notarization"
 
 echo "==> Creating DMG..."

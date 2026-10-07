@@ -128,6 +128,16 @@ class OverlayWindowManager {
         windows[index].makeKey()
     }
 
+    /// Same displays as before (the lid opened onto the layout we built for): put each
+    /// overlay back on its screen at full opacity without a rebuild, so nothing fades in.
+    private func reassertCover() {
+        for (window, screen) in zip(windows, NSScreen.screens) {
+            window.setFrame(screen.frame, display: true)
+            window.alphaValue = 1
+            window.orderFrontRegardless()
+        }
+    }
+
     private func applyKeyRouting() {
         for (index, window) in windows.enumerated() {
             (window as? OverlayWindow)?.acceptsKey = OverlayPolicy.acceptsKey(index: index, focusedIndex: focusedIndex)
@@ -277,8 +287,16 @@ class OverlayWindowManager {
                 guard let self else { return }
                 // Dock / menu bar visibility changes post this too; only rebuild when the
                 // screens themselves changed, or the overlays flash the desktop.
+                // Lid closed with no external display: there is no screen at all for a
+                // moment. Keep the overlays rather than tearing them down — rebuilding when
+                // the lid opens would fade back in from transparent and show the desktop.
+                guard !NSScreen.screens.isEmpty else {
+                    logger.info("No screens (lid closed?) — keeping overlays until displays return")
+                    return
+                }
                 guard ScreenLayout.current != self.builtLayout else {
                     logger.debug("Screen parameters changed — layout unchanged, keeping overlays")
+                    self.reassertCover()
                     return
                 }
                 logger.info("Screen parameters changed — recreating overlay windows")

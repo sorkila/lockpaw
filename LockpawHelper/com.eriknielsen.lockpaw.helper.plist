@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.eriknielsen.lockpaw.helper</string>
+	<key>BundleProgram</key>
+	<string>Contents/Library/LaunchDaemons/LockpawHelper</string>
+	<key>MachServices</key>
+	<dict>
+		<key>com.eriknielsen.lockpaw.helper</key>
+		<true/>
+	</dict>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.eriknielsen.lockpaw</string>
+		<string>com.eriknielsen.lockpaw.debug</string>
+	</array>
+	<!-- At boot, so the helper's startup clear of `disablesleep` runs before anyone logs in:
+	     a Mac that shut down or panicked while blocked must be able to sleep at the login window. -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>

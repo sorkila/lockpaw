@@ -18,6 +18,15 @@ enum Constants {
     /// the `lockpaw` CLI, `lockpaw://settings`, and reopening the app are the ways in.
     static let showMenuBarIconKey = "showMenuBarIcon"
 
+    /// UserDefaults key: lid-closed mode — keep the Mac awake with the lid shut while locked,
+    /// via the opt-in root helper. Off by default.
+    static let lidClosedModeKey = "lidClosedMode"
+
+    /// UserDefaults key: when macOS locks its own session during a Lockpaw lock (typically
+    /// the lid closing with "require password" on), unlocking macOS also unlocks Lockpaw.
+    /// Off by default — Lockpaw stays locked.
+    static let unlockWithMacKey = "unlockWithMac"
+
     enum Timing {
         static let inputBlockerDelayNs: UInt64 = 50_000_000           // 50ms
         static let overlayFadeIn: TimeInterval = 0.3                  // seconds; cover fades in on lock
@@ -28,6 +37,7 @@ enum Constants {
         static let maxAuthAttempts = 3
         static let urlSchemeDebounce: TimeInterval = 0.1              // seconds
         static let userActivityRefreshInterval: TimeInterval = 30     // seconds; defeats screensaver idle timer while locked
+        static let lidPowerCheckInterval: TimeInterval = 30           // seconds; battery/thermal re-check while lid-closed mode holds sleep
         static let pingDebounce: TimeInterval = 2.0                   // seconds; collapse chatty agent pings into one
         static let pingPulseCount = 2                                 // breaths per agent ping
         static let pingPulsePeriod: TimeInterval = 2.2                // seconds per full breath (rise + fall)

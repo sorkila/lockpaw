@@ -31,6 +31,11 @@ targets:
     platform: macOS
     sources:
       - path: Lockpaw
+      - path: LockpawHelper/com.eriknielsen.lockpaw.helper.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
     settings:
       base:
         PRODUCT_NAME: Lockpaw
@@ -56,6 +61,33 @@ targets:
           # SharedSupport, not MacOS — `lockpaw` would collide with the app binary
           # `Lockpaw` on case-insensitive filesystems (DMG/Applications).
           destination: sharedSupport
+      # Lid-closed mode's root helper, registered through SMAppService.daemon. The binary
+      # and its launchd plist both live in Contents/Library/LaunchDaemons.
+      - target: LockpawHelper
+        embed: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Library/LaunchDaemons
+  LockpawHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: LockpawHelper
+        excludes:
+          - "*.plist"
+      - path: Lockpaw/Models/SleepHelperProtocol.swift
+    settings:
+      base:
+        PRODUCT_NAME: LockpawHelper
+        PRODUCT_BUNDLE_IDENTIFIER: com.eriknielsen.lockpaw.helper
+        INFOPLIST_FILE: LockpawHelper/Info.plist
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        # Tools sign with their product name unless told otherwise; the app's XPC
+        # requirement pins this identifier.
+        OTHER_CODE_SIGN_FLAGS: "--identifier com.eriknielsen.lockpaw.helper"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
   LockpawCLI:
     type: tool
     platform: macOS

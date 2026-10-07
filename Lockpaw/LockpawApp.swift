@@ -55,6 +55,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // delegate before launch completes (required for foreground banner presentation).
         _ = AgentNotifier.shared
 
+        // Lid-closed mode: clear a sleep block a crashed previous run may have left.
+        LidSleepController.shared.applicationDidLaunch()
+
         // Start Sparkle after app is fully launched
         updateCheckViewModel.bind(to: updaterController.updater)
         do {

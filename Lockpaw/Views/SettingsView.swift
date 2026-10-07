@@ -114,9 +114,12 @@ struct SettingsView: View {
     @AppStorage(FadeToBlack.enabledKey) private var fadeToBlackEnabled = FadeToBlack.defaultEnabled
     @AppStorage(FadeToBlack.storageKey) private var fadeToBlackDelay = FadeToBlack.defaultValue
     @AppStorage(Constants.showMenuBarIconKey) private var showMenuBarIcon = true
+    @AppStorage(Constants.lidClosedModeKey) private var lidClosedMode = false
+    @AppStorage(Constants.unlockWithMacKey) private var unlockWithMac = false
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
     @ObservedObject private var customMascot = CustomMascot.shared
+    @ObservedObject private var lidSleep = LidSleepController.shared
 
     @State private var selectedSection: SettingsSection = .lockScreen
     @State private var isRecording = false
@@ -160,6 +163,8 @@ struct SettingsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshAccessibilityStatus()
+            // The user may be back from approving the helper in Login Items.
+            lidSleep.refreshStatus()
         }
         .onDisappear {
             accessibilityTimer?.invalidate()
@@ -307,6 +312,35 @@ struct SettingsView: View {
             }
 
             SettingsPanel {
+                SettingsRow(
+                    "Stay awake with the lid closed",
+                    subtitle: "While locked, close the lid and your agents keep running. Uses a small helper you allow once in Login Items. Sleep returns if the Mac runs hot or the battery drops to \(LidSleepPolicy.batteryFloor)%."
+                ) {
+                    SettingsCheckbox(isOn: Binding(
+                        get: { lidClosedMode },
+                        set: { lidSleep.setEnabled($0) }
+                    ))
+                }
+
+                if lidClosedMode {
+                    SettingsDivider()
+
+                    SettingsRow("Helper", subtitle: lidSleep.lastError ?? lidHelperSubtitle) {
+                        lidHelperStatusControl
+                    }
+                }
+
+                SettingsDivider()
+
+                SettingsRow(
+                    "Unlock with your Mac",
+                    subtitle: "If macOS locks while Lockpaw is up (say, when you close the lid), unlocking your Mac unlocks Lockpaw too. Off: Lockpaw stays locked until you unlock it."
+                ) {
+                    SettingsCheckbox(isOn: $unlockWithMac)
+                }
+            }
+
+            SettingsPanel {
                 SettingsRow("Lock now", subtitle: "Start the lock screen immediately.") {
                     Button {
                         NotificationCenter.default.post(name: .lockpawLock, object: nil)
@@ -318,6 +352,35 @@ struct SettingsView: View {
                     .controlSize(.regular)
                 }
             }
+        }
+    }
+
+    private var lidHelperSubtitle: String {
+        switch lidSleep.helperStatus {
+        case .enabled: return lidSleep.sleepHeld ? "Holding sleep off while locked." : "Ready. Active only while Lockpaw is locked."
+        case .requiresApproval: return "Allow \u{201C}Lockpaw\u{201D} in System Settings \u{2192} General \u{2192} Login Items."
+        case .notRegistered: return "Not installed yet."
+        case .unavailable: return "This build isn't signed, so the helper can't run."
+        }
+    }
+
+    @ViewBuilder
+    private var lidHelperStatusControl: some View {
+        switch lidSleep.helperStatus {
+        case .enabled:
+            Label("Ready", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(Color("LockpawTeal"))
+        case .requiresApproval, .notRegistered:
+            Button {
+                if lidSleep.helperStatus == .notRegistered { lidSleep.setEnabled(true) } else { lidSleep.openLoginItems() }
+            } label: {
+                Text(lidSleep.helperStatus == .notRegistered ? "Install" : "Open Login Items")
+                    .padding(.horizontal, 8)
+            }
+            .buttonStyle(.bordered)
+        case .unavailable:
+            Label("Unavailable", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color("LockpawAmber"))
         }
     }
 
@@ -737,6 +800,14 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.bordered)
                     }
+                }
+            }
+
+            if lidClosedMode {
+                SettingsDivider()
+
+                SettingsRow("Lid-closed helper", subtitle: lidHelperSubtitle) {
+                    lidHelperStatusControl
                 }
             }
         }

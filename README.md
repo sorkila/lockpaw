@@ -37,7 +37,7 @@
 - 😴 **Prevents sleep** — IOKit assertion keeps your Mac awake while locked
 - 🌑 **Fade to black** — optionally dim the lock screen to pure black after inactivity (OLED-safe) without ever sleeping the display, so agents keep running
 - 📦 **10 MB** — native Swift, no Electron
-- 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check
+- 🚫 **No analytics** — no data leaves your Mac, no accounts; the only network call is the signed update check (plus anything you switch on yourself)
 - 🐕🐈 **Dog, cat, or your own** — choose the metallic origami dog or cat for the lock screen, drop in your own image, or show no mascot at all
 - ⚙️ **Native Settings** — lock screen, shortcuts, updates, permissions, and about in one quiet window
 

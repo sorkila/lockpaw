@@ -111,6 +111,11 @@ jobs:
           fi
 
           sign_item "${SPARKLE_FW}"
+          # Embedded CLI and lid-closed helper, inside-out before the app. The helper's
+          # identifier is pinned by the app's XPC requirement.
+          sign_item "${APP_PATH}/Contents/SharedSupport/lockpaw"
+          codesign --force --sign "$DEVELOPER_ID_APPLICATION" --options runtime --timestamp \
+            --identifier com.eriknielsen.lockpaw.helper "${APP_PATH}/Contents/Library/LaunchDaemons/LockpawHelper"
           sign_item "${APP_PATH}"
 
           codesign --verify --verbose "${APP_PATH}"
