@@ -265,7 +265,7 @@ Pushes to `main` and PRs run the build and the full unit test suite via GitHub A
 
 Everything in Lockpaw is free and MIT-licensed, and everything that ships stays free. No feature is ever moved behind a payment.
 
-If Lockpaw earns its place on your Mac, you can [buy me a coffee](https://www.buymeacoffee.com/eriknielsen) or become a supporter (pay what you want). Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no once-a-year "consider supporting" line in the menu. Contributors get a supporter licence on the house.
+If Lockpaw earns its place on your Mac, you can [sponsor me on GitHub](https://github.com/sponsors/sorkila), [buy me a coffee](https://www.buymeacoffee.com/eriknielsen), or [become a supporter](https://getlockpaw.com/support/) (pay what you want). Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no once-a-year "consider supporting" line in the menu. Contributors get a supporter licence on the house.
 
 <br>
 
