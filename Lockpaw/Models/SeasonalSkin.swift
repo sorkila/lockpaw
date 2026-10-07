@@ -43,6 +43,17 @@ enum SeasonalSkin: String, CaseIterable {
         return nil
     }
 
+    /// Today's season, worked out once per calendar day. Main actor: views call it per frame.
+    @MainActor static func today(now: Date = Date(), calendar: Calendar = .current) -> SeasonalSkin? {
+        let day = calendar.startOfDay(for: now)
+        if let cached = todayCache, cached.day == day { return cached.season }
+        let season = current(on: now, calendar: calendar)
+        todayCache = (day, season)
+        return season
+    }
+
+    @MainActor private static var todayCache: (day: Date, season: SeasonalSkin?)?
+
     /// Lunar New Year's Day (Gregorian), 2026–2035. Outside the table there's no skin rather
     /// than a guess; extend it before 2036.
     static let lunarNewYearDates: [Int: (month: Int, day: Int)] = [

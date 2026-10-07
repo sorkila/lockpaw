@@ -307,40 +307,29 @@ func installCodexNotify(printOnly: Bool) {
 
     let fm = FileManager.default
     let url = codexHomeDirectory().appendingPathComponent("config.toml")
-    var contents = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    let contents = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
 
-    if let existing = contents.range(of: #"(?m)^\s*notify\s*=.*$"#, options: .regularExpression) {
-        // Upgrade an older lockpaw notify in place; never clobber someone else's.
-        if AgentHookConfig.isLockpawPingCommand(String(contents[existing])) {
-            if contents[existing] != Substring(line) {
-                contents.replaceSubrange(existing, with: line)
-                backupFile(at: url)
-                do {
-                    try contents.write(to: url, atomically: true, encoding: .utf8)
-                    print("✓ Updated notify hook in Codex config at \(url.path)")
-                } catch {
-                    fail("Could not write Codex config: \(error.localizedDescription)")
-                }
-            } else {
-                print("✓ Codex config already routes notify through Lockpaw.")
-            }
-            return
-        }
+    let merged: String
+    switch AgentHookConfig.mergingCodexNotify(into: contents, line: line) {
+    case .unchanged:
+        print("✓ Codex config already routes notify through Lockpaw.")
+        return
+    case .foreign:
         print("""
-        ⚠️  ~/.codex/config.toml already defines `notify` — leaving it untouched.
+        ⚠️  \(url.path) already defines `notify` — leaving it untouched.
         To route Codex through Lockpaw, set it to:
             \(line)
         """)
         return
+    case .added(let text), .upgraded(let text):
+        merged = text
     }
 
     do {
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         backupFile(at: url)
-        if !contents.isEmpty && !contents.hasSuffix("\n") { contents += "\n" }
-        contents += line + "\n"
-        try contents.write(to: url, atomically: true, encoding: .utf8)
-        print("✓ Added notify hook to Codex config at \(url.path)")
+        try merged.write(to: url, atomically: true, encoding: .utf8)
+        print("✓ Set notify in Codex config at \(url.path)")
     } catch {
         fail("Could not write Codex config: \(error.localizedDescription)")
     }

@@ -1262,8 +1262,8 @@ private struct SettingsDivider: View {
 }
 
 /// Settings → Agents → "Send pings to your phone". Off by default: this is the one feature
-/// that sends ping data over the network. Secrets are written to the Keychain as they are
-/// committed (on submit or when a field loses focus), never to UserDefaults.
+/// that sends ping data over the network. Secrets go to the Keychain, never UserDefaults —
+/// on Return, on Send Test, when switching provider, and when the panel closes.
 private struct RelaySettingsPanel: View {
     @AppStorage(WebhookRelayController.providerKey) private var provider = WebhookRelay.Provider.off.rawValue
     @AppStorage(WebhookRelayController.includeProjectKey) private var includeProject = false
@@ -1290,6 +1290,7 @@ private struct RelaySettingsPanel: View {
                     width: 390
                 )
                 .onChange(of: provider) { _, newValue in
+                    commitAll()
                     if newValue == WebhookRelay.Provider.ntfy.rawValue {
                         relay.ensureNtfyTopic()
                         load()
@@ -1357,7 +1358,6 @@ private struct RelaySettingsPanel: View {
             .frame(width: 300)
             .labelsHidden()
             .onSubmit { relay.setSecret(secret, text.wrappedValue) }
-            .onChange(of: text.wrappedValue) { _, newValue in relay.setSecret(secret, newValue) }
         }
     }
 

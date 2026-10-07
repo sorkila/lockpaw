@@ -68,7 +68,11 @@ class InputBlocker {
     /// never torn down and recreated for it, which would let input through in between.
     func startBlocking(gesturesOnly: Bool = false) {
         self.gesturesOnly = gesturesOnly
-        guard !isBlocking else { return }
+        // A tap can die under us (a locked macOS session, a timeout the system wouldn't let
+        // us re-enable). Flipping the flag on a dead tap would leave the keyboard unblocked,
+        // so only an enabled tap counts as already blocking.
+        if isBlocking, let tap = eventTap, CGEvent.tapIsEnabled(tap: tap) { return }
+        if isBlocking { stopBlocking() }
 
         // Ensure cached values are fresh before installing the tap.
         reloadHotkeyConfig()
@@ -161,6 +165,14 @@ class InputBlocker {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
         isBlocking = true
+    }
+
+    /// Tear the tap down and build a fresh one in the same mode — after the session or the
+    /// display slept, when the old tap may be dead even though it still exists.
+    func reinstall() {
+        let mode = gesturesOnly
+        stopBlocking()
+        startBlocking(gesturesOnly: mode)
     }
 
     func stopBlocking() {

@@ -26,8 +26,8 @@ final class WebhookRelayController: ObservableObject {
     /// queue — a ping that can't be delivered in 5s is stale anyway.
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 5
-        configuration.timeoutIntervalForResource = 5
+        configuration.timeoutIntervalForRequest = Constants.Timing.relayTimeout
+        configuration.timeoutIntervalForResource = Constants.Timing.relayTimeout
         configuration.waitsForConnectivity = false
         return URLSession(configuration: configuration)
     }()
@@ -39,9 +39,10 @@ final class WebhookRelayController: ObservableObject {
     }
 
     var config: WebhookRelay.Config {
-        WebhookRelay.Config(
+        let server = secret(.ntfyServer)
+        return WebhookRelay.Config(
             provider: provider,
-            ntfyServer: secret(.ntfyServer).isEmpty ? "https://ntfy.sh" : secret(.ntfyServer),
+            ntfyServer: server.isEmpty ? "https://ntfy.sh" : server,
             ntfyTopic: secret(.ntfyTopic),
             ntfyToken: secret(.ntfyToken),
             pushoverUser: secret(.pushoverUser),
@@ -71,6 +72,7 @@ final class WebhookRelayController: ObservableObject {
 
     /// Called alongside the notification, so it follows the same rule: only while locked.
     func relay(_ ping: AgentPing) {
+        // Checked before `config`, which reads the Keychain, so a relay that's off costs nothing.
         guard provider != .off, throttle.allows(ping) else { return }
         send(ping, reportResult: false)
     }

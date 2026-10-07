@@ -90,7 +90,7 @@ final class Supporter: ObservableObject {
         isChecking = true
         message = nil
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 10
+        configuration.timeoutIntervalForRequest = Constants.Timing.licenceCheckTimeout
         URLSession(configuration: configuration).dataTask(with: request) { [weak self] data, response, _ in
             let outcome = SupporterLicence.outcome(status: (response as? HTTPURLResponse)?.statusCode, body: data)
             Task { @MainActor in self?.finish(outcome, key: key) }

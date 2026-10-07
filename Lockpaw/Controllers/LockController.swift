@@ -68,7 +68,7 @@ class LockController: ObservableObject {
     private var authenticationInProgress = false
     private var sessionWasLost = false
     private var lastAuthFailTime: Date?
-    private var lastPingTime: Date?
+    private var pingGate = PingGate()
     private var passiveAuthTask: Task<Void, Never>?
     /// Bumped by every arm and disarm so a late-resolving evaluation can tell it is stale.
     private var passiveAuthGeneration = 0
@@ -106,9 +106,12 @@ class LockController: ObservableObject {
         ) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [weak self] in
-                guard let self, self.state == .locked else { return }
-                self.inputBlocker.stopBlocking()
-                self.inputBlocker.startBlocking()
+                guard let self else { return }
+                // Mid-auth the tap runs in gesturesOnly mode; it needs rebuilding too, or a
+                // failed attempt returns to .locked with a dead tap.
+                if self.state == .unlocking { self.inputBlocker.reinstall() }
+                guard self.state == .locked else { return }
+                self.inputBlocker.reinstall()
                 self.overlayManager.blockSystemDialogs()
                 self.armPassiveAuthAfterInterruption()
             }
@@ -179,14 +182,10 @@ class LockController: ObservableObject {
 
         let distributed = DistributedNotificationCenter.default()
         systemLockObservers = [
-            distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.systemScreenLocked = true
-                    if self.state == .locked || self.state == .unlocking { self.systemLockSeenDuringLock = true }
-                }
+            distributed.addObserver(forName: .systemScreenLocked, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.handleSystemLock() }
             },
-            distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
+            distributed.addObserver(forName: .systemScreenUnlocked, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor [weak self] in self?.handleSystemUnlock() }
             },
         ]
@@ -293,6 +292,7 @@ class LockController: ObservableObject {
         sessionWasLost = false
         systemLockSeenDuringLock = false
         WebhookRelayController.shared.lockSessionBegan()
+        pingGate.reset()
         transitionTo(.locked)
         LidSleepController.shared.lockBegan()
     }
@@ -404,15 +404,14 @@ class LockController: ObservableObject {
 
     // MARK: - Private
 
-    /// React to an agent ping. Debounces chatty agents, then pulses the lock screen
-    /// and/or posts a notification per `PingDecision` (no-op when unlocked).
+    /// React to an agent ping: per `PingDecision` (nothing unless locked), and only if
+    /// `PingGate` hasn't already announced this session in this state.
     private func handlePing(_ ping: AgentPing) {
-        let now = Date()
-        if let last = lastPingTime, now.timeIntervalSince(last) < Constants.Timing.pingDebounce { return }
-        lastPingTime = now
-
         let soundEnabled = UserDefaults.standard.bool(forKey: Constants.agentPingSoundKey)
         let decision = PingDecision.make(state: state, soundEnabled: soundEnabled)
+        // Only consulted while locked, so a turn that ended before the lock can't
+        // pre-empt the one announcement it gets after (idle_prompt).
+        guard decision.shouldPulse || decision.shouldNotify, pingGate.admits(ping) else { return }
         if decision.shouldPulse {
             pingPulse &+= 1
             agentAttention = true
@@ -424,25 +423,51 @@ class LockController: ObservableObject {
         }
     }
 
-    /// macOS itself was unlocked. With "unlock with your Mac" on, and a macOS lock that began
-    /// during this Lockpaw lock, Lockpaw comes down too; otherwise it stays up and gets its
-    /// taps and sensor back — a locked session can kill both.
+    /// The notification is only a hint (any process can post it). For holding off the
+    /// Accessibility force-unlock it is enough — believing a fake one only keeps Lockpaw
+    /// locked. For "Unlock with your Mac" the window server has to confirm it, now or a
+    /// moment later in case the notification raced the state change.
+    private func handleSystemLock() {
+        systemScreenLocked = true
+        guard state == .locked || state == .unlocking else { return }
+        if SystemSession.isScreenLocked {
+            systemLockSeenDuringLock = true
+            return
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Constants.Timing.systemLockConfirmDelayNs)
+            guard let self else { return }
+            guard SystemSession.isScreenLocked else {
+                // Never confirmed: a stray or forged notification. Drop the hint too, so it
+                // can't keep holding off a real Accessibility revocation.
+                self.systemScreenLocked = false
+                return
+            }
+            if self.state == .locked || self.state == .unlocking { self.systemLockSeenDuringLock = true }
+        }
+    }
+
+    /// macOS itself was unlocked. With "unlock with your Mac" on, and a confirmed macOS lock
+    /// that began during this Lockpaw lock, Lockpaw comes down too; otherwise it stays up and
+    /// gets its taps and sensor back — a locked session can kill both.
     private func handleSystemUnlock() {
-        systemScreenLocked = false
+        let sessionStillLocked = SystemSession.isScreenLocked
+        if !sessionStillLocked { systemScreenLocked = false }
         let unlocksToo = SystemLockPolicy.unlocksAfterSystemUnlock(
             state: state,
             systemLockSeenDuringLock: systemLockSeenDuringLock,
+            sessionReportsLocked: sessionStillLocked,
             settingEnabled: UserDefaults.standard.bool(forKey: Constants.unlockWithMacKey)
         )
-        systemLockSeenDuringLock = false
+        if !sessionStillLocked { systemLockSeenDuringLock = false }
+        if state == .unlocking { inputBlocker.reinstall() }
         guard state == .locked else { return }
         if unlocksToo {
-            logger.info("macOS unlocked after a macOS lock during this session — unlocking (setting on)")
+            logger.info("macOS unlocked after a confirmed macOS lock during this session — unlocking (setting on)")
             unlock()
             return
         }
-        inputBlocker.stopBlocking()
-        inputBlocker.startBlocking()
+        inputBlocker.reinstall()
         overlayManager.blockSystemDialogs()
         armPassiveAuthAfterInterruption()
     }
@@ -660,7 +685,8 @@ class LockController: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, self.state == .locked,
                       SystemLockPolicy.forceUnlocksForAccessibility(
-                          trusted: AccessibilityChecker.isEnabled, systemScreenLocked: self.systemScreenLocked
+                          trusted: AccessibilityChecker.isEnabled,
+                          systemScreenLocked: self.systemScreenLocked || SystemSession.isScreenLocked
                       ) else { return }
                 logger.critical("Accessibility revoked while locked — force unlocking")
                 self.lastError = "Accessibility permission revoked"

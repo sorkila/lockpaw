@@ -18,3 +18,37 @@ struct PingDecision: Equatable {
         return PingDecision(shouldPulse: true, shouldNotify: true, withSound: soundEnabled)
     }
 }
+
+/// Which pings get announced (glow pulse, notification, relay) during one lock session.
+/// Replaces a single global 2s debounce, which dropped a *different* agent's ping — Codex
+/// finishing, then Claude blocked a second later, came through as "Codex finished" only.
+///
+/// - A session already announced with the same kind stays quiet. That absorbs Claude's
+///   `idle_prompt`, which repeats a turn's end a minute after `Stop`, and chatty hooks.
+/// - A change of kind always goes through: done → waiting is the news.
+/// - Pings with no session id (a bare `lockpaw ping` from a script) fall back to the old
+///   short debounce, keyed by agent and kind so different sources never shadow each other.
+///
+/// Reset at every lock, so a turn that ended just before locking still glows once after.
+struct PingGate {
+    private var announced: [String: AgentPing.Kind] = [:]
+    private var lastBare: [String: Date] = [:]
+
+    mutating func admits(_ ping: AgentPing, now: Date = Date()) -> Bool {
+        if let session = ping.sessionID {
+            let key = "\(ping.agent ?? "-")/\(session)"
+            if announced[key] == ping.kind { return false }
+            announced[key] = ping.kind
+            return true
+        }
+        let key = "\(ping.agent ?? "-")|\(ping.kind)"
+        if let last = lastBare[key], now.timeIntervalSince(last) < Constants.Timing.pingDebounce { return false }
+        lastBare[key] = now
+        return true
+    }
+
+    mutating func reset() {
+        announced.removeAll()
+        lastBare.removeAll()
+    }
+}

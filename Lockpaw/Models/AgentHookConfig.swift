@@ -8,8 +8,8 @@ enum AgentHookConfig {
     /// (`auth_success`, a quota wait that resumed by itself, elicitation bookkeeping).
     /// `idle_prompt` is included and decodes as *finished*: it fires a minute after a
     /// turn ends with no reply, which covers a `Stop` that landed just before the screen
-    /// was locked (pings while unlocked are dropped). Per-session de-duplication on the
-    /// lock screen keeps it from reading as a second event.
+    /// was locked (pings while unlocked are dropped). `PingGate` keeps it from reading as
+    /// a second event when `Stop` already announced the same session.
     static let claudeNotificationMatcher = [
         "permission_prompt",
         "idle_prompt",
@@ -71,5 +71,46 @@ enum AgentHookConfig {
         }
         root["hooks"] = hooks
         return root
+    }
+
+    enum CodexNotifyMerge: Equatable {
+        case added(String)
+        case upgraded(String)
+        case unchanged
+        /// Someone else's `notify` is already set; never clobbered.
+        case foreign
+    }
+
+    /// Put lockpaw's `notify = [...]` into a Codex config.toml as a **top-level** key. TOML
+    /// assigns a key to the most recent `[table]` header above it, and real configs end with
+    /// one (`[mcp_servers.x]`, `[profiles.y]`), so appending to the file would have written
+    /// `mcp_servers.x.notify`, which Codex ignores. So only the top-level region (before
+    /// the first header) is searched, and a new line goes at its end.
+    static func mergingCodexNotify(into contents: String, line: String) -> CodexNotifyMerge {
+        var lines = contents.components(separatedBy: "\n")
+        let isHeader = { (text: String) in text.trimmingCharacters(in: .whitespaces).hasPrefix("[") }
+        let firstHeader = lines.firstIndex(where: isHeader) ?? lines.count
+        let isNotify = { (text: String) in
+            text.range(of: #"^\s*notify\s*="#, options: .regularExpression) != nil
+        }
+
+        if let existing = lines[..<firstHeader].firstIndex(where: isNotify) {
+            guard isLockpawPingCommand(lines[existing]) else { return .foreign }
+            guard lines[existing] != line else { return .unchanged }
+            lines[existing] = line
+            return .upgraded(lines.joined(separator: "\n"))
+        }
+
+        if firstHeader == lines.count {
+            var result = contents
+            if !result.isEmpty && !result.hasSuffix("\n") { result += "\n" }
+            return .added(result + line + "\n")
+        }
+        // Before the first table, after any top-level keys, with a blank line before the header.
+        var insertAt = firstHeader
+        while insertAt > 0, lines[insertAt - 1].trimmingCharacters(in: .whitespaces).isEmpty { insertAt -= 1 }
+        let blankAlreadyFollows = insertAt < firstHeader
+        lines.insert(contentsOf: blankAlreadyFollows ? [line] : [line, ""], at: insertAt)
+        return .added(lines.joined(separator: "\n"))
     }
 }

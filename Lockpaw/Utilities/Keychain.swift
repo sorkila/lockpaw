@@ -1,8 +1,9 @@
 import Foundation
 import Security
 
-/// Generic-password items: one service per feature, one account per value. This-device-only
-/// and readable after first unlock, so a relay can still send while the screen is covered.
+/// Generic-password items in the login keychain: one service per feature, one account per
+/// value. (The accessibility attribute is set for the data-protection keychain's sake; the
+/// file-based login keychain macOS uses for unentitled apps ignores it.)
 enum Keychain {
     private static func query(service: String, account: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,

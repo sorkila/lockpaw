@@ -316,6 +316,10 @@ class OverlayWindowManager {
     }
 
     private func stopObservingScreenChanges() {
+        // A rebuild queued by the debounce must not run after dismiss: it would put
+        // shield-level overlays back up over an unlocked Mac with nothing to take them down.
+        screenChangeWork?.cancel()
+        screenChangeWork = nil
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
             screenObserver = nil

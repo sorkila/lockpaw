@@ -112,4 +112,48 @@ final class AgentHookConfigTests: XCTestCase {
         XCTAssertTrue(types.contains("permission_prompt"))
         XCTAssertFalse(types.contains("auth_success"))
     }
+
+    // MARK: - Codex notify (TOML)
+
+    private let notify = #"notify = ["/Users/me/.local/bin/lockpaw", "ping", "--agent", "codex"]"#
+
+    func testCodexNotifyGoesAboveTheFirstTable() {
+        let config = "model = \"gpt-5\"\n\n[mcp_servers.github]\ncommand = \"gh\"\n"
+        guard case .added(let result) = AgentHookConfig.mergingCodexNotify(into: config, line: notify) else {
+            return XCTFail("expected added")
+        }
+        XCTAssertEqual(result, "model = \"gpt-5\"\n\(notify)\n\n[mcp_servers.github]\ncommand = \"gh\"\n")
+    }
+
+    func testCodexNotifyAppendsWhenThereAreNoTables() {
+        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "model = \"x\"", line: notify), .added("model = \"x\"\n\(notify)\n"))
+        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "", line: notify), .added("\(notify)\n"))
+    }
+
+    func testCodexNotifyIntoAFileThatStartsWithATable() {
+        guard case .added(let result) = AgentHookConfig.mergingCodexNotify(into: "[profiles.work]\nmodel = \"o3\"\n", line: notify) else {
+            return XCTFail("expected added")
+        }
+        XCTAssertTrue(result.hasPrefix("\(notify)\n\n[profiles.work]"))
+    }
+
+    func testCodexOldLockpawNotifyIsUpgradedInPlace() {
+        let config = "notify = [\"/x/lockpaw\", \"ping\"]\n[tui]\nnotifications = true\n"
+        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: config, line: notify),
+                       .upgraded("\(notify)\n[tui]\nnotifications = true\n"))
+        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "\(notify)\n", line: notify), .unchanged)
+    }
+
+    func testCodexForeignNotifyIsLeftAlone() {
+        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "notify = [\"terminal-notifier\"]\n", line: notify), .foreign)
+    }
+
+    /// A `notify` key inside a table isn't the top-level one Codex reads.
+    func testNotifyInsideATableDoesNotCount() {
+        let config = "[profiles.work]\nnotify = [\"other\"]\n"
+        guard case .added(let result) = AgentHookConfig.mergingCodexNotify(into: config, line: notify) else {
+            return XCTFail("expected added")
+        }
+        XCTAssertTrue(result.hasPrefix(notify))
+    }
 }

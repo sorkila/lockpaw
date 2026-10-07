@@ -38,7 +38,11 @@ enum Constants {
         static let urlSchemeDebounce: TimeInterval = 0.1              // seconds
         static let userActivityRefreshInterval: TimeInterval = 30     // seconds; defeats screensaver idle timer while locked
         static let lidPowerCheckInterval: TimeInterval = 30           // seconds; battery/thermal re-check while lid-closed mode holds sleep
-        static let pingDebounce: TimeInterval = 2.0                   // seconds; collapse chatty agent pings into one
+        static let systemLockConfirmDelayNs: UInt64 = 1_000_000_000   // 1s; re-check the window server if screenIsLocked raced it
+        static let relayTimeout: TimeInterval = 5                     // seconds; a ping that can't be delivered by then is stale
+        static let relayThrottleWindow: TimeInterval = 30             // seconds; one relay per session per window unless the kind changes
+        static let licenceCheckTimeout: TimeInterval = 10             // seconds; the one-time Polar key check
+        static let pingDebounce: TimeInterval = 2.0                   // seconds; collapse repeat pings that carry no session id (PingGate)
         static let pingPulseCount = 2                                 // breaths per agent ping
         static let pingPulsePeriod: TimeInterval = 2.2                // seconds per full breath (rise + fall)
         static let pingPulseFloor: CGFloat = 0.30                     // glow level between breaths (never fully dark mid-pulse)

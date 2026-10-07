@@ -64,9 +64,13 @@ enum SystemLockPolicy {
     /// After the user unlocks macOS itself (typically opening the lid with "require password"
     /// on), whether Lockpaw also comes down. Off by default — Lockpaw never unlocks because of
     /// something outside it unless asked to. Safe when on: the macOS unlock is at least as
-    /// strong as Lockpaw's own, and only a macOS lock that began during this Lockpaw lock counts.
-    static func unlocksAfterSystemUnlock(state: LockState, systemLockSeenDuringLock: Bool, settingEnabled: Bool) -> Bool {
-        settingEnabled && state == .locked && systemLockSeenDuringLock
+    /// strong as Lockpaw's own, only a macOS lock that began during this Lockpaw lock counts,
+    /// and both ends are confirmed with the window server (`sessionReportsLocked` false now,
+    /// true when the lock was seen) — the notifications alone can be posted by any process.
+    static func unlocksAfterSystemUnlock(
+        state: LockState, systemLockSeenDuringLock: Bool, sessionReportsLocked: Bool, settingEnabled: Bool
+    ) -> Bool {
+        settingEnabled && state == .locked && systemLockSeenDuringLock && !sessionReportsLocked
     }
 
     /// While the macOS session is locked, Accessibility can read as revoked — the session's

@@ -133,7 +133,7 @@ enum WebhookRelay {
 /// Per-session rate limit for the relay: one send per session per window, except that a
 /// change of kind (done → waiting) always goes through — that change is the news.
 struct RelayThrottle {
-    static let window: TimeInterval = 30
+    static let window = Constants.Timing.relayThrottleWindow
     private var last: [String: (kind: String, at: Date)] = [:]
 
     mutating func allows(_ ping: AgentPing, now: Date = Date()) -> Bool {

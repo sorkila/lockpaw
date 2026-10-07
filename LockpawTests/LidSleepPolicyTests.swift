@@ -61,15 +61,25 @@ final class LidSleepPolicyTests: XCTestCase {
 
     // MARK: - System lock
 
-    func testAutoUnlockAfterMacUnlockNeedsAllThree() {
-        XCTAssertTrue(SystemLockPolicy.unlocksAfterSystemUnlock(state: .locked, systemLockSeenDuringLock: true, settingEnabled: true))
-        XCTAssertFalse(SystemLockPolicy.unlocksAfterSystemUnlock(state: .locked, systemLockSeenDuringLock: true, settingEnabled: false),
-                       "off by default: Lockpaw stays locked")
-        XCTAssertFalse(SystemLockPolicy.unlocksAfterSystemUnlock(state: .locked, systemLockSeenDuringLock: false, settingEnabled: true),
-                       "a macOS unlock with no macOS lock during this session proves nothing")
+    private func unlocks(_ state: LockState = .locked, seen: Bool = true, stillLocked: Bool = false, setting: Bool = true) -> Bool {
+        SystemLockPolicy.unlocksAfterSystemUnlock(
+            state: state, systemLockSeenDuringLock: seen, sessionReportsLocked: stillLocked, settingEnabled: setting
+        )
+    }
+
+    func testAutoUnlockAfterMacUnlockNeedsEveryCondition() {
+        XCTAssertTrue(unlocks())
+        XCTAssertFalse(unlocks(setting: false), "off by default: Lockpaw stays locked")
+        XCTAssertFalse(unlocks(seen: false), "no confirmed macOS lock during this session proves nothing")
         for state in [LockState.unlocked, .locking, .unlocking] {
-            XCTAssertFalse(SystemLockPolicy.unlocksAfterSystemUnlock(state: state, systemLockSeenDuringLock: true, settingEnabled: true))
+            XCTAssertFalse(unlocks(state))
         }
+    }
+
+    /// The distributed "screenIsUnlocked" can be posted by any process. If the window
+    /// server still reports the session locked, it was not a real unlock.
+    func testForgedUnlockNotificationDoesNothing() {
+        XCTAssertFalse(unlocks(stillLocked: true))
     }
 
     func testMacLockIsNotAnAccessibilityRevocation() {

@@ -34,8 +34,11 @@ struct MascotImage: View {
     }
 
     private var image: Image? {
+        // The season is only worked out for a supporter's Dog or Cat, and then once a day:
+        // this body runs on every breath frame of the lock screen.
+        let seasonal = mascot.hasSeasonalSkins && Supporter.shared.isSupporter
         if let assetName = mascot.displayAssetName(
-            season: SeasonalSkin.current(on: Date()),
+            season: seasonal ? SeasonalSkin.today() : nil,
             seasonalEnabled: UserDefaults.standard.object(forKey: SeasonalSkin.enabledKey) as? Bool ?? true,
             isSupporter: Supporter.shared.isSupporter,
             assetExists: Mascot.bundledAssetExists

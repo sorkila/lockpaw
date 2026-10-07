@@ -59,5 +59,7 @@ struct MenuBarView: View {
             }
             .keyboardShortcut("q")
         }
+        // The menu is the ask's only surface, so let a week-old ask lapse when it opens.
+        .onAppear { supportAsk.refresh() }
     }
 }

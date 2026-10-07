@@ -159,11 +159,16 @@ final class LidSleepController: ObservableObject {
         // Never open a connection just to say "no" to a helper that isn't there.
         guard blocked || helperStatus == .enabled else { requested = blocked; return }
         requested = blocked
+        // `requested` is what we last asked for. Any failure forgets it, so the next
+        // re-evaluation (the 30s power check while locked) asks again instead of assuming
+        // the helper already holds the state — a lid closed after a failed first request
+        // would otherwise sleep the Mac with the setting on and "Ready".
         let proxy = helperProxy { [weak self] error in
             Task { @MainActor in
                 logger.error("helper unreachable: \(error.localizedDescription, privacy: .public)")
                 self?.lastError = "Couldn't reach the helper."
                 self?.sleepHeld = false
+                if self?.requested == blocked { self?.requested = nil }
             }
         }
         proxy?.setSleepBlocked(blocked) { [weak self] held, message in
@@ -171,6 +176,7 @@ final class LidSleepController: ObservableObject {
                 self?.sleepHeld = held
                 self?.lastError = message
                 if let message { logger.error("helper refused: \(message, privacy: .public)") }
+                if held != blocked, self?.requested == blocked { self?.requested = nil }
             }
         }
     }
@@ -184,7 +190,10 @@ final class LidSleepController: ObservableObject {
                 team: SleepHelper.ownTeamIdentifier(), identifiers: [SleepHelper.helperIdentifier]
             ))
             connection.invalidationHandler = { [weak self] in
-                Task { @MainActor in self?.connection = nil }
+                Task { @MainActor in
+                    self?.connection = nil
+                    self?.requested = nil
+                }
             }
             // The helper restarted (crash, or an update adopted while idle) and cleared its
             // block on the way up; put back whatever we last asked for.
