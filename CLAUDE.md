@@ -32,7 +32,7 @@ tccutil reset Accessibility com.eriknielsen.lockpaw
 xcodebuild -project Lockpaw.xcodeproj -scheme Lockpaw -configuration Debug test
 ```
 
-170 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` and `custom` cases), CustomMascot store (atomic install, downsampling, rejection leaves the old image intact, cached `hasImage`), PingDecision agent-ping branching, AgentPing payload decoding (hook event → kind, agent/project names, CLI forwarding), AgentHookConfig hook merging (in-place upgrade, matcher, foreign hooks untouched), FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, TerminationPolicy (quit refused unless `.unlocked`), OverlayPolicy (no overlay is ever transparent to the pointer; only the primary takes key, except the clicked screen for one Mirror-mode auth attempt), LockdownPolicy (Space-switching gesture types incl. the Dock's control stream are swallowed, also while the auth dialog has the keyboard), ScreenLayout (overlays rebuild only on real display changes), and PassiveAuthPolicy (when the Touch ID sensor may be armed × how each LAError ending is scored, including that no ending can spend an unlock attempt).
+238 unit tests covering LockState transitions, Constants formatting, HotkeyConfig conflict detection/auth-required unlock preference, SleepPreventer state handling, Mascot resolution (incl. the `hidden` and `custom` cases), CustomMascot store (atomic install, downsampling, rejection leaves the old image intact, cached `hasImage`), PingDecision agent-ping branching, AgentPing payload decoding (hook event → kind, agent/project names, CLI forwarding), AgentHookConfig hook merging (in-place upgrade, matcher, foreign hooks untouched), FadeToBlack preference resolution (checkbox × delay), every branch of the PresentationLogic fade-to-black reducer, TerminationPolicy (quit refused unless `.unlocked`), OverlayPolicy (no overlay is ever transparent to the pointer; only the primary takes key, except the clicked screen for one Mirror-mode auth attempt), LockdownPolicy (Space-switching gesture types incl. the Dock's control stream are swallowed, also while the auth dialog has the keyboard), ScreenLayout (overlays rebuild only on real display changes), PingGate (each session announced once per kind per lock), LidSleepPolicy/SystemLockPolicy (lid-closed cutouts; a forged macOS-unlock notification can't unlock), the helper's code-signing requirement, WebhookRelay (exactly what leaves the Mac) and its throttle, SupporterLicence/SupportAsk/SeasonalSkin, the Codex TOML placement, that every bundled mascot asset ships, and PassiveAuthPolicy (when the Touch ID sensor may be armed × how each LAError ending is scored, including that no ending can spend an unlock attempt).
 
 ## Release
 
@@ -68,20 +68,29 @@ Lockpaw/
 │   ├── HotkeyManager.swift         CGEventTap on dedicated background thread — global hotkey
 │   ├── OverlayWindowManager.swift  NSWindow per screen at CGShieldingWindowLevel
 │   ├── SleepPreventer.swift        IOKit sleep assertion
+│   ├── LidSleepController.swift    Lid-closed mode: SMAppService helper, XPC, battery/thermal re-checks
+│   ├── WebhookRelayController.swift  Optional ping relay (ntfy / Pushover / webhook), Keychain secrets
+│   ├── SupportAskController.swift  Persists the once-a-year support ask (menu only)
 │   ├── PresentationController.swift  Fade-to-black effects — timer slot, NSEvent monitors, cross-fades
 │   └── AgentNotifier.swift         UNUserNotificationCenter — "Claude Code finished in <project>" (lazy auth)
 ├── Models/
 │   ├── LockState.swift             .unlocked → .locking → .locked → .unlocking
 │   ├── HotkeyConfig.swift          Centralized hotkey UserDefaults + system conflict detection/auth unlock preference
-│   ├── Mascot.swift                Dog/cat/custom/hidden lock-screen mascot preference
+│   ├── Mascot.swift                Dog/cat/custom/hidden + supporter mascots; seasonal asset resolution
 │   ├── CustomMascot.swift          User image store — Application Support copy, downsampled PNG, cached hasImage
 │   ├── FadeToBlack.swift           Fade-to-black preference + pure presentation reducer (LockPresentation / PresentationLogic)
-│   ├── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound)
+│   ├── PingDecision.swift          Pure agent-ping decision (state + sound pref → pulse/notify/sound) + PingGate (announce once per session/kind)
 │   ├── AgentPing.swift             Typed ping decoded from the hook payload (agent, project, kind) — shared with the CLI
 │   ├── AgentHookConfig.swift       Pure Claude-style hook merge + Notification matcher — shared with the CLI
 │   ├── LockdownPolicy.swift        Pure gesture lockdown — swallowed trackpad/Dock event types, auth-dialog mode (#18)
 │   ├── ScreenLayout.swift          Display set overlays were built for — rebuild only on real screen changes
 │   ├── OverlayPolicy.swift         Pure per-screen overlay config (clicks swallowed everywhere; key only on primary)
+│   ├── LidSleepPolicy.swift        Pure lid-closed rules (thermal, battery hysteresis) + SystemLockPolicy (macOS lock/unlock)
+│   ├── SleepHelperProtocol.swift   Helper XPC protocol + code-signing requirement — shared with LockpawHelper
+│   ├── WebhookRelay.swift          Pure relay request builder + RelayThrottle
+│   ├── SupporterLicence.swift      Polar key check (pure) + Supporter state
+│   ├── SupportAsk.swift            Pure yearly-ask policy
+│   ├── SeasonalSkin.swift          Pure season-by-date for Dog/Cat skins
 │   └── PassiveAuthPolicy.swift     Pure passive Touch ID rules (arm/re-arm/stand down + LAError scoring)
 ├── Views/
 │   ├── OverlayRootView.swift       Per-screen presentation switch — lock UI / pure black / attention pulse
@@ -89,14 +98,17 @@ Lockpaw/
 │   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
 │   ├── AmbientScreenView.swift     Secondary display — morphing gradient blobs
 │   ├── MenuBarView.swift           Menu bar dropdown
-│   ├── SettingsView.swift          5 tabs; hotkey recorder, auth setting, agent alerts (sound/test/setup), updates, Buy Me a Coffee
+│   ├── SettingsView.swift          6 tabs; lid-closed mode, Agents (setup grid, sound, relay), hotkey, updates, supporter licence
 │   └── OnboardingView.swift        5 steps: welcome (mascot), hotkey, accessibility, agent alerts, menu bar
 ├── Utilities/
 │   ├── Constants.swift             App constants, Timing enum, animation presets, formatting
 │   ├── Notifications.swift         All Notification.Name in one place
+│   ├── LockpawIntents.swift        App Intents: Lock Screen, Is Lockpaw Locked? (no unlock, on purpose)
+│   ├── SystemSession.swift         Real macOS lock state (CGSSessionScreenIsLocked)
+│   ├── Keychain.swift              Generic-password helper (relay secrets, supporter key)
 │   └── AccessibilityChecker.swift  AXIsProcessTrusted + System Settings opener
 └── Resources/
-    └── Assets.xcassets             App icon, mascot, menu bar icon (template), colors
+    └── Assets.xcassets             App icon, mascots (dog, cat, 4 supporter, 8 seasonal), menu bar icon (template), colors
 
 LockpawTests/                       (sibling of Lockpaw/)
 ├── LockStateTests.swift            State transition validation (16 tests)
@@ -105,20 +117,29 @@ LockpawTests/                       (sibling of Lockpaw/)
 ├── SleepPreventerTests.swift       Sleep assertion state handling (5 tests)
 ├── FadeToBlackTests.swift          Fade-to-black checkbox/delay resolution + timeout mapping (11 tests)
 ├── PresentationLogicTests.swift    Presentation reducer: blackout/reveal/pulse/error branches (30 tests)
-├── MascotTests.swift               Mascot resolution incl. hidden + custom (7 tests)
-├── CustomMascotTests.swift         Store: install/replace/reject/remove, downsampling, revision, cached hasImage (18 tests)
+├── MascotTests.swift               Mascot resolution, supporter mascots, seasonal assets, bundled art (16 tests)
+├── CustomMascotTests.swift         Store: install/replace/reject/remove, downsampling, revision, cached hasImage (16 tests)
 ├── TerminationPolicyTests.swift    Quit guard + LockStatus mirror (3 tests)
-├── AgentPingTests.swift            PingDecision branching: locked/unlocked × sound (6 tests)
-├── AgentPingPayloadTests.swift     Payload → AgentPing: kinds, names, CLI forwarding (18 tests)
-├── AgentHookConfigTests.swift      Hook merge: fresh, upgrade in place, matcher, foreign hooks (7 tests)
+├── AgentPingTests.swift            PingDecision branching + PingGate + SeasonalSkin.today (12 tests)
+├── AgentPingPayloadTests.swift     Payload/argv → AgentPing: kinds, flags, Codex notify, basename only (25 tests)
+├── AgentHookConfigTests.swift      Hook merge, matcher, hook fields, Codex TOML placement (15 tests)
 ├── OverlayPolicyTests.swift        Per-screen overlay config: mouse events + key status + Mirror-mode focus (5 tests)
 ├── LockdownPolicyTests.swift       Gesture mask (Space swipes, Dock control stream) + auth-dialog mode (5 tests)
 ├── ScreenLayoutTests.swift         Rebuild only on real display changes (3 tests)
+├── LidSleepPolicyTests.swift       Lid-closed cutouts, macOS lock policy, helper signing requirement (13 tests)
+├── WebhookRelayTests.swift         What leaves the Mac per provider + throttle (11 tests)
+├── SupporterTests.swift            Seasons by date, yearly ask, Polar key check (14 tests)
 └── PassiveAuthTests.swift          Armed Touch ID: arming conditions × LAError scoring (18 tests)
 
 LockpawCLI/                         (sibling of Lockpaw/)
 └── main.swift                      `lockpaw` CLI: ping [--agent] [--print] / install-cli / install-hook <claude|codex|gemini|cursor|copilot|aider>
                                     (the target also compiles Lockpaw/Models/AgentPing.swift + AgentHookConfig.swift)
+
+LockpawHelper/                      (sibling of Lockpaw/) — lid-closed mode's root LaunchDaemon, opt-in
+├── main.swift                      XPC listener, caller code-signing requirement, dead-man switch, SIGTERM clear, update adoption
+├── SleepBlocker.swift              `pmset -a disablesleep` with a bounded wait; clears at start
+├── Info.plist                      Embedded in the binary (CREATE_INFOPLIST_SECTION_IN_BINARY) — bump its version with the app's
+└── com.eriknielsen.lockpaw.helper.plist  LaunchDaemon plist (BundleProgram, MachServices, RunAtLoad, KeepAlive)
 ```
 
 ## Architecture decisions
