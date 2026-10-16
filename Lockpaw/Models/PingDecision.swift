@@ -52,3 +52,24 @@ struct PingGate {
         lastBare.removeAll()
     }
 }
+
+/// One ping through a lock session's bookkeeping. The order is the point: the ping is
+/// recorded first, then `PingGate` decides only whether it is announced (pulse,
+/// notification, relay). Gating the record dropped the row of a second agent finishing
+/// inside the debounce, and a repeat the gate swallows still has to update its session.
+enum PingIntake {
+    /// Returns whether the ping should be announced. Outside `.locked` (`decision` is
+    /// `.none`) nothing is recorded and the gate is not consulted, so a turn that ended
+    /// before the lock can't pre-empt the one announcement it gets after.
+    static func receive(
+        _ ping: AgentPing,
+        decision: PingDecision,
+        queue: inout AgentPingQueue,
+        gate: inout PingGate,
+        now: Date = Date()
+    ) -> Bool {
+        guard decision.shouldPulse || decision.shouldNotify else { return false }
+        queue.record(ping)
+        return gate.admits(ping, now: now)
+    }
+}

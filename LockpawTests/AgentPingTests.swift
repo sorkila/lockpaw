@@ -91,6 +91,68 @@ final class PingGateTests: XCTestCase {
     }
 }
 
+/// `LockController.handlePing`'s bookkeeping: record first, announce through the gate.
+final class PingIntakeTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000)
+    private let locked = PingDecision.make(state: .locked, soundEnabled: false)
+
+    private func ping(_ kind: AgentPing.Kind, agent: String? = "Claude Code", session: String? = "s1", at offset: TimeInterval = 0) -> AgentPing {
+        AgentPing(agent: agent, project: nil, kind: kind, sessionID: session, receivedAt: now.addingTimeInterval(offset))
+    }
+
+    func testAGatedRepeatIsStillRecorded() {
+        var queue = AgentPingQueue()
+        var gate = PingGate()
+        XCTAssertTrue(PingIntake.receive(ping(.permission), decision: locked, queue: &queue, gate: &gate, now: now))
+        // Pre-mark the next kind as announced, so the gate swallows it: the row must still move.
+        _ = gate.admits(ping(.finished), now: now)
+        XCTAssertFalse(PingIntake.receive(ping(.finished, at: 5), decision: locked, queue: &queue, gate: &gate, now: now.addingTimeInterval(5)))
+        XCTAssertEqual(queue.pings.map(\.kind), [.finished])
+    }
+
+    /// Two bare pings from different scripts inside the 2s debounce: the second isn't
+    /// announced, but both are on the lock screen.
+    func testPingsInsideTheDebounceAreRecordedButNotAnnounced() {
+        var queue = AgentPingQueue()
+        var gate = PingGate()
+        let first = AgentPing(agent: "build-bot", project: "api", kind: .attention, sessionID: nil, receivedAt: now)
+        let second = AgentPing(agent: "build-bot", project: "web", kind: .attention, sessionID: nil, receivedAt: now)
+        XCTAssertTrue(PingIntake.receive(first, decision: locked, queue: &queue, gate: &gate, now: now))
+        XCTAssertFalse(PingIntake.receive(second, decision: locked, queue: &queue, gate: &gate, now: now.addingTimeInterval(1)))
+        XCTAssertEqual(queue.pings.count, 2)
+    }
+
+    func testTwoSessionsFinishingTogetherBothGetARowAndAnAnnouncement() {
+        var queue = AgentPingQueue()
+        var gate = PingGate()
+        XCTAssertTrue(PingIntake.receive(ping(.finished, agent: "Codex", session: "t1"), decision: locked, queue: &queue, gate: &gate, now: now))
+        XCTAssertTrue(PingIntake.receive(ping(.permission, session: "s9", at: 1), decision: locked, queue: &queue, gate: &gate, now: now.addingTimeInterval(1)))
+        XCTAssertEqual(queue.pings.map(\.sessionID), ["t1", "s9"])
+    }
+
+    /// Unlocked or mid-transition: nothing recorded, and the gate is left untouched so the
+    /// first ping after the lock is still announced.
+    func testNotLocked_recordsNothingAndLeavesTheGateAlone() {
+        var queue = AgentPingQueue()
+        var gate = PingGate()
+        for state in [LockState.unlocked, .locking, .unlocking] {
+            let decision = PingDecision.make(state: state, soundEnabled: true)
+            XCTAssertFalse(PingIntake.receive(ping(.finished), decision: decision, queue: &queue, gate: &gate, now: now))
+        }
+        XCTAssertTrue(queue.isEmpty)
+        XCTAssertTrue(PingIntake.receive(ping(.finished), decision: locked, queue: &queue, gate: &gate, now: now))
+    }
+
+    /// The review's case end to end: amber stays amber after a later, announced finish.
+    func testAnnouncedFinishDoesNotRepaintAWaitingGlow() {
+        var queue = AgentPingQueue()
+        var gate = PingGate()
+        _ = PingIntake.receive(ping(.permission, session: "a"), decision: locked, queue: &queue, gate: &gate, now: now)
+        XCTAssertTrue(PingIntake.receive(ping(.finished, session: "b", at: 30), decision: locked, queue: &queue, gate: &gate, now: now.addingTimeInterval(30)))
+        XCTAssertEqual(queue.glowTone, .amber)
+    }
+}
+
 final class SeasonalTodayTests: XCTestCase {
     @MainActor func testTodayMatchesCurrent() {
         let date = Date(timeIntervalSince1970: 1_792_000_000)

@@ -25,6 +25,16 @@ final class ConstantsTests: XCTestCase {
         XCTAssertEqual(Constants.formatElapsedTime(7325), "2h 02m")
     }
 
+    // MARK: - formatWaitTime
+
+    func testFormatWaitTime() {
+        XCTAssertEqual(Constants.formatWaitTime(0), "now")
+        XCTAssertEqual(Constants.formatWaitTime(59), "now")
+        XCTAssertEqual(Constants.formatWaitTime(60), "1m")
+        XCTAssertEqual(Constants.formatWaitTime(3599), "59m")
+        XCTAssertEqual(Constants.formatWaitTime(3660), "1h 01m")
+    }
+
     // MARK: - formatElapsedTimeAccessible
 
     func testFormatElapsedTimeAccessibleSecondsOnly() {

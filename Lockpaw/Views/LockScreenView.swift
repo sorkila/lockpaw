@@ -140,24 +140,19 @@ struct LockScreenView: View {
                         .opacity(controller.isAuthenticating || controller.unlockSucceeded ? 0.15 : 1)
                         .allowsHitTesting(false)
 
-                        // Standing agent hint — quiet, persistent companion to the
-                        // glow pulses; stays until unlock.
-                        if controller.agentAttention && !controller.unlockSucceeded {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(Color("LockpawTeal"))
-                                    .frame(width: 5, height: 5)
-                                    .opacity(0.55 + breathe * 0.3)
-                                Text("Your agent needs you")
-                                    .font(.lockCaption)
-                                    .foregroundStyle(.white.opacity(0.4))
-                                    .tracking(0.5)
-                            }
-                            .transition(.opacity)
-                            .allowsHitTesting(false)
-                        }
+                        // Who is waiting — tally, then a row per session; stays until
+                        // unlock. Always mounted (empty until the first ping) and faded by
+                        // explicit opacity: removal transitions hard-cut in the overlay on
+                        // macOS 26. The animations are scoped to the list so a ping never
+                        // opens an animated transaction over the breathing mascot.
+                        AgentPingList(queue: controller.agentPings, breathe: breathe)
+                            .opacity(controller.agentPings.isEmpty || controller.unlockSucceeded ? 0 : 1)
+                            .opacity(appeared ? 1 : 0)
+                            .opacity(controller.isAuthenticating ? 0.15 : 1)
+                            .animation(Constants.Anim.gentle, value: controller.agentPings)
+                            .animation(Constants.Anim.gentle, value: controller.unlockSucceeded)
+                            .animation(Constants.Anim.gentle, value: controller.isAuthenticating)
                     }
-                    .animation(Constants.Anim.gentle, value: controller.agentAttention)
 
                     Spacer()
 
@@ -230,7 +225,7 @@ struct LockScreenView: View {
         .onAppear {
             // Fade-to-black reveals remount this view with fresh @State — restore the
             // resting glow after a ping (onChange(of: pingPulse) won't refire on mount).
-            if controller.agentAttention { pingGlow = glowIntensity.restLevel }
+            if !controller.agentPings.isEmpty { pingGlow = glowIntensity.restLevel }
             withAnimation(reduceMotion ? .none : .timingCurve(0.16, 1, 0.3, 1, duration: 0.6)) { appeared = true }
             guard !reduceMotion else { return }
             withAnimation(Constants.Anim.breathe) { phase = Constants.Anim.breathePhaseTarget }
@@ -309,20 +304,7 @@ struct LockScreenView: View {
             // Attention glow — fires on an agent ping. Bright and full-screen so it
             // reads from across a room while the screen stays covered.
             if pingGlow > 0 {
-                // Mid-stop keeps a wide band at full saturation — a single
-                // stop-to-clear ramp washed the brand green toward pale cyan.
-                RadialGradient(
-                    stops: [
-                        .init(color: Color("LockpawTeal").opacity(glowIntensity.centreOpacity(at: pingGlow)), location: 0),
-                        .init(color: Color("LockpawTeal").opacity(min(0.14 * pingGlow * glowIntensity.peakScale, 0.25)), location: 0.45),
-                        .init(color: .clear, location: 1)
-                    ],
-                    center: .center, startRadius: 0,
-                    endRadius: max(geo.size.width, geo.size.height) * 0.8
-                )
-                .ignoresSafeArea()
-                .blendMode(.plusLighter)
-                .allowsHitTesting(false)
+                AgentGlow(color: controller.agentPings.glowTone, level: pingGlow)
             }
         }
     }

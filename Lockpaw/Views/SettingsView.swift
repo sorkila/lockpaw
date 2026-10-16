@@ -115,6 +115,7 @@ struct SettingsView: View {
     @AppStorage("hotkeyDisplay") private var hotkeyDisplay = HotkeyConfig.defaultDisplay
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
     @AppStorage(Constants.agentPingSoundKey) private var agentPingSound = false
+    @AppStorage(Constants.lockScreenShowsProjectsKey) private var lockScreenShowsProjects = false
     @AppStorage(FadeToBlack.enabledKey) private var fadeToBlackEnabled = FadeToBlack.defaultEnabled
     @AppStorage(FadeToBlack.storageKey) private var fadeToBlackDelay = FadeToBlack.defaultValue
     @AppStorage(Constants.showMenuBarIconKey) private var showMenuBarIcon = true
@@ -753,6 +754,12 @@ struct SettingsView: View {
                         options: GlowIntensity.allCases.map { ($0.displayName, $0.rawValue) },
                         width: 260
                     )
+                }
+
+                SettingsDivider()
+
+                SettingsRow("Show project names on the lock screen", subtitle: "Off: \u{201C}Claude Code finished\u{201D}. On: \u{201C}Claude Code finished in web-app\u{201D}. Notifications always name it.") {
+                    SettingsCheckbox(isOn: $lockScreenShowsProjects)
                 }
 
                 SettingsDivider()

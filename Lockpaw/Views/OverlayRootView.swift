@@ -43,7 +43,7 @@ struct OverlayRootView: View {
 
             if pulseMounted {
                 // Keyed by generation so a re-ping remounts and restarts the breaths.
-                AttentionPulseView()
+                AttentionPulseView(color: controller.agentPings.glowTone)
                     .id(presentationController.attentionGeneration)
                     .opacity(pulseOpacity)
             }
@@ -101,46 +101,32 @@ struct OverlayRootView: View {
 }
 
 /// The agent-ping pulse while black, on every screen (the primary lock UI is
-/// unmounted): the lock screen's teal glow breathing the same envelope, rising from
+/// unmounted): the lock screen's `AgentGlow` breathing the same envelope, rising from
 /// black and settling to the pulse floor until the attention window fades back out.
 /// Under Reduce Motion the glow holds at the floor with no motion.
 private struct AttentionPulseView: View {
+    let color: AgentGlowTone
+
     @State private var glow: CGFloat = 0
-    @AppStorage(GlowIntensity.storageKey) private var glowIntensityRaw = GlowIntensity.defaultValue.rawValue
-    private var glowIntensity: GlowIntensity { GlowIntensity.resolved(from: glowIntensityRaw) }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        GeometryReader { geo in
-            RadialGradient(
-                stops: [
-                    .init(color: Color("LockpawTeal").opacity(glowIntensity.centreOpacity(at: glow)), location: 0),
-                    .init(color: Color("LockpawTeal").opacity(min(0.14 * glow * glowIntensity.peakScale, 0.25)), location: 0.45),
-                    .init(color: .clear, location: 1)
-                ],
-                center: .center,
-                startRadius: 0,
-                endRadius: max(geo.size.width, geo.size.height) * 0.8
-            )
-            .blendMode(.plusLighter)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .onAppear {
-            guard !reduceMotion else {
-                glow = Constants.Timing.pingPulseFloor
-                return
-            }
-            let half = Constants.Timing.pingPulsePeriod / 2
-            for breath in 0..<Constants.Timing.pingPulseCount {
-                let start = Double(breath) * Constants.Timing.pingPulsePeriod
-                DispatchQueue.main.asyncAfter(deadline: .now() + start) {
-                    withAnimation(.easeInOut(duration: half)) { glow = 1 }
+        AgentGlow(color: color, level: glow)
+            .onAppear {
+                guard !reduceMotion else {
+                    glow = Constants.Timing.pingPulseFloor
+                    return
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + start + half) {
-                    withAnimation(.easeInOut(duration: half)) { glow = Constants.Timing.pingPulseFloor }
+                let half = Constants.Timing.pingPulsePeriod / 2
+                for breath in 0..<Constants.Timing.pingPulseCount {
+                    let start = Double(breath) * Constants.Timing.pingPulsePeriod
+                    DispatchQueue.main.asyncAfter(deadline: .now() + start) {
+                        withAnimation(.easeInOut(duration: half)) { glow = 1 }
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + start + half) {
+                        withAnimation(.easeInOut(duration: half)) { glow = Constants.Timing.pingPulseFloor }
+                    }
                 }
             }
-        }
     }
 }

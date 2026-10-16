@@ -3,7 +3,7 @@ import Foundation
 /// One agent's request for attention, decoded from what its hook handed to
 /// `lockpaw ping`. Also compiled into the CLI target, so the wire format lives in
 /// one place — keep this file Foundation-only.
-struct AgentPing: Equatable {
+struct AgentPing: Equatable, Identifiable {
     enum Kind: Equatable {
         case finished
         case permission
@@ -59,6 +59,15 @@ struct AgentPing: Equatable {
     let kind: Kind
     let sessionID: String?
     let receivedAt: Date
+
+    /// One row per session on the lock screen, keyed by agent and session like `PingGate`,
+    /// so two agents that happen to share a session id never overwrite each other's row.
+    /// Pings without a session (agents whose hooks send no payload) collapse per agent
+    /// and project instead.
+    var id: String {
+        if let sessionID { return "\(agent ?? "-")/\(sessionID)" }
+        return "\(agent ?? "")|\(project ?? "")"
+    }
 
     /// What the notification and the lock screen say. Project names are opt-in on the
     /// lock screen (anyone walking past can read it), so callers choose.

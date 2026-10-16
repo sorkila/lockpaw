@@ -65,9 +65,15 @@
 Lock your screen and walk away — when your AI agent pauses for permission or finishes,
 the locked screen **glows from across the room** and a notification fires. You stay
 covered (and private) until *you* unlock. The glow is always silent; turn on a sound in
-**Settings → Agents** if you want one (off by default for shared offices). The
-notification says who and why: *Claude Code needs permission in my-app*, *Claude Code
-finished in other-repo*.
+**Settings → Agents** if you want one (off by default for shared offices).
+
+The lock screen says who is waiting and why: a tally when more than one agent has
+pinged (*1 waiting · 2 done*), then one line per session — *Claude Code needs
+permission · 2m*, *Codex finished · 12m*. Project names stay off the lock screen, since
+anyone walking past can read it; turn them on in **Settings → Agents**. The notification
+always names the project: *Claude Code needs permission in my-app.* The glow is teal when
+your agents are done and amber while any of them is blocked on you or stopped on an error
+(a red dot marks the error); a later "done" never repaints a waiting glow teal.
 
 **Easiest:** open **Settings → Agents → Connect your agent** and click your agent —
 done. Prefer the terminal? Lockpaw ships a tiny `lockpaw` command-line tool
@@ -126,7 +132,7 @@ On first launch, grant **Accessibility** when prompted. The Lockpaw icon appears
 
 The lock screen is intentionally minimal. Near-black canvas. Subtle radial glow. One element at a time.
 
-**Calm by default** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer; the pointer slips away after a moment of stillness. The fallback auth button waits quietly at the bottom — always there, never loud. When an agent pings, the screen breathes two slow waves of teal, then keeps a soft "your agent needs you" hint until you return.
+**Calm by default** — the screen opens with your chosen mascot, your message, and a quiet elapsed timer; the pointer slips away after a moment of stillness. The fallback auth button waits quietly at the bottom — always there, never loud. When an agent pings, the screen breathes two slow waves of light (teal when it's done, amber when it's waiting on you), then keeps a soft glow and a quiet line per agent under the timer until you return.
 
 **Mascots** — a metallic origami dog or cat rendered in teal and amber, floating in a pool of light. Slow 12-second breathing cycle. On successful unlock, the mascot scales up with a teal bloom and fades away. Or bring your own: a custom image gets a soft feathered edge so it sits in the same pool of light (transparent backgrounds look best).
 

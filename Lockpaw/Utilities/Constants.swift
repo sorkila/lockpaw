@@ -14,6 +14,11 @@ enum Constants {
     /// UserDefaults key: play a sound on agent ping. Off by default for shared spaces.
     static let agentPingSoundKey = "agentPingSound"
 
+    /// UserDefaults key: name the project in the lock screen's agent rows ("Claude Code
+    /// finished in web-app"). Off by default — anyone walking past can read a lock screen.
+    /// Notifications always name it.
+    static let lockScreenShowsProjectsKey = "lockScreenShowsProjects"
+
     /// UserDefaults key: show the menu bar icon. On by default; when off, the hotkey,
     /// the `lockpaw` CLI, `lockpaw://settings`, and reopening the app are the ways in.
     static let showMenuBarIconKey = "showMenuBarIcon"
@@ -85,6 +90,15 @@ enum Constants {
         if hours > 0 { return String(format: "%dh %02dm", hours, minutes) }
         if minutes > 0 { return String(format: "%dm %02ds", minutes, seconds) }
         return String(format: "%ds", seconds)
+    }
+
+    /// Coarse age of an agent ping. Minute resolution: the row only has to say
+    /// roughly how long the agent has been waiting.
+    static func formatWaitTime(_ interval: TimeInterval) -> String {
+        let minutes = Int(interval) / 60
+        if minutes < 1 { return "now" }
+        if minutes < 60 { return "\(minutes)m" }
+        return formatElapsedTime(interval)
     }
 
     static func formatElapsedTimeAccessible(_ interval: TimeInterval) -> String {

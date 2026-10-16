@@ -134,6 +134,26 @@ final class AgentPingPayloadTests: XCTestCase {
         XCTAssertEqual(ping(["cwd": "/Users/me/w/croq-app"]).project, "croq-app")
     }
 
+    // MARK: - Identity
+
+    func testIdentityIsAgentAndSession() {
+        XCTAssertEqual(ping(["agent": "claude", "session_id": "abc"]).id, "Claude Code/abc")
+    }
+
+    func testIdentity_sameSessionIDFromTwoAgentsAreTwoRows() {
+        XCTAssertNotEqual(
+            ping(["agent": "claude", "session_id": "abc"]).id,
+            ping(["agent": "gemini", "session_id": "abc"]).id
+        )
+    }
+
+    func testIdentityWithoutASession_isAgentAndProject() {
+        let a = ping(["agent": "aider", "cwd": "/w/one"])
+        let b = ping(["agent": "aider", "cwd": "/w/two"])
+        XCTAssertNotEqual(a.id, b.id)
+        XCTAssertEqual(a.id, ping(["agent": "aider", "cwd": "/w/one"]).id)
+    }
+
     // MARK: - CLI side
 
     func testUserInfo_forwardsOnlyTheKnownStringFieldsAndTheBasename() {

@@ -22,9 +22,9 @@ class LockController: ObservableObject {
     /// screen watches this token to trigger a one-shot attention glow.
     @Published private(set) var pingPulse: Int = 0
 
-    /// True from the first agent ping until unlock — after the glow pulses finish,
-    /// the lock screen keeps a subtle "your agent needs you" hint from this flag.
-    @Published private(set) var agentAttention = false
+    /// Every agent that pinged since the screen was locked, kept until unlock — after
+    /// the glow pulses finish, the lock screen lists who is waiting and why.
+    @Published private(set) var agentPings = AgentPingQueue()
 
     /// True while the armed-Touch-ID path is live for this lock session — deliberately not
     /// the precise in-flight state of one evaluation. The lock screen reads it for its
@@ -387,17 +387,20 @@ class LockController: ObservableObject {
 
     // MARK: - Private
 
-    /// React to an agent ping: per `PingDecision` (nothing unless locked), and only if
-    /// `PingGate` hasn't already announced this session in this state.
+    /// React to an agent ping per `PingDecision` (nothing unless locked). `PingIntake`
+    /// records every ping, so two agents finishing together both get a row; only the
+    /// glow, the notification and the relay go through `PingGate`.
     private func handlePing(_ ping: AgentPing) {
         let soundEnabled = UserDefaults.standard.bool(forKey: Constants.agentPingSoundKey)
         let decision = PingDecision.make(state: state, soundEnabled: soundEnabled)
-        // Only consulted while locked, so a turn that ended before the lock can't
-        // pre-empt the one announcement it gets after (idle_prompt).
-        guard decision.shouldPulse || decision.shouldNotify, pingGate.admits(ping) else { return }
+        var queue = agentPings
+        let announce = PingIntake.receive(ping, decision: decision, queue: &queue, gate: &pingGate)
+        // Publish only a real change: a repeat in the same state leaves the queue as it
+        // was, and an empty publish would still re-render the lock screen mid-breath.
+        if queue != agentPings { agentPings = queue }
+        guard announce else { return }
         if decision.shouldPulse {
             pingPulse &+= 1
-            agentAttention = true
             presentationController.notePing()
         }
         if decision.shouldNotify {
@@ -508,7 +511,7 @@ class LockController: ObservableObject {
     private func unlock() {
         // An unlock after an agent ping is Lockpaw having done its job — the one moment
         // the yearly support ask may come up (in the menu, never here).
-        if agentAttention { SupportAskController.shared.noteUnlockAfterPing() }
+        if !agentPings.isEmpty { SupportAskController.shared.noteUnlockAfterPing() }
         presentationController.stop()
         disarmPassiveAuth(endingSession: true)
         endPasswordEntry()
@@ -687,9 +690,9 @@ class LockController: ObservableObject {
     }
 
     /// Once unlocked, the agent banners in Notification Center are stale — the user
-    /// is back at the machine. Drop the flag and the delivered notifications together.
+    /// is back at the machine. Drop the queue and the delivered notifications together.
     private func clearAgentAttention() {
-        agentAttention = false
+        agentPings.clear()
         AgentNotifier.shared.clearDelivered()
     }
 
