@@ -150,7 +150,7 @@ final class PresentationController: ObservableObject {
     /// poster's PID. Best-effort: input remappers (Karabiner, BTT) repost hardware
     /// events under their own PID, so those users may need the unlock hotkey — which
     /// ignores this filter entirely. Events with no CGEvent count as physical.
-    private static func isPhysical(_ event: NSEvent) -> Bool {
+    static func isPhysical(_ event: NSEvent) -> Bool {
         guard let cgEvent = event.cgEvent else { return true }
         return cgEvent.getIntegerValueField(.eventSourceUnixProcessID) == 0
     }

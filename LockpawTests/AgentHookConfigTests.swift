@@ -156,4 +156,87 @@ final class AgentHookConfigTests: XCTestCase {
         }
         XCTAssertTrue(result.hasPrefix(notify))
     }
+
+    // MARK: - Activity hooks ("Sleep when agents finish")
+
+    func testActivityHooks_liveBesideThePings_andUpgradeInPlace() {
+        let activity = "\"$HOME/.local/bin/lockpaw\" activity --agent claude"
+        let withPings = merged([:])
+        let events = AgentHookConfig.claudeActivityEvents
+        let both = AgentHookConfig.mergingPingHook(
+            into: withPings, events: events, command: activity,
+            isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        )
+        for event in events {
+            XCTAssertEqual(groups(both, event).flatMap(commands), [activity], event)
+        }
+        XCTAssertEqual(groups(both, "Stop").flatMap(commands), [command], "the ping hooks are untouched")
+
+        // Re-running (or a newer command) replaces, never duplicates.
+        let newer = activity + " --x"
+        let again = AgentHookConfig.mergingPingHook(
+            into: both, events: events, command: newer,
+            isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        )
+        XCTAssertEqual(groups(again, "PostToolUse").flatMap(commands), [newer])
+    }
+
+    func testPingAndActivityMatchers_neverClaimEachOther() {
+        XCTAssertFalse(AgentHookConfig.isLockpawPingCommand("\"$HOME/.local/bin/lockpaw\" activity --agent claude"))
+        XCTAssertFalse(AgentHookConfig.isLockpawActivityCommand("\"$HOME/.local/bin/lockpaw\" ping --agent claude"))
+    }
+
+    func testActivityHooks_coverTurnsAndBothEndsOfATool() {
+        XCTAssertEqual(AgentHookConfig.claudeActivityEvents, ["UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"])
+        XCTAssertEqual(AgentHookConfig.geminiActivityEvents, ["BeforeAgent", "BeforeTool", "AfterTool", "SessionEnd"])
+    }
+
+    func testConnected_meansAPingHookIsThere() {
+        XCTAssertFalse(AgentHookConfig.containsHook(in: [:]))
+        XCTAssertTrue(AgentHookConfig.containsHook(in: merged([:])))
+        let foreignOnly: [String: Any] = ["hooks": ["Stop": [["hooks": [["type": "command", "command": "say done"]]]]]]
+        XCTAssertFalse(AgentHookConfig.containsHook(in: foreignOnly))
+        XCTAssertFalse(AgentHookConfig.containsHook(in: merged([:]), isOwnCommand: AgentHookConfig.isLockpawActivityCommand))
+    }
+
+    func testRemovingActivityHooks_leavesPingsAndForeignHooks() {
+        let activity = "\"$HOME/.local/bin/lockpaw\" activity --agent claude"
+        let foreign: [String: Any] = ["model": "x", "hooks": [
+            "PostToolUse": [["matcher": "Edit", "hooks": [["type": "command", "command": "prettier"]]]],
+            "PreToolUse": [["hooks": [
+                ["type": "command", "command": "guard.sh"],
+                ["type": "command", "command": activity],
+            ]]],
+        ]]
+        let installed = AgentHookConfig.mergingPingHook(
+            into: merged(foreign), events: AgentHookConfig.claudeActivityEvents, command: activity,
+            isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        )
+        let removed = AgentHookConfig.removingHooks(
+            from: installed, events: AgentHookConfig.claudeActivityEvents,
+            isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        )
+
+        XCTAssertFalse(AgentHookConfig.containsHook(in: removed, isOwnCommand: AgentHookConfig.isLockpawActivityCommand))
+        XCTAssertTrue(AgentHookConfig.containsHook(in: removed), "the ping hooks stay")
+        XCTAssertEqual(removed["model"] as? String, "x")
+        XCTAssertEqual(groups(removed, "PostToolUse").flatMap(commands), ["prettier"])
+        XCTAssertEqual(groups(removed, "PostToolUse").first?["matcher"] as? String, "Edit")
+        XCTAssertEqual(groups(removed, "PreToolUse").flatMap(commands), ["guard.sh"], "a shared group keeps its foreign hook")
+        XCTAssertNil((removed["hooks"] as? [String: Any])?["UserPromptSubmit"], "an event left empty goes")
+    }
+
+    func testRemovingTheLastHook_dropsTheHooksKey() {
+        let activity = "\"$HOME/.local/bin/lockpaw\" activity --agent gemini"
+        let installed = AgentHookConfig.mergingPingHook(
+            into: ["theme": "dark"], events: AgentHookConfig.geminiActivityEvents, command: activity,
+            isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        )
+        let removed = AgentHookConfig.removingHooks(
+            from: installed, events: AgentHookConfig.geminiActivityEvents,
+            isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        )
+        XCTAssertNil(removed["hooks"])
+        XCTAssertEqual(removed["theme"] as? String, "dark")
+    }
 }

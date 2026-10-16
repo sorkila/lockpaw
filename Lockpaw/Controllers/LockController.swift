@@ -195,6 +195,10 @@ class LockController: ObservableObject {
             },
         ]
 
+        // Created now, not at the first lock: a session that started working before the
+        // lock has to be known by the time the lock begins.
+        _ = AgentSleepController.shared
+
         pingObserver = NotificationCenter.default.addObserver(
             forName: .lockpawPing, object: nil, queue: .main
         ) { [weak self] notification in
@@ -300,6 +304,13 @@ class LockController: ObservableObject {
         pingGate.reset()
         transitionTo(.locked)
         LidSleepController.shared.lockBegan()
+        AgentSleepController.shared.lockBegan(
+            releaseHolds: { [weak self] in self?.sleepPreventer.allowSleep() },
+            restoreHolds: { [weak self] in
+                guard let self, self.state == .locked else { return }
+                self.sleepPreventer.preventSleep()
+            }
+        )
     }
 
     /// Quick unlock via hotkey — no auth.
@@ -523,6 +534,7 @@ class LockController: ObservableObject {
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
         LidSleepController.shared.lockEnded()
+        AgentSleepController.shared.lockEnded()
     }
 
     private func forceUnlock() {
@@ -543,6 +555,7 @@ class LockController: ObservableObject {
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
         LidSleepController.shared.lockEnded()
+        AgentSleepController.shared.lockEnded()
     }
 
     // MARK: - Passive Touch ID

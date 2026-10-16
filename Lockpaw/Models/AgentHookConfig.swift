@@ -26,6 +26,57 @@ enum AgentHookConfig {
         command.contains("lockpaw") && command.contains("ping")
     }
 
+    /// Matches the hook that runs `lockpaw activity` ("Sleep when agents finish").
+    static func isLockpawActivityCommand(_ command: String) -> Bool {
+        command.contains("lockpaw") && command.contains("activity")
+    }
+
+    /// Claude Code events reported by `lockpaw activity`: a prompt starts a turn, a tool
+    /// call is open from its start to its finish, and the session closing ends it. Only
+    /// installed while "Sleep when agents finish" is on: they run a lockpaw process on
+    /// every tool call, which nobody else should pay for.
+    static let claudeActivityEvents = ["UserPromptSubmit", "PreToolUse", "PostToolUse", "SessionEnd"]
+    /// Gemini CLI's equivalents.
+    static let geminiActivityEvents = ["BeforeAgent", "BeforeTool", "AfterTool", "SessionEnd"]
+
+    /// Whether a Claude-style config already runs one of lockpaw's hooks — for the ping,
+    /// "is this agent connected?".
+    static func containsHook(in root: [String: Any], isOwnCommand: (String) -> Bool = isLockpawPingCommand) -> Bool {
+        guard let hooks = root["hooks"] as? [String: Any] else { return false }
+        return hooks.values.contains { value in
+            (value as? [[String: Any]] ?? []).contains { group in
+                (group["hooks"] as? [[String: Any]] ?? []).contains { hook in
+                    (hook["command"] as? String).map(isOwnCommand) ?? false
+                }
+            }
+        }
+    }
+
+    /// Take lockpaw's own hooks out of a Claude-style `hooks` object, leaving every foreign
+    /// hook where it was. A group left empty goes, then an event left empty, then `hooks`.
+    static func removingHooks(
+        from root: [String: Any],
+        events: [String],
+        isOwnCommand: (String) -> Bool
+    ) -> [String: Any] {
+        var root = root
+        guard var hooks = root["hooks"] as? [String: Any] else { return root }
+        for event in events {
+            guard let groups = hooks[event] as? [[String: Any]] else { continue }
+            let kept: [[String: Any]] = groups.compactMap { group in
+                guard let inner = group["hooks"] as? [[String: Any]] else { return group }
+                let remaining = inner.filter { !((($0["command"] as? String).map(isOwnCommand)) ?? false) }
+                guard !remaining.isEmpty else { return nil }
+                var group = group
+                group["hooks"] = remaining
+                return group
+            }
+            hooks[event] = kept.isEmpty ? nil : kept
+        }
+        root["hooks"] = hooks.isEmpty ? nil : hooks
+        return root
+    }
+
     /// Merge a lockpaw ping into a Claude Code-style `hooks` object — the schema Gemini
     /// CLI adopted too: each event maps to an array of groups, each group holding a
     /// `hooks` array of {type, command} entries. Upgrades any existing lockpaw entry in
@@ -38,7 +89,8 @@ enum AgentHookConfig {
         events: [String],
         command: String,
         matchers: [String: String] = [:],
-        hookFields: [String: Any] = [:]
+        hookFields: [String: Any] = [:],
+        isOwnCommand: (String) -> Bool = isLockpawPingCommand
     ) -> [String: Any] {
         var root = root
         var hooks = root["hooks"] as? [String: Any] ?? [:]
@@ -49,7 +101,7 @@ enum AgentHookConfig {
                 guard var inner = groups[g]["hooks"] as? [[String: Any]] else { continue }
                 var ownsGroup = !inner.isEmpty
                 for h in inner.indices {
-                    if let cmd = inner[h]["command"] as? String, isLockpawPingCommand(cmd) {
+                    if let cmd = inner[h]["command"] as? String, isOwnCommand(cmd) {
                         inner[h]["command"] = command
                         inner[h].merge(hookFields) { _, new in new }
                         present = true

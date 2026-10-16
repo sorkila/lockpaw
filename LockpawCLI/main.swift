@@ -34,10 +34,18 @@ func printUsage() {
                                     on stdin adds the project and the reason.
                                     --done | --waiting | --error say what happened when
                                     the payload doesn't. --print shows what would be sent.
+      lockpaw activity              Report that an agent session is working or has ended,
+                                    from a hook payload on stdin. Feeds "Sleep when agents
+                                    finish"; never glows the screen. --print shows it.
       lockpaw install-cli           Symlink this tool into your PATH (~/.local/bin)
       lockpaw install-hook <tool>   Wire up an agent. <tool>: claude | codex | gemini |
                                     cursor | copilot | aider
                                     Add --print to show the snippet without writing it.
+                                    claude | gemini --activity adds only the hooks behind
+                                    "Sleep when agents finish" (--if-connected: only if
+                                    the agent already pings Lockpaw).
+      lockpaw remove-hook <tool> --activity
+                                    Take those activity hooks out again.
       lockpaw --help                Show this help
 
     EXAMPLES:
@@ -86,6 +94,23 @@ func sendPing(arguments: [String], printOnly: Bool) {
         Notification.Name(pingNotificationName),
         object: nil,
         userInfo: info.isEmpty ? nil : info,
+        deliverImmediately: true
+    )
+}
+
+func sendActivity(arguments: [String], printOnly: Bool) {
+    guard let info = AgentActivity.userInfo(arguments: arguments, stdinPayload: readHookPayload()) else {
+        if printOnly { print("(not an activity event, or no session id: nothing sent)") }
+        return
+    }
+    if printOnly {
+        for key in info.keys.sorted() { print("\(key): \(info[key] ?? "")") }
+        return
+    }
+    DistributedNotificationCenter.default().postNotificationName(
+        Notification.Name(AgentActivity.distributedName),
+        object: nil,
+        userInfo: info,
         deliverImmediately: true
     )
 }
@@ -201,6 +226,11 @@ func claudeConfigDirectory() -> URL {
 /// keeps the hook valid when the app moves or updates.
 func shellPingCommand(agent: String, kind: AgentPing.KindFlag? = nil) -> String {
     "\"$HOME/.local/bin/lockpaw\" ping --agent \(agent)" + (kind.map { " \($0.flag)" } ?? "")
+}
+
+/// Same form as the ping command, for the activity hooks behind "Sleep when agents finish".
+func shellActivityCommand(agent: String) -> String {
+    "\"$HOME/.local/bin/lockpaw\" activity --agent \(agent)"
 }
 
 /// The command points at the ~/.local/bin symlink; bail out if it can't be created.
@@ -339,13 +369,79 @@ func installGeminiHook(printOnly: Bool) {
     // Gemini CLI adopted Claude Code's hook schema (stable since mid-2026), so the
     // same merge applies. AfterAgent fires once per turn after the final response;
     // Notification fires on system alerts like tool-permission prompts.
-    let url = homeDirectory().appendingPathComponent(".gemini/settings.json")
+    let url = geminiSettingsURL()
     let events = ["Notification", "AfterAgent"]
     let command = shellPingCommand(agent: "gemini")
     if printOnly { print(claudeStyleSnippet(path: url.path, events: events, command: command)); return }
     requireCLISymlink()
     writeJSON(AgentHookConfig.mergingPingHook(into: readJSONObject(at: url), events: events, command: command),
               to: url, label: "Gemini CLI")
+}
+
+func geminiSettingsURL() -> URL {
+    homeDirectory().appendingPathComponent(".gemini/settings.json")
+}
+
+// MARK: - activity hooks ("Sleep when agents finish")
+
+/// The agents whose turns Lockpaw can follow, with where their hooks live.
+func activityTarget(_ tool: String) -> (url: URL, label: String, events: [String])? {
+    switch tool {
+    case "claude":
+        return (claudeConfigDirectory().appendingPathComponent("settings.json"), "Claude Code",
+                AgentHookConfig.claudeActivityEvents)
+    case "gemini":
+        return (geminiSettingsURL(), "Gemini CLI", AgentHookConfig.geminiActivityEvents)
+    default:
+        return nil
+    }
+}
+
+/// Activity hooks run a lockpaw process on every tool call, so they are only installed
+/// while "Sleep when agents finish" is on: Settings runs this when the box is ticked
+/// (with --if-connected, which skips an agent that has no Lockpaw ping hook) and
+/// `remove-hook --activity` when it is cleared.
+func installActivityHooks(tool: String, printOnly: Bool, ifConnected: Bool) {
+    guard let target = activityTarget(tool) else {
+        fail("--activity works with claude and gemini; other agents only say when they finish.")
+    }
+    let command = shellActivityCommand(agent: tool)
+    if printOnly {
+        print(claudeStyleSnippet(path: target.url.path, events: target.events, command: command))
+        return
+    }
+    let root = readJSONObject(at: target.url)
+    if ifConnected, !AgentHookConfig.containsHook(in: root) {
+        print("– \(target.label) isn't connected to Lockpaw, skipped.")
+        return
+    }
+    requireCLISymlink()
+    writeJSON(
+        AgentHookConfig.mergingPingHook(
+            into: root, events: target.events, command: command,
+            isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        ),
+        to: target.url, label: target.label
+    )
+}
+
+func removeActivityHooks(tool: String) {
+    guard let target = activityTarget(tool) else {
+        fail("--activity works with claude and gemini.")
+    }
+    let root = readJSONObject(at: target.url)
+    // Also covers a missing or unreadable file: nothing of ours to take out, and never a
+    // write that could replace a config we couldn't parse.
+    guard AgentHookConfig.containsHook(in: root, isOwnCommand: AgentHookConfig.isLockpawActivityCommand) else {
+        print("✓ No Lockpaw activity hooks in \(target.label)'s config.")
+        return
+    }
+    writeJSON(
+        AgentHookConfig.removingHooks(
+            from: root, events: target.events, isOwnCommand: AgentHookConfig.isLockpawActivityCommand
+        ),
+        to: target.url, label: target.label
+    )
 }
 
 func installCursorHook(printOnly: Bool) {
@@ -495,6 +591,8 @@ switch args.first {
 case "ping":
     // Unknown trailing args are ignored — Codex appends a JSON payload to the notify program.
     sendPing(arguments: args, printOnly: args.contains("--print"))
+case "activity":
+    sendActivity(arguments: args, printOnly: args.contains("--print"))
 case "install-cli":
     installCLI()
 case "install-hook":
@@ -502,6 +600,10 @@ case "install-hook":
         fail("Usage: lockpaw install-hook <claude|codex|gemini|cursor|copilot|aider> [--print]")
     }
     let printOnly = args.contains("--print")
+    if args.contains("--activity") {
+        installActivityHooks(tool: args[1], printOnly: printOnly, ifConnected: args.contains("--if-connected"))
+        break
+    }
     switch args[1] {
     case "claude": installClaudeHook(printOnly: printOnly)
     case "codex": installCodexHook(printOnly: printOnly)
@@ -511,6 +613,11 @@ case "install-hook":
     case "aider": installAiderHook(printOnly: printOnly)
     default: fail("Unknown tool '\(args[1])'. Use claude, codex, gemini, cursor, copilot, or aider.")
     }
+case "remove-hook":
+    guard args.count >= 2, args.contains("--activity") else {
+        fail("Usage: lockpaw remove-hook <claude|gemini> --activity")
+    }
+    removeActivityHooks(tool: args[1])
 case "--help", "-h", "help", nil:
     printUsage()
 case .some(let command):

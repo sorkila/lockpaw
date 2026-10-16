@@ -37,6 +37,9 @@ final class LidSleepController: ObservableObject {
     private var connection: NSXPCConnection?
     private var locked = false
     private var cutOffForBattery = false
+    /// "Sleep when agents finish" fired: the agents this lock was keeping awake are done,
+    /// so stop holding sleep off until one starts working again.
+    private var releasedForAgents = false
     private var requested: Bool?
     private var powerTimer: Timer?
     private var observers: [Any] = []
@@ -66,12 +69,14 @@ final class LidSleepController: ObservableObject {
     func lockBegan() {
         locked = true
         cutOffForBattery = false
+        releasedForAgents = false
         reevaluate()
         startPowerChecks()
     }
 
     func lockEnded() {
         locked = false
+        releasedForAgents = false
         stopPowerChecks()
         reevaluate()
     }
@@ -120,20 +125,32 @@ final class LidSleepController: ObservableObject {
 
     func openLoginItems() { SMAppService.openSystemSettingsLoginItems() }
 
+    /// Called by `AgentSleepController`. `completion` runs once the helper has answered
+    /// (or straight away when there was nothing to ask): an explicit sleep request is
+    /// refused while `disablesleep` is set, so the caller waits for it to be lifted.
+    func setReleasedForAgents(_ released: Bool, completion: (() -> Void)? = nil) {
+        releasedForAgents = released
+        reevaluate(completion: completion)
+    }
+
     // MARK: - Policy
 
-    private func reevaluate() {
+    private func reevaluate(completion: (() -> Void)? = nil) {
         refreshStatus()
         let decision = LidSleepPolicy.decide(
             enabled: settingEnabled,
             helperReady: helperStatus == .enabled,
-            locked: locked,
+            locked: locked && !releasedForAgents,
             power: Self.currentPower(),
             thermal: LidSleepPolicy.Thermal(ProcessInfo.processInfo.thermalState),
             cutOffForBattery: cutOffForBattery
         )
         cutOffForBattery = decision.cutOffForBattery
-        if decision.block != requested { send(decision.block) }
+        if decision.block != requested {
+            send(decision.block, completion: completion)
+        } else {
+            completion?()
+        }
     }
 
     private func reapply() {
@@ -155,9 +172,9 @@ final class LidSleepController: ObservableObject {
 
     // MARK: - XPC
 
-    private func send(_ blocked: Bool) {
+    private func send(_ blocked: Bool, completion: (() -> Void)? = nil) {
         // Never open a connection just to say "no" to a helper that isn't there.
-        guard blocked || helperStatus == .enabled else { requested = blocked; return }
+        guard blocked || helperStatus == .enabled else { requested = blocked; completion?(); return }
         requested = blocked
         // `requested` is what we last asked for. Any failure forgets it, so the next
         // re-evaluation (the 30s power check while locked) asks again instead of assuming
@@ -169,6 +186,7 @@ final class LidSleepController: ObservableObject {
                 self?.lastError = "Couldn't reach the helper."
                 self?.sleepHeld = false
                 if self?.requested == blocked { self?.requested = nil }
+                completion?()
             }
         }
         proxy?.setSleepBlocked(blocked) { [weak self] held, message in
@@ -177,6 +195,7 @@ final class LidSleepController: ObservableObject {
                 self?.lastError = message
                 if let message { logger.error("helper refused: \(message, privacy: .public)") }
                 if held != blocked, self?.requested == blocked { self?.requested = nil }
+                completion?()
             }
         }
     }

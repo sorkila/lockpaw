@@ -13,6 +13,9 @@ extension Notification.Name {
     static let lockpawOpenSettings = Notification.Name("lockpawOpenSettings")
     /// Posted when an AI agent pings (bridged from the distributed notification, or fired by the in-app test button).
     static let lockpawPing = Notification.Name("lockpawPing")
+    /// Posted when an agent session starts working, shows a sign of life, or ends (bridged
+    /// from `lockpaw activity`). Never glows anything; it feeds "Sleep when agents finish".
+    static let lockpawAgentActivity = Notification.Name("lockpawAgentActivity")
     /// Posted (throttled) by InputBlocker when a physical keyboard/scroll event hits its
     /// tap while locked — the tap swallows those events before NSEvent monitors can see
     /// them, so fade-to-black needs this side channel to reveal the lock UI.

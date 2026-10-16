@@ -120,6 +120,8 @@ struct SettingsView: View {
     @AppStorage(Constants.showMenuBarIconKey) private var showMenuBarIcon = true
     @AppStorage(Constants.lidClosedModeKey) private var lidClosedMode = false
     @AppStorage(Constants.unlockWithMacKey) private var unlockWithMac = false
+    @AppStorage(AgentSleepPolicy.enabledKey) private var sleepWhenAgentsFinish = false
+    @AppStorage(AgentSleepPolicy.delayKey) private var sleepWhenAgentsFinishDelay = AgentSleepPolicy.defaultDelayMinutes
 
     @ObservedObject var updateCheckViewModel: UpdateCheckViewModel
     @ObservedObject private var customMascot = CustomMascot.shared
@@ -585,7 +587,12 @@ struct SettingsView: View {
     /// then record the outcome for the row identified by `mark`. A ⚠️ on stdout with
     /// exit 0 (e.g. Codex already has a foreign `notify`) is surfaced as a failure
     /// so the button doesn't claim success for a write that didn't happen.
-    private func runAgentSetup(_ arguments: [String], mark: String, treatWarningAsFailure: Bool = true) {
+    private func runAgentSetup(
+        _ arguments: [String],
+        mark: String,
+        treatWarningAsFailure: Bool = true,
+        onSuccess: (() -> Void)? = nil
+    ) {
         if case .running = agentSetupResults[mark] { return }
         guard let cli = cliURL, FileManager.default.isExecutableFile(atPath: cli.path) else {
             agentSetupResults[mark] = .failure("The bundled lockpaw tool is missing — reinstall Lockpaw.")
@@ -626,12 +633,35 @@ struct SettingsView: View {
             }
             await MainActor.run {
                 agentSetupResults[mark] = result
+                guard case .success = result else { return }
                 // install-hook installs the CLI as a side effect — mirror that.
-                if mark != "cli", case .success = result {
-                    agentSetupResults["cli"] = .success
-                }
+                if arguments.first == "install-hook" { agentSetupResults["cli"] = .success }
+                onSuccess?()
             }
         }
+    }
+
+    /// The agents whose turns Lockpaw can follow for "Sleep when agents finish".
+    private static let activityTools = ["claude", "gemini"]
+
+    private static func activityMark(_ tool: String) -> String { "activity-\(tool)" }
+
+    /// Activity hooks run a lockpaw process on every tool call, so they only exist while
+    /// the box is ticked: added to agents that already ping Lockpaw, removed when cleared.
+    private func runActivityHookSetup(_ tool: String, enabled: Bool) {
+        let arguments = enabled
+            ? ["install-hook", tool, "--activity", "--if-connected"]
+            : ["remove-hook", tool, "--activity"]
+        runAgentSetup(arguments, mark: Self.activityMark(tool))
+    }
+
+    private var activityHookFailureMessage: String? {
+        for tool in Self.activityTools {
+            if case .failure(let message) = agentSetupResults[Self.activityMark(tool)], !message.isEmpty {
+                return message
+            }
+        }
+        return nil
     }
 
     private func isSetupRunning(_ mark: String) -> Bool {
@@ -781,7 +811,13 @@ struct SettingsView: View {
                             HStack(spacing: 8) {
                                 ForEach(row, id: \.self) { tool in
                                     Button {
-                                        runAgentSetup(["install-hook", tool], mark: tool)
+                                        runAgentSetup(["install-hook", tool], mark: tool) {
+                                            // Connecting an agent while the box is ticked adds its
+                                            // activity hooks too.
+                                            if sleepWhenAgentsFinish, Self.activityTools.contains(tool) {
+                                                runActivityHookSetup(tool, enabled: true)
+                                            }
+                                        }
                                     } label: {
                                         setupButtonLabel(mark: tool, idle: agentLabel(tool), done: "\(agentLabel(tool)) ✓")
                                     }
@@ -806,6 +842,44 @@ struct SettingsView: View {
                 }
 
                 if let failure = agentSetupFailureMessage {
+                    Text(failure)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 4)
+                }
+            }
+
+            SettingsPanel {
+                SettingsRow(
+                    "Sleep when agents finish",
+                    subtitle: "While locked, put the Mac to sleep once every Claude Code and Gemini CLI session has finished its turn. One that is running a command or waiting for you keeps it awake. Turning this on adds hooks to the agents connected above. Lockpaw can't see other agents (they only say when they finish), or background shells and agents that carry on after a turn ends."
+                ) {
+                    SettingsCheckbox(isOn: Binding(
+                        get: { sleepWhenAgentsFinish },
+                        set: { enabled in
+                            sleepWhenAgentsFinish = enabled
+                            for tool in Self.activityTools { runActivityHookSetup(tool, enabled: enabled) }
+                        }
+                    ))
+                    // A second toggle before the first finished would be dropped and leave the
+                    // hooks out of step with the box.
+                    .disabled(Self.activityTools.contains { isSetupRunning(Self.activityMark($0)) })
+                }
+
+                if sleepWhenAgentsFinish {
+                    SettingsDivider()
+
+                    SettingsRow("Sleep after", subtitle: "How long every agent has to stay quiet first.") {
+                        SettingsSegmentedControl(
+                            selection: $sleepWhenAgentsFinishDelay,
+                            options: AgentSleepPolicy.delayOptions.map { ("\($0) min", $0) },
+                            width: 210
+                        )
+                    }
+                }
+
+                if let failure = activityHookFailureMessage {
                     Text(failure)
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -48,6 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastURLSchemeCall: Date = .distantPast
     private var onboardingWindow: NSWindow?
     private var pingDistributedObserver: Any?
+    private var activityDistributedObserver: Any?
     private var openSettingsObserver: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -114,6 +115,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             forName: Notification.Name(Constants.pingDistributedName), object: nil, queue: .main
         ) { notification in
             NotificationCenter.default.post(name: .lockpawPing, object: nil, userInfo: notification.userInfo)
+        }
+        activityDistributedObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(AgentActivity.distributedName), object: nil, queue: .main
+        ) { notification in
+            NotificationCenter.default.post(name: .lockpawAgentActivity, object: nil, userInfo: notification.userInfo)
         }
 
         openSettingsObserver = NotificationCenter.default.addObserver(
@@ -224,6 +230,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     deinit {
         if let obs = hotkeyObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = pingDistributedObserver { DistributedNotificationCenter.default().removeObserver(obs) }
+        if let obs = activityDistributedObserver { DistributedNotificationCenter.default().removeObserver(obs) }
         if let obs = openSettingsObserver { NotificationCenter.default.removeObserver(obs) }
     }
 }

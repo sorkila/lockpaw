@@ -35,6 +35,7 @@
 - **Agents keep running.** AI coding tools, builds, downloads and SSH sessions carry on underneath.
 - **Agent alerts.** The locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot or Aider needs you, and the notification says which agent and why.
 - **Lid closed, still running.** Optional. Close the MacBook lid while locked and your agents keep going, no external display needed. It uses one small helper you approve once, and sleep comes back when you unlock, when the Mac runs hot, or at 20% battery.
+- **Sleep when agents finish.** Optional. While locked, the Mac goes to sleep a few minutes after every Claude Code and Gemini CLI session has finished its turn. A session running a command or waiting for you keeps it awake.
 - **Pings on your phone.** Optional. Forward agent pings to ntfy, Pushover or any webhook, such as Home Assistant.
 - **Shortcuts and Spotlight.** *Lock Screen* and *Is Lockpaw Locked?* actions. There's no unlock action, on purpose.
 - **Fade to black.** Optionally dims the lock screen to pure black after a while (good for OLED) without sleeping the display.
@@ -56,6 +57,7 @@
 | Change mascot, use your own image, or turn it off | Settings → Lock Screen → Mascot |
 | Hide the menu bar icon | Settings → General → Show menu bar icon (open Lockpaw from Applications to bring it back) |
 | Keep agents running with the lid closed | Settings → Lock Screen → Stay awake with the lid closed |
+| Sleep once your agents are done | Settings → Agents → Sleep when agents finish |
 | Send pings to your phone | Settings → Agents → Send pings off this Mac |
 
 <br>
@@ -76,9 +78,9 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 
 | Agent | Setup | What it hooks |
 |-------|-------|---------------|
-| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` + `StopFailure` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`); `Notification` is matched to the types that need you, so `auth_success` and the like stay quiet |
+| **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` + `StopFailure` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`); `Notification` is matched to the types that need you, so `auth_success` and the like stay quiet. With *Sleep when agents finish* on, also `UserPromptSubmit` + `PreToolUse` + `PostToolUse` + `SessionEnd` → `lockpaw activity` (`install-hook claude --activity`; never glows) |
 | **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` for *finished*, plus a `PermissionRequest` hook in `~/.codex/hooks.json` for *waiting* — trust it once via `/hooks` in Codex (honors `$CODEX_HOME`) |
-| **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json` |
+| **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json`; with *Sleep when agents finish* on, also `BeforeAgent` + `BeforeTool` + `AfterTool` + `SessionEnd` → `lockpaw activity` |
 | **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` (`--done`) |
 | **Copilot CLI** | `lockpaw install-hook copilot` | `agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json` (honors `$COPILOT_HOME`) |
 | **Aider** | `lockpaw install-hook aider` | `notifications-command` in `~/.aider.conf.yml` |
@@ -219,6 +221,7 @@ Lockpaw/
 │  ├─ OverlayWindowManager        NSWindow · multi-display · shielding level
 │  ├─ SleepPreventer              IOKit · idle sleep assertion
 │  ├─ LidSleepController          Lid-closed mode · SMAppService helper · XPC · power cutouts
+│  ├─ AgentSleepController        Sleep when agents finish · session tracking · IOPMSleepSystem
 │  ├─ WebhookRelayController      Optional ping relay · ntfy / Pushover / webhook · Keychain
 │  └─ AgentNotifier               UNUserNotificationCenter · agent-ping notifications
 ├─ Models/
@@ -229,6 +232,8 @@ Lockpaw/
 │  ├─ AgentPing                  Typed ping: hook payload → agent · project · kind (shared with the CLI)
 │  ├─ LockdownPolicy             Pure gesture lockdown (Space swipes)
 │  ├─ LidSleepPolicy             Pure lid-closed rules (thermal, battery) + macOS lock handling
+│  ├─ AgentActivity              Which agent sessions are working (shared with the CLI)
+│  ├─ AgentSleepPolicy           Pure "sleep when agents finish" reducer
 │  ├─ WebhookRelay               Pure relay request builder + per-session throttle
 │  ├─ SupporterLicence           Polar key check · supporter state
 │  ├─ Mascot                     Dog/cat/custom/none lock screen preference (+ supporter mascots, seasonal skins)

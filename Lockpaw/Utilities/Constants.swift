@@ -38,6 +38,7 @@ enum Constants {
         static let urlSchemeDebounce: TimeInterval = 0.1              // seconds
         static let userActivityRefreshInterval: TimeInterval = 30     // seconds; defeats screensaver idle timer while locked
         static let lidPowerCheckInterval: TimeInterval = 30           // seconds; battery/thermal re-check while lid-closed mode holds sleep
+        static let agentSleepCheckInterval: TimeInterval = 15         // seconds; "sleep when agents finish" re-check while locked (reports also re-check)
         static let systemLockConfirmDelayNs: UInt64 = 1_000_000_000   // 1s; re-check the window server if screenIsLocked raced it
         static let relayTimeout: TimeInterval = 5                     // seconds; a ping that can't be delivered by then is stale
         static let relayThrottleWindow: TimeInterval = 30             // seconds; one relay per session per window unless the kind changes

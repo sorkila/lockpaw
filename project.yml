@@ -97,6 +97,7 @@ targets:
       # definition, and the app's unit tests cover what the CLI runs.
       - path: Lockpaw/Models/AgentPing.swift
       - path: Lockpaw/Models/AgentHookConfig.swift
+      - path: Lockpaw/Models/AgentActivity.swift
     settings:
       base:
         PRODUCT_NAME: lockpaw
