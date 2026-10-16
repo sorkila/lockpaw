@@ -50,6 +50,7 @@ class LockController: ObservableObject {
     private let authenticator = Authenticator()
     private let sleepPreventer = SleepPreventer()
     private let presentationController = PresentationController()
+    private let wallpaper = WallpaperController()
 
     private var timer: Timer?
     private var sleepObserver: Any?
@@ -236,14 +237,22 @@ class LockController: ObservableObject {
 
         let mirrorAll = UserDefaults.standard.integer(forKey: "multiDisplayMode") == 1
         let fadeTimeout = FadeToBlack.currentTimeout
+        if UserDefaults.standard.bool(forKey: DesktopWallpaper.enabledKey) {
+            wallpaper.begin(
+                motion: WallpaperMotion.current,
+                reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            )
+        }
         guard overlayManager.showOverlay(contentFactory: { [weak self] index, isPrimary in
             guard let self else { return AnyView(Color.black) }
+            let wallpaper = self.wallpaper.content(forScreenAt: index)
             return AnyView(OverlayRootView(
                 controller: self,
                 presentationController: self.presentationController,
                 showsLockUI: isPrimary || mirrorAll,
                 screenIndex: index,
-                phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15
+                phaseOffset: mirrorAll ? 0 : CGFloat(index) * 0.15,
+                wallpaper: wallpaper
             ))
         }, onOpaque: { [weak self] in
             // Arm only once the cover is opaque: the Touch ID prompt opens the moment the
@@ -254,6 +263,7 @@ class LockController: ObservableObject {
             self?.armPassiveAuth()
         }) else {
             logger.error("Lock failed — no screens available for overlay")
+            wallpaper.end()
             sleepPreventer.allowSleep()
             transitionTo(.unlocked)
             lastError = "No screens available"
@@ -520,6 +530,7 @@ class LockController: ObservableObject {
         clearAgentAttention()
         state = .unlocked
         overlayManager.dismissOverlay(animated: true)
+        wallpaper.end()
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
         LidSleepController.shared.lockEnded()
@@ -540,6 +551,7 @@ class LockController: ObservableObject {
         clearAgentAttention()
         state = .unlocked
         overlayManager.dismissOverlay()
+        wallpaper.end()
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
         LidSleepController.shared.lockEnded()

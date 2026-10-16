@@ -37,6 +37,7 @@
 - **Lid closed, still running.** Optional. Close the MacBook lid while locked and your agents keep going, no external display needed. It uses one small helper you approve once, and sleep comes back when you unlock, when the Mac runs hot, or at 20% battery.
 - **Pings on your phone.** Optional. Forward agent pings to ntfy, Pushover or any webhook, such as Home Assistant.
 - **Shortcuts and Spotlight.** *Lock Screen* and *Is Lockpaw Locked?* actions. There's no unlock action, on purpose.
+- **Your wallpaper, Aerials included.** Optionally shows each display's macOS wallpaper behind the lock screen; Aerials keep moving while plugged in.
 - **Fade to black.** Optionally dims the lock screen to pure black after a while (good for OLED) without sleeping the display.
 - **Small and native.** About 14 MB of Swift. No Electron.
 - **No analytics.** No accounts, and the only network call is the signed update check, plus anything you switch on yourself.

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Desktop wallpaper behind the lock screen** (Settings → Lock Screen, off by default), Aerials included. Each display shows its own wallpaper for the Space it's on. Screens showing the same Aerial share one video player, and **Aerials move** picks when it plays: Always, Plugged in (the default; it holds still on battery and in Low Power Mode) or Never. Under Reduce Motion, and whenever it's paused, the Aerial holds its current frame. A dim keeps the lock screen's text and the ping glow readable over bright wallpapers. Asked for in #20 and contributed in #21 by @zazdrew.
+
 ## [1.6.1] - 2026-10-15
 
 ### Security

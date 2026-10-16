@@ -84,14 +84,9 @@ final class CustomMascot: ObservableObject {
     /// is baked in so a phone photo lands the right way up. Returns nil for anything
     /// ImageIO cannot decode.
     static func downsampledPNG(from data: Data, maxPixelSize: Int) -> Data? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceShouldCache: false,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = ImageDownsampling.thumbnail(from: source, maxPixelSize: maxPixelSize)
+        else { return nil }
 
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(output, UTType.png.identifier as CFString, 1, nil) else {
