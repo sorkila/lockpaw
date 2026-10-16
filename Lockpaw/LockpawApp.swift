@@ -49,6 +49,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: NSWindow?
     private var pingDistributedObserver: Any?
     private var openSettingsObserver: Any?
+    private var sessionChangeObservers: [(NotificationCenter, Any)] = []
+    private var hotkeyRefreshWork: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Instantiate AgentNotifier now so it registers as the notification-center
@@ -114,6 +116,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             forName: Notification.Name(Constants.pingDistributedName), object: nil, queue: .main
         ) { notification in
             NotificationCenter.default.post(name: .lockpawPing, object: nil, userInfo: notification.userInfo)
+        }
+
+        // The hotkey tap can die across sleep, a macOS lock or a user switch while still
+        // looking alive (#29), so rebuild it after each. Wake and unlock often arrive
+        // together; debounce them into one rebuild once the session has settled.
+        let workspace = NSWorkspace.shared.notificationCenter
+        let distributed = DistributedNotificationCenter.default()
+        let sessionChanges: [(NotificationCenter, Notification.Name)] = [
+            (workspace, NSWorkspace.didWakeNotification),
+            (workspace, NSWorkspace.screensDidWakeNotification),
+            (workspace, NSWorkspace.sessionDidBecomeActiveNotification),
+            (distributed, .systemScreenUnlocked),
+        ]
+        sessionChangeObservers = sessionChanges.map { center, name in
+            (center, center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.scheduleHotkeyRefresh()
+            })
         }
 
         openSettingsObserver = NotificationCenter.default.addObserver(
@@ -186,6 +205,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
+    private func scheduleHotkeyRefresh() {
+        hotkeyRefreshWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.hotkeyRefreshWork = nil
+            self.hotkeyManager.refreshAfterSessionChange()
+            // Accessibility can read as revoked for a moment after a macOS unlock; the
+            // rebuild then fails, and the poll registers the hotkey once it's back.
+            if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding"), HotkeyConfig.enabled,
+               !self.hotkeyManager.isRegistered, self.accessibilityPollTimer == nil {
+                self.startAccessibilityPoll()
+            }
+        }
+        hotkeyRefreshWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.hotkeyRefreshDelay, execute: work)
+    }
+
     private func startAccessibilityPoll() {
         accessibilityPollTimer?.invalidate()
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] timer in
@@ -225,5 +261,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let obs = hotkeyObserver { NotificationCenter.default.removeObserver(obs) }
         if let obs = pingDistributedObserver { DistributedNotificationCenter.default().removeObserver(obs) }
         if let obs = openSettingsObserver { NotificationCenter.default.removeObserver(obs) }
+        for (center, obs) in sessionChangeObservers { center.removeObserver(obs) }
     }
 }

@@ -49,6 +49,7 @@ enum Constants {
         static let pingGlowRest: CGFloat = 0.08 /* the Subtle level; GlowIntensity owns the setting */                       // faint glow held after the breaths until unlock — paired with the "agent needs you" hint
         static let cursorIdleHide: TimeInterval = 3.0                 // seconds of stillness before the pointer hides again while locked
         static let agentSetupMinSpin: TimeInterval = 1.2              // seconds; floor on the Settings connect-spinner so success registers
+        static let hotkeyRefreshDelay: TimeInterval = 1.0             // seconds; let wake / unlock / session return settle before rebuilding the hotkey tap (debounced)
         static let passwordEntryIdleTimeout: TimeInterval = 30.0      // seconds without typing before the lock-screen password field closes and Touch ID re-arms
 
         // Fade to black — dim the lock UI to pure black after inactivity (OLED burn-in guard).

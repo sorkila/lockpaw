@@ -86,8 +86,10 @@ class HotkeyManager {
 
         // Run the event tap on a dedicated background thread with its own run loop.
         // This avoids the LSUIElement main run loop activation issue entirely.
-        let thread = Thread { [weak self] in
-            guard let self, let tap = self.eventTap else { return }
+        // The thread takes its own tap rather than reading `self.eventTap` once it starts:
+        // a rebuild that lands before it runs must not hand it the replacement's tap.
+        let thread = Thread { [weak self, tap = eventTap] in
+            guard let self, CFMachPortIsValid(tap) else { return }
 
             self.tapRunLoop = CFRunLoopGetCurrent()
 
@@ -113,7 +115,12 @@ class HotkeyManager {
     func unregisterHotkey() {
         guard isRegistered else { return }
 
-        if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false) }
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            // Invalidating removes the port's run loop source, so the tap thread's run loop
+            // exits even when `tapRunLoop` isn't set yet (a rebuild racing the thread's start).
+            CFMachPortInvalidate(tap)
+        }
         if let rl = tapRunLoop { CFRunLoopStop(rl) }
         tapRunLoop = nil
         tapThread = nil
@@ -126,6 +133,16 @@ class HotkeyManager {
         logger.info("reregister called")
         unregisterHotkey()
         registerHotkey()
+    }
+
+    /// Rebuild a registered tap after the system slept, the macOS session was locked, or
+    /// the user switched away and back. Like InputBlocker's tap, the old one may be dead
+    /// even though it still exists and reads as enabled, and nothing else would ever notice:
+    /// the hotkey just stops working until relaunch (#29). Unregistered stays unregistered.
+    func refreshAfterSessionChange() {
+        guard isRegistered else { return }
+        logger.info("refreshAfterSessionChange: rebuilding the hotkey tap")
+        reregister()
     }
 
     func setEnabled(_ enabled: Bool) {
