@@ -268,6 +268,9 @@ class LockController: ObservableObject {
 
         Task {
             try? await Task.sleep(nanoseconds: Constants.Timing.inputBlockerDelayNs)
+            // An unlock inside this window must win: starting the blocker now would leave the
+            // keyboard dead with no lock screen up. See InputBlockPolicy.
+            guard InputBlockPolicy.shouldStartDeferredBlocking(state: state) else { return }
             inputBlocker.startBlocking()
         }
 

@@ -63,8 +63,12 @@ class HotkeyManager {
                 if savedMods & controlKey != 0 { matches = matches && flags.contains(.maskControl) }
 
                 if matches {
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
+                    // A held key auto-repeats; only the first press toggles (InputBlockPolicy).
+                    let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                    if InputBlockPolicy.hotkeyShouldToggle(isAutorepeat: isRepeat) {
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
+                        }
                     }
                     // Swallow it. A .listenOnly tap cannot, so the hotkey's own key used to
                     // reach the frontmost app as well — locking from a terminal with

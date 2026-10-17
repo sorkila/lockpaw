@@ -136,8 +136,12 @@ class InputBlocker {
 
                     // Let the unlock hotkey through
                     if modifiersMatch && keyCode == savedKeyCode {
-                        InputBlocker.inputQueue.async {
-                            NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
+                        // A held key auto-repeats; only the first press toggles (InputBlockPolicy).
+                        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                        if InputBlockPolicy.hotkeyShouldToggle(isAutorepeat: isRepeat) {
+                            InputBlocker.inputQueue.async {
+                                NotificationCenter.default.post(name: .toggleLockpaw, object: nil)
+                            }
                         }
                         return nil
                     }
