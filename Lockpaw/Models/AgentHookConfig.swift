@@ -26,6 +26,19 @@ enum AgentHookConfig {
         command.contains("lockpaw") && command.contains("ping")
     }
 
+    /// Claude Code events the session board follows; each runs `lockpaw session`.
+    static let claudeSessionEvents = [
+        "SessionStart", "UserPromptSubmit", "SubagentStart", "SubagentStop",
+        "Notification", "Stop", "StopFailure", "SessionEnd",
+    ]
+
+    /// Matches a hook that feeds the session board. Never matches a ping (and
+    /// `isLockpawPingCommand` never matches this), so the two merges can't touch each
+    /// other's entries.
+    static func isLockpawSessionCommand(_ command: String) -> Bool {
+        command.contains("lockpaw") && command.contains(" session")
+    }
+
     /// Merge a lockpaw ping into a Claude Code-style `hooks` object — the schema Gemini
     /// CLI adopted too: each event maps to an array of groups, each group holding a
     /// `hooks` array of {type, command} entries. Upgrades any existing lockpaw entry in
@@ -40,6 +53,32 @@ enum AgentHookConfig {
         matchers: [String: String] = [:],
         hookFields: [String: Any] = [:]
     ) -> [String: Any] {
+        merging(into: root, events: events, command: command, matchers: matchers,
+                hookFields: hookFields, isOurs: isLockpawPingCommand)
+    }
+
+    /// Add lockpaw's `session` hook to every event the board follows, next to the ping
+    /// hooks rather than in place of them. Same merge as `mergingPingHook`: an existing
+    /// session entry is upgraded in place, ping hooks and foreign hooks are left as they
+    /// are, and running it twice changes nothing. They run async so Claude never waits on
+    /// them — except SessionEnd, which runs as the session exits, where a background hook
+    /// can be torn down before it finishes.
+    static func mergingSessionHooks(into root: [String: Any], command: String) -> [String: Any] {
+        claudeSessionEvents.reduce(root) { root, event in
+            merging(into: root, events: [event], command: command,
+                    hookFields: event == "SessionEnd" ? [:] : ["async": true],
+                    isOurs: isLockpawSessionCommand)
+        }
+    }
+
+    private static func merging(
+        into root: [String: Any],
+        events: [String],
+        command: String,
+        matchers: [String: String] = [:],
+        hookFields: [String: Any],
+        isOurs: (String) -> Bool
+    ) -> [String: Any] {
         var root = root
         var hooks = root["hooks"] as? [String: Any] ?? [:]
         for event in events {
@@ -49,7 +88,7 @@ enum AgentHookConfig {
                 guard var inner = groups[g]["hooks"] as? [[String: Any]] else { continue }
                 var ownsGroup = !inner.isEmpty
                 for h in inner.indices {
-                    if let cmd = inner[h]["command"] as? String, isLockpawPingCommand(cmd) {
+                    if let cmd = inner[h]["command"] as? String, isOurs(cmd) {
                         inner[h]["command"] = command
                         inner[h].merge(hookFields) { _, new in new }
                         present = true

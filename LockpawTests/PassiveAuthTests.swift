@@ -170,4 +170,19 @@ final class PassiveAuthTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Focus loss
+
+    func testActivationOfAnotherApp_stopsTheSensor() {
+        // A click on the overlay activates Lockpaw itself — the case that left the lock
+        // screen saying "Touch ID to unlock" over a sensor that had stopped listening.
+        XCTAssertTrue(PassiveAuthPolicy.activationStopsSensor(activatedBundleID: Constants.bundleIdentifier))
+        XCTAssertTrue(PassiveAuthPolicy.activationStopsSensor(activatedBundleID: "com.mitchellh.ghostty"))
+        XCTAssertTrue(PassiveAuthPolicy.activationStopsSensor(activatedBundleID: nil))
+    }
+
+    func testActivationOfTheAuthAgent_doesNotRearm() {
+        // Re-arming activates the agent; treating that as focus loss would loop.
+        XCTAssertFalse(PassiveAuthPolicy.activationStopsSensor(activatedBundleID: PassiveAuthPolicy.authUIAgentBundleID))
+    }
 }

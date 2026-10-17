@@ -7,6 +7,7 @@ enum ScreenRole {
 
 struct LockScreenView: View {
     @ObservedObject var controller: LockController
+    @ObservedObject var sessionMonitor = AgentSessionMonitor.shared
     var screenRole: ScreenRole = .primary
     var phaseOffset: CGFloat = 0
     /// Overlay screen index, so Authenticate opens its dialog on this display.
@@ -32,6 +33,11 @@ struct LockScreenView: View {
     private var breathe: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.2) }
     private var drift: CGFloat { reduceMotion ? 0 : sin((phase + phaseOffset) * .pi * 2 * 0.05) }
     private var mascot: Mascot { Mascot.effective(from: selectedMascot) }
+    private var hasSessions: Bool { !sessionMonitor.sessions.isEmpty }
+    /// The dock steps aside whenever the bottom area is busy unlocking.
+    private var sessionDockHidden: Bool {
+        controller.isAuthenticating || controller.passwordEntryActive || controller.unlockSucceeded
+    }
 
     /// The sensor is live when `passiveAuthLive`, so name the gesture that already works
     /// rather than pointing at the button below it — the button stays for the password
@@ -54,8 +60,18 @@ struct LockScreenView: View {
 
                 // Content group — positioned at ~42% from top (slightly below center)
                 VStack(spacing: 0) {
-                    Spacer().frame(minHeight: 0)
-                        .frame(height: geo.size.height * 0.32)
+                    if hasSessions {
+                        // Up to the same 32%: it keeps that whole share whenever the screen
+                        // has room and gives back only what the session dock needs, so the
+                        // dock never pushes the content into the prompt. Laid out after the
+                        // content group and before the spacers below.
+                        Spacer(minLength: 0)
+                            .frame(maxHeight: geo.size.height * 0.32)
+                            .layoutPriority(1)
+                    } else {
+                        Spacer().frame(minHeight: 0)
+                            .frame(height: geo.size.height * 0.32)
+                    }
 
                     // Mascot + message + time as a tight cohesive group
                     VStack(spacing: unit * 1.2) {
@@ -158,8 +174,27 @@ struct LockScreenView: View {
                         }
                     }
                     .animation(Constants.Anim.gentle, value: controller.agentAttention)
+                    // With the dock, the content takes its full size first; otherwise the
+                    // spacer above would claim the room the message's scale factor allows
+                    // and shrink the text.
+                    .layoutPriority(hasSessions ? 2 : 0)
 
-                    Spacer()
+                    Spacer(minLength: hasSessions ? (compact ? 20 : 32) : nil)
+
+                    // Session dock — a tile per Claude session, in its own slot above the
+                    // unlock prompt (8pt here plus the bottom area's own slack). A click
+                    // opens a detail card above the dock. Gone with no sessions, and hidden
+                    // and inert while the bottom area is unlocking.
+                    if hasSessions {
+                        LockScreenSessionDock(sessions: sessionMonitor.sessions, compact: compact)
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 8)
+                            .opacity(appeared ? 1 : 0)
+                            .opacity(sessionDockHidden ? 0 : 1)
+                            .allowsHitTesting(!sessionDockHidden)
+                            .accessibilityHidden(sessionDockHidden)
+                            .animation(Constants.Anim.gentle, value: sessionDockHidden)
+                    }
 
                     // Bottom area
                     ZStack {
@@ -222,6 +257,8 @@ struct LockScreenView: View {
                     .animation(Constants.Anim.gentle, value: controller.passwordEntryScreen)
                     .offset(x: shakeOffset)
                 }
+                // The content group eases up (or back down) as the dock comes and goes.
+                .animation(reduceMotion ? nil : Constants.Anim.gentle, value: hasSessions)
             }
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)

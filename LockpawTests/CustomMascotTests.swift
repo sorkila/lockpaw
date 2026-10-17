@@ -1,5 +1,7 @@
 import XCTest
 import AppKit
+import ImageIO
+import UniformTypeIdentifiers
 @testable import Lockpaw
 
 @MainActor
@@ -162,7 +164,132 @@ final class CustomMascotTests: XCTestCase {
         XCTAssertFalse(store.canShow(.custom))
     }
 
+    // MARK: - Animation
+
+    func testAStillImageHasNoAnimation() throws {
+        try store.install(from: makeImageFile(pixels: 16))
+        XCTAssertNil(store.loadAnimation())
+    }
+
+    func testInstallKeepsEveryFrameAndItsDelay() throws {
+        try store.install(from: makeAnimatedGIF(pixels: 16, delays: [0.05, 0.1, 0.2]))
+
+        let animation = try XCTUnwrap(store.loadAnimation())
+        XCTAssertEqual(animation.frames.count, 3)
+        XCTAssertEqual(animation.delays[0], 0.05, accuracy: 0.001)
+        XCTAssertEqual(animation.delays[1], 0.1, accuracy: 0.001)
+        XCTAssertEqual(animation.delays[2], 0.2, accuracy: 0.001)
+        XCTAssertEqual(animation.duration, 0.35, accuracy: 0.001)
+    }
+
+    /// Anything reading the stored file as a plain PNG still gets a usable first frame.
+    func testAnAnimatedInstallStillLoadsAsAnImage() throws {
+        try store.install(from: makeAnimatedGIF(pixels: 20, delays: [0.1, 0.1]))
+        XCTAssertEqual(store.loadImage()?.size, NSSize(width: 20, height: 20))
+    }
+
+    func testZeroDelayFramesPlayAtTheBrowserDefault() throws {
+        try store.install(from: makeAnimatedGIF(pixels: 8, delays: [0, 0]))
+        let animation = try XCTUnwrap(store.loadAnimation())
+        XCTAssertEqual(animation.delays.count, 2)
+        for delay in animation.delays {
+            XCTAssertEqual(delay, MascotAnimation.defaultFrameDelay, accuracy: 0.001)
+        }
+    }
+
+    func testReplacingAnAnimationWithAStillDropsTheCachedAnimation() throws {
+        try store.install(from: makeAnimatedGIF(pixels: 8, delays: [0.1, 0.1]))
+        XCTAssertNotNil(store.loadAnimation())
+
+        try store.install(from: makeImageFile(pixels: 8))
+        XCTAssertNil(store.loadAnimation())
+    }
+
+    func testRemoveDropsTheCachedAnimation() throws {
+        try store.install(from: makeAnimatedGIF(pixels: 8, delays: [0.1, 0.1]))
+        XCTAssertNotNil(store.loadAnimation())
+
+        store.remove()
+        XCTAssertNil(store.loadAnimation())
+    }
+
+    /// A multi-page TIFF has several images but no timing — it is not an animation.
+    func testAMultiImageFileWithoutTimingStaysStill() throws {
+        let url = try makeMultiImageFile(type: .tiff, pixels: 8, count: 2, frameProperties: nil)
+        try store.install(from: url)
+
+        XCTAssertTrue(store.hasImage)
+        XCTAssertNil(store.loadAnimation())
+    }
+
+    func testAnimationFramesShrinkToStayInsideTheMemoryBudget() {
+        XCTAssertEqual(CustomMascot.animationPixelSize(frameCount: 2, maxPixelSize: 1024), 1024)
+
+        let edge = CustomMascot.animationPixelSize(frameCount: 120, maxPixelSize: 1024)
+        XCTAssertLessThanOrEqual(120 * edge * edge * 4, CustomMascot.animationMemoryBudget)
+        XCTAssertGreaterThanOrEqual(edge, CustomMascot.minAnimationPixelSize)
+    }
+
+    func testAnimationFramesNeverDropBelowTheMinimumEdge() {
+        let edge = CustomMascot.animationPixelSize(frameCount: CustomMascot.maxAnimationFrames * 10, maxPixelSize: 1024)
+        XCTAssertEqual(edge, CustomMascot.minAnimationPixelSize)
+    }
+
+    func testFrameAtDateWalksTheDelaysAndLoops() throws {
+        let frames = try (0..<3).map { _ in try makeCGImage(pixels: 1) }
+        let animation = MascotAnimation(frames: frames, delays: [0.1, 0.2, 0.3])
+
+        func frame(at seconds: TimeInterval) -> CGImage {
+            animation.frame(at: Date(timeIntervalSinceReferenceDate: seconds))
+        }
+        XCTAssertTrue(frame(at: 0.05) === frames[0])
+        XCTAssertTrue(frame(at: 0.15) === frames[1])
+        XCTAssertTrue(frame(at: 0.45) === frames[2])
+        XCTAssertTrue(frame(at: 0.65) === frames[0])
+    }
+
     // MARK: - Helpers
+
+    private func makeAnimatedGIF(pixels: Int, delays: [TimeInterval]) throws -> URL {
+        let frames = delays.map { [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: $0]] as CFDictionary }
+        let url = try makeMultiImageFile(type: .gif, pixels: pixels, count: delays.count, frameProperties: frames)
+        let data = try Data(contentsOf: url)
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+        XCTAssertEqual(CGImageSourceGetCount(source), delays.count, "fixture must really be animated")
+        return url
+    }
+
+    private func makeMultiImageFile(type: UTType, pixels: Int, count: Int, frameProperties: [CFDictionary]?) throws -> URL {
+        let url = try makeSourcesDirectory().appendingPathComponent("source.\(type.preferredFilenameExtension ?? "img")")
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, count, nil))
+        if type == .gif {
+            CGImageDestinationSetProperties(destination, [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0],
+            ] as CFDictionary)
+        }
+        for index in 0..<count {
+            CGImageDestinationAddImage(destination, try makeCGImage(pixels: pixels), frameProperties?[index])
+        }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return url
+    }
+
+    private func makeCGImage(pixels: Int) throws -> CGImage {
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.setFillColor(CGColor(red: 0, green: 0.83, blue: 0.67, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: pixels, height: pixels))
+        return try XCTUnwrap(context.makeImage())
+    }
+
+    private func makeSourcesDirectory() throws -> URL {
+        let sources = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("CustomMascotSources-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        return sources
+    }
 
     private func makeImageFile(pixels: Int) throws -> URL {
         let rep = NSBitmapImageRep(

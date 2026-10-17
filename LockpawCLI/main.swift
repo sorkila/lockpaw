@@ -34,6 +34,8 @@ func printUsage() {
                                     on stdin adds the project and the reason.
                                     --done | --waiting | --error say what happened when
                                     the payload doesn't. --print shows what would be sent.
+      lockpaw session               Record a Claude Code hook event (JSON on stdin) on
+                                    Lockpaw's session board. Written by install-hook claude.
       lockpaw install-cli           Symlink this tool into your PATH (~/.local/bin)
       lockpaw install-hook <tool>   Wire up an agent. <tool>: claude | codex | gemini |
                                     cursor | copilot | aider
@@ -58,7 +60,12 @@ func printUsage() {
 /// Stdin at /dev/null (Codex notify) reads EOF at once. A payload cut off by the
 /// deadline or the size cap fails to parse and is sent as a bare ping.
 func readHookPayload(deadline seconds: TimeInterval = 2, limit: Int = 4 << 20) -> [String: Any] {
-    guard isatty(STDIN_FILENO) == 0 else { return [:] }
+    (try? JSONSerialization.jsonObject(with: readHookInput(deadline: seconds, limit: limit))) as? [String: Any] ?? [:]
+}
+
+/// The raw bytes behind `readHookPayload`, under the same deadline and cap.
+func readHookInput(deadline seconds: TimeInterval = 2, limit: Int = 4 << 20) -> Data {
+    guard isatty(STDIN_FILENO) == 0 else { return Data() }
     let end = Date().addingTimeInterval(seconds)
     var data = Data()
     var buffer = [UInt8](repeating: 0, count: 64 << 10)
@@ -72,7 +79,7 @@ func readHookPayload(deadline seconds: TimeInterval = 2, limit: Int = 4 << 20) -
         guard count > 0 else { break }
         data.append(buffer, count: count)
     }
-    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    return data
 }
 
 func sendPing(arguments: [String], printOnly: Bool) {
@@ -87,6 +94,33 @@ func sendPing(arguments: [String], printOnly: Bool) {
         object: nil,
         userInfo: info.isEmpty ? nil : info,
         deliverImmediately: true
+    )
+}
+
+// MARK: - session
+
+/// Tells a running Lockpaw to re-read the session board. No payload — the board on disk
+/// is the source of truth, so a nudge missed while Lockpaw was quit loses nothing.
+let sessionsNotificationName = "com.eriknielsen.lockpaw.sessions"
+
+/// Runs as a Claude Code hook: records the event from stdin on the session board and
+/// nudges Lockpaw when something changed. Never fails and never prints — hook stdout can
+/// reach Claude's context on some events, and a hook must not disturb its own session.
+func recordSessionEvent() {
+    guard let event = try? JSONDecoder().decode(AgentHookEvent.self, from: readHookInput()) else { return }
+    let now = Date()
+    // The session's name lives in its transcript. Read it on the events that happen about
+    // once per turn — start, prompt, "needs you", stop — and never on per-subagent events,
+    // which can arrive in bursts. Outside the store lock.
+    let titles = ["SessionStart", "UserPromptSubmit", "Notification", "Stop"].contains(event.hookEventName)
+        ? event.transcriptPath.flatMap(AgentSessionTitles.read(transcriptAt:))
+        : nil
+    let update = AgentSessionStore.standard.update(sessionID: event.owningSessionID) { current in
+        AgentSessionReducer.apply(event, to: current, now: now, titles: titles)
+    }
+    guard update.changed else { return }
+    DistributedNotificationCenter.default().postNotificationName(
+        Notification.Name(sessionsNotificationName), object: nil, userInfo: nil, deliverImmediately: true
     )
 }
 
@@ -203,6 +237,9 @@ func shellPingCommand(agent: String, kind: AgentPing.KindFlag? = nil) -> String 
     "\"$HOME/.local/bin/lockpaw\" ping --agent \(agent)" + (kind.map { " \($0.flag)" } ?? "")
 }
 
+/// Claude Code's second set of hooks: the session board, same PATH-independent form.
+let claudeSessionCommand = "\"$HOME/.local/bin/lockpaw\" session"
+
 /// The command points at the ~/.local/bin symlink; bail out if it can't be created.
 func requireCLISymlink() {
     do {
@@ -229,23 +266,32 @@ func claudeStyleSnippet(path: String, events: [String], command: String, matcher
     """
 }
 
+/// Claude gets two sets of hooks: the pings (who and why, for the glow, the notification
+/// and the relay) and the session board's (every event the board follows).
 func installClaudeHook(printOnly: Bool) {
     let url = claudeConfigDirectory().appendingPathComponent("settings.json")
     // StopFailure runs instead of Stop when a turn ends on an API error.
     let events = ["Notification", "Stop", "StopFailure"]
     let command = shellPingCommand(agent: "claude")
     let matchers = ["Notification": AgentHookConfig.claudeNotificationMatcher]
+    let merge = { (root: [String: Any]) -> [String: Any] in
+        AgentHookConfig.mergingSessionHooks(
+            into: AgentHookConfig.mergingPingHook(into: root, events: events, command: command, matchers: matchers),
+            command: claudeSessionCommand
+        )
+    }
     if printOnly {
-        print(claudeStyleSnippet(path: url.path, events: events, command: command, matchers: matchers))
+        // Both sets share some events, so show the merged result rather than two snippets
+        // to splice together by hand.
+        let data = (try? JSONSerialization.data(
+            withJSONObject: merge([:]), options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        )) ?? Data()
+        print("Add to \(url.path) (session hooks run async, except SessionEnd):\n\n" + String(decoding: data, as: UTF8.self))
         return
     }
     requireCLISymlink()
-    writeJSON(
-        AgentHookConfig.mergingPingHook(
-            into: readJSONObject(at: url), events: events, command: command, matchers: matchers
-        ),
-        to: url, label: "Claude Code"
-    )
+    writeJSON(merge(readJSONObject(at: url)), to: url, label: "Claude Code")
+    print("  Claude Code sessions now show on Lockpaw's session board.")
 }
 
 /// Codex's config directory: $CODEX_HOME if set, otherwise ~/.codex.
@@ -495,6 +541,8 @@ switch args.first {
 case "ping":
     // Unknown trailing args are ignored — Codex appends a JSON payload to the notify program.
     sendPing(arguments: args, printOnly: args.contains("--print"))
+case "session":
+    recordSessionEvent()
 case "install-cli":
     installCLI()
 case "install-hook":

@@ -87,6 +87,9 @@ class LockController: ObservableObject {
     /// Secure-input reading taken as the current arm started, so the tick can tell a flip
     /// caused by arming from one that was already there.
     private var secureInputBeforeArm = false
+    private var activationObserver: Any?
+    /// Last immediate re-arm after the Touch ID prompt lost focus — throttles focus ping-pong.
+    private var lastFocusRearm = Date.distantPast
 
     init() {
         toggleObserver = NotificationCenter.default.addObserver(
@@ -204,6 +207,22 @@ class LockController: ObservableObject {
                 self?.handlePing(ping)
             }
         }
+
+        // Touch ID stops listening the moment its hidden prompt loses focus, and the
+        // evaluation never returns — see PassiveAuthPolicy.activationStopsSensor.
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            let bundleID = app?.bundleIdentifier
+            Task { @MainActor [weak self] in
+                self?.rearmAfterFocusLoss(activatedBundleID: bundleID)
+            }
+        }
+
+        // The session board listens from here, not from a view, for the same reason as the
+        // toggle: the menu bar content is built lazily, and the lock screen only while locked.
+        AgentSessionMonitor.shared.start()
     }
 
     deinit {
@@ -219,6 +238,7 @@ class LockController: ObservableObject {
         if let obs = pingObserver { NotificationCenter.default.removeObserver(obs) }
         for obs in urlSchemeObservers { NotificationCenter.default.removeObserver(obs) }
         for obs in systemLockObservers { DistributedNotificationCenter.default().removeObserver(obs) }
+        if let obs = activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(obs) }
     }
 
     // MARK: - Public
@@ -644,6 +664,24 @@ class LockController: ObservableObject {
             passiveAuthSuspended = true
             passiveAuthLive = false
         }
+    }
+
+    /// The Touch ID prompt lost focus, so the sensor has silently stopped while the
+    /// evaluation still looks in flight — a click on the overlay was enough, and the lock
+    /// screen went on saying "Touch ID to unlock" over a dead sensor. Re-arm immediately so
+    /// a finger that follows the click lands on a live sensor, but at most once a second:
+    /// anything faster is left disarmed for the one-second tick, which re-arms whenever
+    /// nothing is in flight, so focus ping-pong between apps cannot spin. A no-op while the
+    /// password field is open — it disarmed Touch ID on purpose and holds activation itself.
+    private func rearmAfterFocusLoss(activatedBundleID: String?) {
+        guard state == .locked, !unlockSucceeded, !passwordEntryActive, passiveEvaluationInFlight,
+              PassiveAuthPolicy.activationStopsSensor(activatedBundleID: activatedBundleID) else { return }
+        logger.info("passiveAuth: Touch ID prompt lost focus to \(activatedBundleID ?? "nil", privacy: .public) — re-arming")
+        disarmPassiveAuth()
+        let now = Date()
+        guard now.timeIntervalSince(lastFocusRearm) >= Constants.Timing.focusRearmThrottle else { return }
+        lastFocusRearm = now
+        armPassiveAuth()
     }
 
     /// Rides the one-second lock tick, which is already running for the elapsed clock.

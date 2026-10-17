@@ -36,6 +36,19 @@ enum PassiveAuthOutcome: Equatable {
 /// guard and the outcome mapping can be unit-tested directly.
 enum PassiveAuthPolicy {
 
+    /// `coreautha` — the LocalAuthentication agent that hosts the (hidden) Touch ID prompt
+    /// for an armed evaluation.
+    static let authUIAgentBundleID = "com.apple.LocalAuthentication.UIAgent"
+
+    /// Touch ID only listens while its prompt has focus. When any other app activates —
+    /// Lockpaw on a click on the overlay, Lockpaw's own deferred activation landing ~0.5s
+    /// into a lock, or whatever app focus drifts to — the agent receives LostFocus and stops
+    /// the sensor ("UI lost focus", LAError -4 subcode 7), but the evaluation does *not*
+    /// return, so nothing in `outcome` ever sees it. Measured on macOS 26 via coreauthd logs.
+    static func activationStopsSensor(activatedBundleID: String?) -> Bool {
+        activatedBundleID != authUIAgentBundleID
+    }
+
     /// `unlockCommitted` is the success animation: the state machine is still `.locked`
     /// while it plays, so without this a re-arm landing in that window would invalidate the
     /// evaluation that had *just* succeeded and swallow the unlock it was animating.

@@ -11,6 +11,10 @@ enum Constants {
     /// ping never launches the app when it isn't already running.
     static let pingDistributedName = "com.eriknielsen.lockpaw.ping"
 
+    /// Distributed notification `lockpaw session` posts when the session board changed.
+    /// No payload — the board on disk is the source of truth.
+    static let sessionsDistributedName = "com.eriknielsen.lockpaw.sessions"
+
     /// UserDefaults key: play a sound on agent ping. Off by default for shared spaces.
     static let agentPingSoundKey = "agentPingSound"
 
@@ -43,6 +47,7 @@ enum Constants {
         static let relayThrottleWindow: TimeInterval = 30             // seconds; one relay per session per window unless the kind changes
         static let licenceCheckTimeout: TimeInterval = 10             // seconds; the one-time Polar key check
         static let pingDebounce: TimeInterval = 2.0                   // seconds; collapse repeat pings that carry no session id (PingGate)
+        static let sessionReloadCoalesce: TimeInterval = 0.15         // seconds; a burst of `lockpaw session` nudges (parallel subagents) becomes one store read
         static let pingPulseCount = 2                                 // breaths per agent ping
         static let pingPulsePeriod: TimeInterval = 2.2                // seconds per full breath (rise + fall)
         static let pingPulseFloor: CGFloat = 0.30                     // glow level between breaths (never fully dark mid-pulse)
@@ -50,6 +55,7 @@ enum Constants {
         static let cursorIdleHide: TimeInterval = 3.0                 // seconds of stillness before the pointer hides again while locked
         static let agentSetupMinSpin: TimeInterval = 1.2              // seconds; floor on the Settings connect-spinner so success registers
         static let passwordEntryIdleTimeout: TimeInterval = 30.0      // seconds without typing before the lock-screen password field closes and Touch ID re-arms
+        static let focusRearmThrottle: TimeInterval = 1.0             // seconds; at most one immediate Touch ID re-arm per window after its prompt loses focus (the tick covers the rest)
 
         // Fade to black — dim the lock UI to pure black after inactivity (OLED burn-in guard).
         static let fadeToBlackDuration: TimeInterval = 6.0            // visible → black fade; the one sanctioned >1.6s motion token (DESIGN.md §4)

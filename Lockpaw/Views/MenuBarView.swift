@@ -3,6 +3,9 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var controller: LockController
     @ObservedObject private var supportAsk = SupportAskController.shared
+    @ObservedObject private var sessionMonitor = AgentSessionMonitor.shared
+    /// Session ages are read when the menu opens.
+    @State private var now = Date()
 
     var body: some View {
         Group {
@@ -32,6 +35,18 @@ struct MenuBarView: View {
                 }
             }
 
+            // The session board, one plain line per Claude session. The menu is the user's
+            // own, so folder names are fine here.
+            if !sessionMonitor.sessions.isEmpty {
+                Divider()
+
+                Section("Claude Sessions") {
+                    ForEach(sessionMonitor.sessions) { session in
+                        Text(session.menuLine(now: now))
+                    }
+                }
+            }
+
             if controller.state == .unlocked, supportAsk.isShowing {
                 Divider()
 
@@ -54,6 +69,9 @@ struct MenuBarView: View {
             .keyboardShortcut("q")
         }
         // The menu is the ask's only surface, so let a week-old ask lapse when it opens.
-        .onAppear { supportAsk.refresh() }
+        .onAppear {
+            supportAsk.refresh()
+            now = Date()
+        }
     }
 }
