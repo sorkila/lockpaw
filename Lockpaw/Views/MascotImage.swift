@@ -14,22 +14,39 @@ import SwiftUI
 struct MascotImage: View {
     let mascot: Mascot
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     init(_ mascot: Mascot) {
         self.mascot = mascot
     }
 
     var body: some View {
-        if let image {
-            let base = image
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-
-            if mascot == .custom {
-                base.mask { featheredEdge }
-            } else {
-                base
+        if let animation {
+            TimelineView(.animation(minimumInterval: animation.shortestDelay)) { context in
+                styled(Image(decorative: animation.frame(at: context.date), scale: 1))
             }
+        } else if let image {
+            styled(image)
+        }
+    }
+
+    /// Only a custom image can animate; Reduce Motion holds it on its first frame.
+    private var animation: MascotAnimation? {
+        guard mascot == .custom, !reduceMotion else { return nil }
+        return CustomMascot.shared.loadAnimation()
+    }
+
+    @ViewBuilder
+    private func styled(_ image: Image) -> some View {
+        let base = image
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+
+        if mascot == .custom {
+            base.mask { featheredEdge }
+        } else {
+            base
         }
     }
 
