@@ -61,6 +61,7 @@ class LockController: ObservableObject {
     private var errorClearTask: Task<Void, Never>?
     private var toggleObserver: Any?
     private var pingObserver: Any?
+    private var presentationSink: AnyCancellable?
     /// `lockpaw://lock|unlock|unlock-password`. Here, not in MenuBarView: SwiftUI builds the
     /// MenuBarExtra content lazily, so observers there didn't exist until the menu had been
     /// opened once — and never with the menu bar icon hidden. Same reason as toggleObserver.
@@ -205,6 +206,14 @@ class LockController: ObservableObject {
                 self?.handlePing(ping)
             }
         }
+
+        // Here rather than in lock(): the publisher outlives every session, and the
+        // `state == .locked` guard makes a reset in presentationController.start() moot.
+        presentationSink = presentationController.$presentation
+            .removeDuplicates()
+            .sink { [weak self] presentation in
+                Task { @MainActor [weak self] in self?.presentationChanged(to: presentation) }
+            }
     }
 
     deinit {
@@ -583,6 +592,7 @@ class LockController: ObservableObject {
         guard !passwordEntryActive else { return }
         guard PassiveAuthPolicy.shouldArm(
             state: state,
+            screenShowing: presentationController.presentation == .visible,
             unlockCommitted: unlockSucceeded,
             biometryAvailable: biometryAvailable,
             suspended: passiveAuthSuspended,
@@ -591,7 +601,7 @@ class LockController: ObservableObject {
             lastFailure: lastAuthFailTime,
             now: Date()
         ) else {
-            logger.debug("passiveAuth: arm refused — state=\(String(describing: self.state)), committed=\(self.unlockSucceeded), biometry=\(self.biometryAvailable), suspended=\(self.passiveAuthSuspended), authInProgress=\(self.authenticationInProgress), failCount=\(self.failCount)")
+            logger.debug("passiveAuth: arm refused — state=\(String(describing: self.state)), presentation=\(String(describing: self.presentationController.presentation)), committed=\(self.unlockSucceeded), biometry=\(self.biometryAvailable), suspended=\(self.passiveAuthSuspended), authInProgress=\(self.authenticationInProgress), failCount=\(self.failCount)")
             return
         }
 
@@ -606,6 +616,19 @@ class LockController: ObservableObject {
         passiveAuthLive = true
         passiveAuthTask = Task { @MainActor [weak self] in
             await self?.runPassiveAuth(generation: generation)
+        }
+    }
+
+    /// Black disarms so Lockpaw gets activation back and can hide the pointer (#39). The
+    /// reveal arms at once, with no #28 wait: OverlayRootView's black backdrop stays opaque
+    /// through it. `passiveAuthLive` stays latched, or the prompt would flicker on reveal.
+    private func presentationChanged(to presentation: LockPresentation) {
+        guard state == .locked else { return }
+        if presentation == .visible {
+            armPassiveAuth()
+        } else {
+            disarmPassiveAuth()
+            overlayManager.reconcealCursor()
         }
     }
 

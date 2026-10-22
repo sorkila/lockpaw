@@ -10,6 +10,7 @@ final class PassiveAuthTests: XCTestCase {
 
     private func shouldArm(
         state: LockState = .locked,
+        screenShowing: Bool = true,
         unlockCommitted: Bool = false,
         biometryAvailable: Bool = true,
         suspended: Bool = false,
@@ -19,6 +20,7 @@ final class PassiveAuthTests: XCTestCase {
     ) -> Bool {
         PassiveAuthPolicy.shouldArm(
             state: state,
+            screenShowing: screenShowing,
             unlockCommitted: unlockCommitted,
             biometryAvailable: biometryAvailable,
             suspended: suspended,
@@ -39,6 +41,12 @@ final class PassiveAuthTests: XCTestCase {
         for state in [LockState.unlocked, .locking, .unlocking] {
             XCTAssertFalse(shouldArm(state: state), "must not arm in \(state)")
         }
+    }
+
+    /// The tick re-arms whenever nothing is armed, so this guard is what keeps the sensor
+    /// down (and the pointer hideable) while black (#39).
+    func testScreenFadedToBlack_doesNotArm() {
+        XCTAssertFalse(shouldArm(screenShowing: false))
     }
 
     // MARK: - Macs without Touch ID keep the button path

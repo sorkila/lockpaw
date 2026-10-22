@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- With Fade to black on and Touch ID available, the pointer stayed on screen over the black for the whole lock. It now hides. Touch ID rests while the screen is black: wake it with a key or the mouse, then touch.
+
 ## [1.7.0] - 2026-10-21
 
 ### Changed

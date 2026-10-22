@@ -39,8 +39,13 @@ enum PassiveAuthPolicy {
     /// `unlockCommitted` is the success animation: the state machine is still `.locked`
     /// while it plays, so without this a re-arm landing in that window would invalidate the
     /// evaluation that had *just* succeeded and swallow the unlock it was animating.
+    ///
+    /// `screenShowing` is false while black or pulsing: armed, the LocalAuthentication agent
+    /// holds activation and an inactive app can't hide the pointer, so it floated over pure
+    /// black for the whole lock (#39). The cost is a finger doing nothing until a reveal.
     static func shouldArm(
         state: LockState,
+        screenShowing: Bool,
         unlockCommitted: Bool,
         biometryAvailable: Bool,
         suspended: Bool,
@@ -51,7 +56,7 @@ enum PassiveAuthPolicy {
         cooldown: TimeInterval = Constants.Timing.authRateLimitCooldown,
         maxAttempts: Int = Constants.Timing.maxAuthAttempts
     ) -> Bool {
-        guard state == .locked, !unlockCommitted, biometryAvailable,
+        guard state == .locked, screenShowing, !unlockCommitted, biometryAvailable,
               !suspended, !authenticationInProgress else { return false }
 
         // The 30s cooldown belongs to the paths the user actually initiated. Arming

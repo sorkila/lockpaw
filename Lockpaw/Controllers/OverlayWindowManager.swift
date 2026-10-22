@@ -33,6 +33,7 @@ class OverlayWindowManager {
     private var screenChangeWork: DispatchWorkItem?
     private var mouseMoveMonitors: [Any] = []
     private var cursorRehideTimer: Timer?
+    private var activationObserver: Any?
     /// Overlay holding key for the current auth attempt (Mirror mode), or nil when the
     /// primary has it as usual — see OverlayPolicy.acceptsKey.
     private var focusedIndex: Int?
@@ -288,8 +289,9 @@ class OverlayWindowManager {
     /// fighting for it buys a flicker and costs an activation steal every few seconds.
     /// Accepted trade, in the spirit of the fade-to-black pointer note: while a finger press
     /// can unlock, the pointer is visible over the lock screen. It conceals as before
-    /// whenever nothing is armed — no Touch ID, biometry unavailable, or passive auth
-    /// suspended. `NSCursor.hide()` remains rejected for the reasons in CLAUDE.md.
+    /// whenever nothing is armed — no Touch ID, biometry unavailable, passive auth
+    /// suspended, or faded to black (see `reconcealCursor`). `NSCursor.hide()` remains
+    /// rejected for the reasons in CLAUDE.md.
     private func scheduleCursorRehide() {
         cursorRehideTimer?.invalidate()
         cursorRehideTimer = Timer.scheduledTimer(withTimeInterval: Constants.Timing.cursorIdleHide, repeats: false) { _ in
@@ -297,9 +299,35 @@ class OverlayWindowManager {
         }
     }
 
+    /// After Touch ID is disarmed for black (#39). Cancelling the evaluation doesn't promise
+    /// activation comes back here, and the hide is a no-op until it lands (~400-500ms), so
+    /// the hide that counts is the one on `didBecomeActive`.
+    func reconcealCursor() {
+        guard !windows.isEmpty else { return }
+        if let observer = activationObserver { NotificationCenter.default.removeObserver(observer) }
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let observer = self.activationObserver else { return }
+                NotificationCenter.default.removeObserver(observer)
+                self.activationObserver = nil
+                NSCursor.setHiddenUntilMouseMoves(true)
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        windows.first?.makeKey()
+        NSCursor.setHiddenUntilMouseMoves(true)
+        DispatchQueue.main.async {
+            NSCursor.setHiddenUntilMouseMoves(true)
+        }
+    }
+
     private func stopCursorConcealment() {
         cursorRehideTimer?.invalidate()
         cursorRehideTimer = nil
+        if let observer = activationObserver { NotificationCenter.default.removeObserver(observer) }
+        activationObserver = nil
         for monitor in mouseMoveMonitors { NSEvent.removeMonitor(monitor) }
         mouseMoveMonitors.removeAll()
         // Make sure the pointer isn't left hidden after unlock.
