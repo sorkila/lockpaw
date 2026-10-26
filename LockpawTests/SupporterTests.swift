@@ -75,16 +75,16 @@ final class SupportAskTests: XCTestCase {
         )
     }
 
-    /// A user the card is waiting for: a month in, ten unlocks after a ping, never asked.
+    /// A user the card is waiting for: a month in, five unlocks after a ping, never asked.
     private func cardReady(_ change: (inout SupportAsk.State) -> Void = { _ in }) -> SupportAsk.State {
         var ready = state(pingUnlocks: SupportAsk.cardMinimumPingUnlocks, cardShown: false)
         change(&ready)
         return ready
     }
 
-    func testRaisesAfterTwoWeeksForNonSupporters() {
+    func testRaisesAfterAWeekForNonSupporters() {
         XCTAssertTrue(SupportAsk.shouldRaise(after: state(), isSupporter: false, now: now))
-        XCTAssertFalse(SupportAsk.shouldRaise(after: state(firstUseDaysAgo: 13), isSupporter: false, now: now))
+        XCTAssertFalse(SupportAsk.shouldRaise(after: state(firstUseDaysAgo: 6), isSupporter: false, now: now))
     }
 
     func testNeverForSupportersOrAfterDontAskAgain() {
@@ -115,7 +115,7 @@ final class SupportAskTests: XCTestCase {
         XCTAssertTrue(SupportAsk.cardIsDue(cardReady(), isSupporter: false, allFinished: true, now: now))
         XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.pingUnlocks = SupportAsk.cardMinimumPingUnlocks - 1 },
                                             isSupporter: false, allFinished: true, now: now))
-        XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.firstUse = self.now.addingTimeInterval(-13 * self.day) },
+        XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.firstUse = self.now.addingTimeInterval(-6 * self.day) },
                                             isSupporter: false, allFinished: true, now: now))
     }
 
@@ -156,6 +156,13 @@ final class SupportAskTests: XCTestCase {
     func testTheMenuLineOnlyComesAfterTheCard() {
         XCTAssertFalse(SupportAsk.shouldRaise(after: cardReady(), isSupporter: false, now: now))
         XCTAssertTrue(SupportAsk.shouldRaise(after: cardReady { $0.cardShown = true }, isSupporter: false, now: now))
+    }
+
+    func testTheCardsGatesAreAWeekAndFiveUnlocks() {
+        XCTAssertEqual(SupportAsk.minimumUse, 7 * day)
+        XCTAssertEqual(SupportAsk.cardMinimumPingUnlocks, 5)
+        XCTAssertTrue(SupportAsk.cardIsDue(cardReady { $0.firstUse = self.now.addingTimeInterval(-7 * self.day) },
+                                           isSupporter: false, allFinished: true, now: now))
     }
 
     func testPingUnlocksCount() {

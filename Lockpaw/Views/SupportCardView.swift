@@ -65,7 +65,7 @@ struct SupportCardView: View {
         switch model.phase {
         case .ask:
             VStack(alignment: .leading, spacing: 0) {
-                paragraph("Lockpaw has kept your screen covered while your agents work. I build it on my own, and it\u{2019}ll always be free. If you\u{2019}d like to help keep it going, you can pay what you want, from $5.")
+                paragraph("Lockpaw has kept your screen covered while your agents work. I build it on my own, and it\u{2019}ll always be free. If you\u{2019}d like to help keep it going, $9 is a fine thank-you, $19 if it saves your afternoons. Or pay what you want.")
                 buttons(primary: ("Chip in", .support), secondary: ("Not now", .notNow))
                 HStack(spacing: 12) {
                     Button("Already a supporter?") { onAction(.alreadySupport) }

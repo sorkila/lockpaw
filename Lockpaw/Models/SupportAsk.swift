@@ -3,18 +3,18 @@ import Foundation
 /// When Lockpaw asks for support. Pure and tested, because an ask that nags is worse
 /// than no ask.
 ///
-/// The first ask is a card, shown once ever: after two weeks of use and ten unlocks that
+/// The first ask is a card, shown once ever: after a week of use and five unlocks that
 /// followed an agent ping, at an unlock where every agent had finished (a breakpoint, not
 /// an agent waiting for permission). After that, at most once a year, a line in the menu
 /// bar dropdown. Never for supporters, never after "Don't ask again" or "I already support
 /// Lockpaw", never on the lock screen. A pending ask waits in the menu until the user opens
 /// it, and lapses after a week if they don't.
 enum SupportAsk {
-    static let minimumUse: TimeInterval = 14 * 86_400
+    static let minimumUse: TimeInterval = 7 * 86_400
     static let interval: TimeInterval = 365 * 86_400
     static let pendingLifetime: TimeInterval = 7 * 86_400
     /// Unlocks after an agent ping before the card may come up: Lockpaw has proven itself.
-    static let cardMinimumPingUnlocks = 10
+    static let cardMinimumPingUnlocks = 5
 
     struct State: Equatable {
         var firstUse: Date?
