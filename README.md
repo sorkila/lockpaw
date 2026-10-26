@@ -127,6 +127,8 @@ xcodebuild -scheme Lockpaw -configuration Release build
 
 On first launch, grant **Accessibility** when prompted. The Lockpaw icon appears in your menu bar.
 
+Lockpaw is free and stays free. If it earns its place, you can [support Lockpaw](https://getlockpaw.com/support/): $9 is a fine thank-you, $19 if it saves your afternoons.
+
 <br>
 
 ## Design
@@ -271,7 +273,7 @@ Pushes to `main` and PRs run the build and the full unit test suite via GitHub A
 
 Everything in Lockpaw is free and MIT-licensed, and everything that ships stays free. No feature is ever moved behind a payment.
 
-If Lockpaw earns its place on your Mac, you can [become a supporter](https://getlockpaw.com/support/) (pay what you want, once) or [sponsor me on GitHub](https://github.com/sponsors/sorkila). Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no more asks: Lockpaw asks once, in a small card after it has done its job, and after that at most once a year in the menu bar. Contributors get a supporter licence on the house.
+If Lockpaw earns its place on your Mac, you can [become a supporter](https://getlockpaw.com/support/) (once, $9 or $19 suggested, or pay what you want) or [sponsor me on GitHub](https://github.com/sponsors/sorkila). Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no more asks: Lockpaw asks once, in a small card after it has done its job, and after that at most once a year in the menu bar. Contributors get a supporter licence on the house.
 
 <br>
 

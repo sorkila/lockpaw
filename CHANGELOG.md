@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The supporter card comes a little sooner: after a week of use and five unlocks after an agent ping, instead of two weeks and ten. Still once ever, still only when your agents have all finished, still gone with one click. Nothing in Lockpaw is gated, and that doesn't change.
+- The card suggests $9, or $19 if Lockpaw saves your afternoons. Pay what you want still works.
+
+<!--
+Supporter line for the release notes (GitHub Release body and the appcast HTML), last line, once per release:
+
+GitHub Release (markdown):
+Lockpaw stays free. If it saves your afternoons, [chip in $9 or $19](https://getlockpaw.com/support/?from=release) or [sponsor on GitHub](https://github.com/sponsors/sorkila).
+
+Appcast (after the </ul> in build/appcast/Lockpaw.html):
+<p>Lockpaw stays free. If it saves your afternoons, <a href="https://getlockpaw.com/support/?from=update">chip in $9 or $19</a>.</p>
+-->
+
 ## [1.7.0] - 2026-10-21
 
 ### Changed
