@@ -19,6 +19,7 @@ struct LockScreenView: View {
     @AppStorage("lockMessage") private var message = Constants.defaultLockMessage
     @AppStorage(Mascot.storageKey) private var selectedMascot = Mascot.defaultValue
     @AppStorage(HotkeyConfig.requireAuthenticationToUnlockKey) private var requiresAuthenticationToUnlock = HotkeyConfig.defaultRequireAuthenticationToUnlock
+    @AppStorage(TokenCounterPreference.showKey) private var showTokenCounter = TokenCounterPreference.defaultShow
 
     @State private var phase: CGFloat = 0
     @State private var appeared = false
@@ -57,8 +58,18 @@ struct LockScreenView: View {
 
                 // Content group — positioned at ~42% from top (slightly below center)
                 VStack(spacing: 0) {
-                    Spacer().frame(minHeight: 0)
-                        .frame(height: geo.size.height * 0.32)
+                    if showTokenCounter {
+                        // The counter adds two lines under the timer. Up to the same 32% sits
+                        // above the content group, but it gives back what the counter and the
+                        // waiting rows need on a short screen, so the group never pushes the
+                        // unlock prompt down past the bottom edge.
+                        Spacer(minLength: 0)
+                            .frame(maxHeight: geo.size.height * 0.32)
+                            .layoutPriority(1)
+                    } else {
+                        Spacer().frame(minHeight: 0)
+                            .frame(height: geo.size.height * 0.32)
+                    }
 
                     // Mascot + message + time as a tight cohesive group
                     VStack(spacing: unit * 1.2) {
@@ -132,32 +143,51 @@ struct LockScreenView: View {
                         .allowsHitTesting(false)
                         .legibleOverWallpaper(!drawsBackdrop)
 
-                        // Time
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in
-                            Text(Constants.formatElapsedTime(controller.elapsedTime))
-                                .font(.lockMono)
-                                .foregroundStyle(.white.opacity(0.35))
-                                .tracking(0.5)
-                                .accessibilityLabel("Locked for \(Constants.formatElapsedTimeAccessible(controller.elapsedTime))")
+                        // Time, with the token counter tight under it when that is on (Settings →
+                        // Lock Screen, off by default). Off, this stack holds only the timer.
+                        VStack(spacing: compact ? 8 : 10) {
+                            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                                Text(Constants.formatElapsedTime(controller.elapsedTime))
+                                    .font(.lockMono)
+                                    .foregroundStyle(.white.opacity(0.35))
+                                    .tracking(0.5)
+                                    .accessibilityLabel("Locked for \(Constants.formatElapsedTimeAccessible(controller.elapsedTime))")
+                            }
+                            .opacity(appeared ? 1 : 0)
+                            .opacity(controller.isAuthenticating || controller.unlockSucceeded ? 0.15 : 1)
+                            .allowsHitTesting(false)
+                            .legibleOverWallpaper(!drawsBackdrop)
+
+                            // Display only. It observes the monitor itself, so a token update
+                            // never re-runs this body; nothing derived from the breath goes in.
+                            if showTokenCounter {
+                                TokenCounterView(compact: compact)
+                                    .equatable()
+                                    .opacity(appeared ? 1 : 0)
+                                    .opacity(controller.isAuthenticating || controller.unlockSucceeded ? 0.15 : 1)
+                                    .allowsHitTesting(false)
+                                    .legibleOverWallpaper(!drawsBackdrop)
+                            }
                         }
-                        .opacity(appeared ? 1 : 0)
-                        .opacity(controller.isAuthenticating || controller.unlockSucceeded ? 0.15 : 1)
-                        .allowsHitTesting(false)
-                        .legibleOverWallpaper(!drawsBackdrop)
 
                         // Who is waiting — a row per session; stays until
                         // unlock. Always mounted (empty until the first ping) and faded by
                         // explicit opacity: removal transitions hard-cut in the overlay on
                         // macOS 26. The animations are scoped to the list so a ping never
                         // opens an animated transaction over the breathing mascot.
-                        AgentPingList(queue: controller.agentPings, breathe: breathe)
-                            .opacity(controller.agentPings.isEmpty || controller.unlockSucceeded ? 0 : 1)
-                            .opacity(appeared ? 1 : 0)
-                            .opacity(controller.isAuthenticating ? 0.15 : 1)
-                            .animation(Constants.Anim.gentle, value: controller.agentPings)
-                            .animation(Constants.Anim.gentle, value: controller.unlockSucceeded)
-                            .animation(Constants.Anim.gentle, value: controller.isAuthenticating)
-                            .legibleOverWallpaper(!drawsBackdrop)
+                        // With the counter on, the rows' space is held from the start, so a
+                        // first ping never lifts the mascot to make room for them.
+                        ZStack(alignment: .top) {
+                            if showTokenCounter { WaitingRowsSpace() }
+                            AgentPingList(queue: controller.agentPings, breathe: breathe)
+                                .opacity(controller.agentPings.isEmpty || controller.unlockSucceeded ? 0 : 1)
+                                .opacity(appeared ? 1 : 0)
+                                .opacity(controller.isAuthenticating ? 0.15 : 1)
+                                .animation(Constants.Anim.gentle, value: controller.agentPings)
+                                .animation(Constants.Anim.gentle, value: controller.unlockSucceeded)
+                                .animation(Constants.Anim.gentle, value: controller.isAuthenticating)
+                                .legibleOverWallpaper(!drawsBackdrop)
+                        }
                     }
 
                     Spacer()
@@ -339,6 +369,23 @@ struct LockScreenView: View {
         }
         .opacity(appeared ? 1 : 0)
         .allowsHitTesting(false)
+    }
+}
+
+/// The height of `AgentPingList.maxRows` rows, drawn as nothing. Same grid, fonts and
+/// spacing as the rows, so the space it holds is the space they take.
+private struct WaitingRowsSpace: View {
+    var body: some View {
+        Grid(verticalSpacing: 6) {
+            ForEach(0..<AgentPingList.maxRows, id: \.self) { _ in
+                GridRow {
+                    Text(verbatim: "0").font(.lockCaption)
+                    Text(verbatim: "0").font(.lockMono)
+                }
+            }
+        }
+        .hidden()
+        .accessibilityHidden(true)
     }
 }
 

@@ -14,6 +14,7 @@ struct LockScreenSettingsPane: View {
     @AppStorage(WallpaperMotion.storageKey) private var wallpaperMotion = WallpaperMotion.defaultValue
     @AppStorage(FadeToBlack.enabledKey) private var fadeToBlackEnabled = FadeToBlack.defaultEnabled
     @AppStorage(FadeToBlack.storageKey) private var fadeToBlackDelay = FadeToBlack.defaultValue
+    @AppStorage(TokenCounterPreference.showKey) private var showTokenCounter = TokenCounterPreference.defaultShow
 
     @ObservedObject private var customMascot = CustomMascot.shared
     @ObservedObject private var supporter = Supporter.shared
@@ -22,7 +23,8 @@ struct LockScreenSettingsPane: View {
     var body: some View {
         Form {
             Section {
-                MascotPreview(mascot: Mascot.effective(from: selectedMascot), showsMessage: showMessage, message: message)
+                MascotPreview(mascot: Mascot.effective(from: selectedMascot), showsMessage: showMessage, message: message,
+                              showsTokenCounter: showTokenCounter)
                     .listRowInsets(EdgeInsets())
 
                 if mascotChoices.count > 5 {
@@ -64,6 +66,12 @@ struct LockScreenSettingsPane: View {
                         .onChange(of: message) { _, newValue in
                             if newValue.count > 120 { message = String(newValue.prefix(120)) }
                         }
+                }
+            }
+
+            Section("Token counter") {
+                Toggle(isOn: $showTokenCounter) {
+                    SettingLabel("Show token usage", detail: "Reads Claude Code and opencode usage on this Mac and shows it on the lock screen.")
                 }
             }
 
@@ -134,11 +142,12 @@ struct LockScreenSettingsPane: View {
 }
 
 /// A small, live picture of the lock screen: the mascot in its pool of light, the message
-/// under it and the timer. It changes as the settings below it do.
+/// under it, the timer and the token counter. It changes as the settings below it do.
 private struct MascotPreview: View {
     let mascot: Mascot
     let showsMessage: Bool
     let message: String
+    let showsTokenCounter: Bool
 
     var body: some View {
         ZStack {
@@ -169,6 +178,11 @@ private struct MascotPreview: View {
                 Text("00:42")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.35))
+                if showsTokenCounter {
+                    Text("12,480 tokens today")
+                        .font(.system(size: 9, weight: .light).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.35))
+                }
             }
         }
         .frame(height: 168)
