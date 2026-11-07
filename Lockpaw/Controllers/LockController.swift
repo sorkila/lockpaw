@@ -91,6 +91,9 @@ class LockController: ObservableObject {
     /// Secure-input reading taken as the current arm started, so the tick can tell a flip
     /// caused by arming from one that was already there.
     private var secureInputBeforeArm = false
+    /// Consecutive lock ticks Lockpaw has been the front app while the sensor was armed.
+    /// Reset by every arm.
+    private var ownAppFrontTicks = 0
 
     init() {
         toggleObserver = NotificationCenter.default.addObserver(
@@ -605,6 +608,7 @@ class LockController: ObservableObject {
         logger.notice("passiveAuth: arming (failCount=\(self.failCount, privacy: .public))")
         let generation = passiveAuthGeneration
         secureInputBeforeArm = IsSecureEventInputEnabled()
+        ownAppFrontTicks = 0
         passiveEvaluationInFlight = true
         passiveAuthLive = true
         passiveAuthTask = Task { @MainActor [weak self] in
@@ -711,13 +715,18 @@ class LockController: ObservableObject {
                 return
             }
             // Another app coming forward stops the sensor without ending the evaluation,
-            // so nothing else would ever notice. Re-arming brings the prompt back to the
-            // front; at tick pace, an app that keeps grabbing focus costs one arm a second.
+            // so nothing else would ever notice. So does Lockpaw itself holding the front
+            // (a click on the lock screen), after a few ticks' grace. Re-arming brings the
+            // prompt back to the front; at tick pace, an app that keeps grabbing focus
+            // costs one arm a second.
             let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            let own = Bundle.main.bundleIdentifier
+            ownAppFrontTicks = frontmost != nil && frontmost == own ? ownAppFrontTicks + 1 : 0
             if PassiveAuthPolicy.armedPromptLostFocus(
                 frontmostBundleID: frontmost,
-                ownBundleID: Bundle.main.bundleIdentifier,
-                systemScreenLocked: SystemSession.isScreenLocked
+                ownBundleID: own,
+                systemScreenLocked: SystemSession.isScreenLocked,
+                ownAppFrontTicks: ownAppFrontTicks
             ) {
                 logger.notice("passiveAuth: Touch ID prompt lost focus to \(frontmost ?? "?", privacy: .public), re-arming")
                 armPassiveAuthAfterInterruption()

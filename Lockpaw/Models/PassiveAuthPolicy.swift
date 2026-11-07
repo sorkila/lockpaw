@@ -76,20 +76,32 @@ enum PassiveAuthPolicy {
     /// The agent that draws the (hidden) Touch ID prompt.
     static let promptAgentBundleID = "com.apple.LocalAuthentication.UIAgent"
 
-    /// Whether the armed evaluation has lost the sensor to another app. When any other app
-    /// comes to the front — an agent opening a browser, an updater, a helper like
-    /// Logitech's plugin service — coreauthd stops the sensor ("UI lost focus") but never
-    /// ends the evaluation, so it stays in flight with nobody listening, and a press on the
-    /// sensor locks macOS instead. Measured on macOS 26. Lockpaw itself in front is fine
-    /// (the prompt agent takes the front back), and while macOS is locked loginwindow owns
-    /// the front and re-arming would only churn. An unknown front app is not a reason to.
+    /// Lock ticks Lockpaw may sit in front of an armed prompt before that counts as lost
+    /// focus. Arming leaves Lockpaw in front for a moment before the prompt agent takes it,
+    /// and the agent has been seen taking the front back about a second after Lockpaw
+    /// reactivated, so a short grace keeps those from re-arming every tick.
+    static let ownAppFrontGraceTicks = 3
+
+    /// Whether the armed evaluation has lost the sensor. When another app comes to the
+    /// front — an agent opening a browser, an updater, a helper like Logitech's plugin
+    /// service — coreauthd stops the sensor ("UI lost focus") but never ends the
+    /// evaluation, so it stays in flight with nobody listening, and a press on the sensor
+    /// locks macOS instead. Measured on macOS 26. Lockpaw itself taking the front does the
+    /// same (a click on the lock screen, 2026-11-07: the prompt agent did not take the front
+    /// back and Touch ID stayed dead until the password), so it counts too once it has held
+    /// the front for `ownAppFrontGraceTicks` ticks in a row. While macOS is locked
+    /// loginwindow owns the front and re-arming would only churn. An unknown front app is
+    /// not a reason to.
     static func armedPromptLostFocus(
         frontmostBundleID: String?,
         ownBundleID: String?,
-        systemScreenLocked: Bool
+        systemScreenLocked: Bool,
+        ownAppFrontTicks: Int
     ) -> Bool {
         guard !systemScreenLocked, let frontmostBundleID else { return false }
-        return frontmostBundleID != promptAgentBundleID && frontmostBundleID != ownBundleID
+        if frontmostBundleID == promptAgentBundleID { return false }
+        if frontmostBundleID == ownBundleID { return ownAppFrontTicks >= ownAppFrontGraceTicks }
+        return true
     }
 
     static func outcome(_ result: PassiveAuthResult) -> PassiveAuthOutcome {
