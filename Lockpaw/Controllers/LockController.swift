@@ -523,12 +523,15 @@ class LockController: ObservableObject {
     }
 
     private func unlock() {
-        // An unlock after an agent ping is Lockpaw having done its job: the one moment the
-        // support ask may come up (the card or the menu, never here). The card only when
-        // every agent finished; one waiting on a permission prompt is not a breakpoint.
-        if !agentPings.isEmpty {
+        // An unlock is Lockpaw having done its job: the one moment the support ask may come
+        // up (the card or the menu, never here). After a ping, the card only when every
+        // agent finished; one waiting on a permission prompt is not a breakpoint. Without a
+        // ping, it only counts toward the cover-only route to the same card.
+        if agentPings.isEmpty {
+            SupportAskController.shared.noteUnlock(.plain)
+        } else {
             let allFinished = agentPings.pings.allSatisfy { $0.kind.status == .done }
-            SupportAskController.shared.noteUnlockAfterPing(allFinished: allFinished)
+            SupportAskController.shared.noteUnlock(.afterPings(allFinished: allFinished))
         }
         presentationController.stop()
         disarmPassiveAuth(endingSession: true)

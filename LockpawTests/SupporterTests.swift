@@ -64,14 +64,15 @@ final class SupportAskTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     private func state(firstUseDaysAgo: Double = 30, lastAskedDaysAgo: Double? = nil, pendingDaysAgo: Double? = nil, never: Bool = false,
-                       pingUnlocks: Int = 0, cardShown: Bool = true) -> SupportAsk.State {
+                       pingUnlocks: Int = 0, cardShown: Bool = true, locks: Int = 0) -> SupportAsk.State {
         SupportAsk.State(
             firstUse: now.addingTimeInterval(-firstUseDaysAgo * day),
             lastAsked: lastAskedDaysAgo.map { now.addingTimeInterval(-$0 * day) },
             pendingSince: pendingDaysAgo.map { now.addingTimeInterval(-$0 * day) },
             dismissedForever: never,
             pingUnlocks: pingUnlocks,
-            cardShown: cardShown
+            cardShown: cardShown,
+            locks: locks
         )
     }
 
@@ -112,16 +113,16 @@ final class SupportAskTests: XCTestCase {
     // MARK: - The card
 
     func testTheCardComesUpOnceLockpawHasProvenItself() {
-        XCTAssertTrue(SupportAsk.cardIsDue(cardReady(), isSupporter: false, allFinished: true, now: now))
+        XCTAssertTrue(SupportAsk.cardIsDue(cardReady(), isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
         XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.pingUnlocks = SupportAsk.cardMinimumPingUnlocks - 1 },
-                                            isSupporter: false, allFinished: true, now: now))
+                                            isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
         XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.firstUse = self.now.addingTimeInterval(-6 * self.day) },
-                                            isSupporter: false, allFinished: true, now: now))
+                                            isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
     }
 
     func testTheCardWaitsForEveryAgentToHaveFinished() {
         // An agent waiting on a permission prompt: the user is rushing back, not looking around.
-        XCTAssertFalse(SupportAsk.cardIsDue(cardReady(), isSupporter: false, allFinished: false, now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(cardReady(), isSupporter: false, unlock: .afterPings(allFinished: false), now: now))
     }
 
     func testTheCardIsShownOnceEver() {
@@ -131,20 +132,20 @@ final class SupportAskTests: XCTestCase {
         var later = shown
         later.pendingSince = nil
         later.lastAsked = now
-        XCTAssertFalse(SupportAsk.cardIsDue(later, isSupporter: false, allFinished: true, now: now.addingTimeInterval(400 * day)))
+        XCTAssertFalse(SupportAsk.cardIsDue(later, isSupporter: false, unlock: .afterPings(allFinished: true), now: now.addingTimeInterval(400 * day)))
     }
 
     func testTheCardNeverReachesSupportersOrThoseWhoSaidNo() {
-        XCTAssertFalse(SupportAsk.cardIsDue(cardReady(), isSupporter: true, allFinished: true, now: now))
-        XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.dismissedForever = true }, isSupporter: false, allFinished: true, now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(cardReady(), isSupporter: true, unlock: .afterPings(allFinished: true), now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.dismissedForever = true }, isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
     }
 
     func testTheCardRespectsAMenuAskFromTheLastYear() {
         // Asked in the menu by 1.6: the card waits out the year.
         XCTAssertFalse(SupportAsk.cardIsDue(cardReady { $0.lastAsked = self.now.addingTimeInterval(-100 * self.day) },
-                                            isSupporter: false, allFinished: true, now: now))
+                                            isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
         XCTAssertTrue(SupportAsk.cardIsDue(cardReady { $0.lastAsked = self.now.addingTimeInterval(-366 * self.day) },
-                                           isSupporter: false, allFinished: true, now: now))
+                                           isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
     }
 
     func testAnUnansweredCardFoldsIntoTheMenuLine() {
@@ -162,11 +163,89 @@ final class SupportAskTests: XCTestCase {
         XCTAssertEqual(SupportAsk.minimumUse, 7 * day)
         XCTAssertEqual(SupportAsk.cardMinimumPingUnlocks, 5)
         XCTAssertTrue(SupportAsk.cardIsDue(cardReady { $0.firstUse = self.now.addingTimeInterval(-7 * self.day) },
-                                           isSupporter: false, allFinished: true, now: now))
+                                           isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
     }
 
     func testPingUnlocksCount() {
         XCTAssertEqual(SupportAsk.countingPingUnlock(state(pingUnlocks: 4)).pingUnlocks, 5)
+    }
+
+    // MARK: - The card, for screen-cover users
+
+    /// A user who never connected an agent: a month in, twenty locks, never asked.
+    private func coverReady(_ change: (inout SupportAsk.State) -> Void = { _ in }) -> SupportAsk.State {
+        var ready = state(cardShown: false, locks: SupportAsk.cardMinimumLocks)
+        change(&ready)
+        return ready
+    }
+
+    func testLocksCount() {
+        XCTAssertEqual(SupportAsk.countingLock(state(locks: 19)).locks, 20)
+        XCTAssertEqual(SupportAsk.countingLock(state(pingUnlocks: 2)).pingUnlocks, 2)
+    }
+
+    func testTheCoverRoutesGatesAreTwentyLocksAndTwoWeeks() {
+        XCTAssertEqual(SupportAsk.cardMinimumLocks, 20)
+        XCTAssertEqual(SupportAsk.cardMinimumCoverUse, 14 * day)
+        XCTAssertTrue(SupportAsk.cardIsDue(coverReady(), isSupporter: false, unlock: .plain, now: now))
+        XCTAssertTrue(SupportAsk.cardIsDue(coverReady { $0.firstUse = self.now.addingTimeInterval(-14 * self.day) },
+                                           isSupporter: false, unlock: .plain, now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(coverReady { $0.locks = SupportAsk.cardMinimumLocks - 1 },
+                                            isSupporter: false, unlock: .plain, now: now))
+        // Twenty locks in the first afternoon, or the first week, is not two weeks.
+        XCTAssertFalse(SupportAsk.cardIsDue(coverReady { $0.firstUse = self.now.addingTimeInterval(-13 * self.day) },
+                                            isSupporter: false, unlock: .plain, now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(coverReady { $0.firstUse = nil }, isSupporter: false, unlock: .plain, now: now))
+    }
+
+    func testAPlainUnlockDoesNotOpenTheAgentRoute() {
+        // Five ping unlocks but too few locks: the card still waits for an unlock after a ping.
+        let agentUser = cardReady { $0.locks = 5 }
+        XCTAssertFalse(SupportAsk.cardIsDue(agentUser, isSupporter: false, unlock: .plain, now: now))
+        XCTAssertTrue(SupportAsk.cardIsDue(agentUser, isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
+    }
+
+    func testTheCoverRouteNeverInterruptsAWaitingAgent() {
+        let mixed = coverReady { $0.pingUnlocks = 2 }
+        XCTAssertFalse(SupportAsk.cardIsDue(mixed, isSupporter: false, unlock: .afterPings(allFinished: false), now: now))
+        XCTAssertTrue(SupportAsk.cardIsDue(mixed, isSupporter: false, unlock: .afterPings(allFinished: true), now: now))
+    }
+
+    func testTheCoverRouteKeepsEveryRuleOfTheCard() {
+        XCTAssertFalse(SupportAsk.cardIsDue(coverReady(), isSupporter: true, unlock: .plain, now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(coverReady { $0.dismissedForever = true }, isSupporter: false, unlock: .plain, now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(coverReady { $0.lastAsked = self.now.addingTimeInterval(-100 * self.day) },
+                                            isSupporter: false, unlock: .plain, now: now))
+        XCTAssertFalse(SupportAsk.cardIsDue(coverReady { $0.pendingSince = self.now.addingTimeInterval(-self.day) },
+                                            isSupporter: false, unlock: .plain, now: now))
+    }
+
+    func testTheCardIsStillShownOnceEverWhicheverRouteComesFirst() {
+        // Shown through the agent route: the cover route can't bring it back, and vice versa.
+        var afterAgents = SupportAsk.showingCard(cardReady { $0.locks = 100 }, now: now)
+        afterAgents.pendingSince = nil
+        afterAgents.lastAsked = now
+        XCTAssertFalse(SupportAsk.cardIsDue(afterAgents, isSupporter: false, unlock: .plain, now: now.addingTimeInterval(400 * day)))
+
+        var afterCover = SupportAsk.showingCard(coverReady(), now: now)
+        afterCover.pendingSince = nil
+        afterCover.lastAsked = now
+        afterCover.pingUnlocks = 50
+        XCTAssertFalse(SupportAsk.cardIsDue(afterCover, isSupporter: false, unlock: .afterPings(allFinished: true),
+                                            now: now.addingTimeInterval(400 * day)))
+    }
+
+    func testTheMenuLineStillWaitsForTheCardOnTheCoverRoute() {
+        // The yearly line still needs the card first, whichever route earned it.
+        XCTAssertFalse(SupportAsk.shouldRaise(after: coverReady(), isSupporter: false, now: now))
+    }
+
+    func testTheCardOnlyMentionsAgentsToPeopleWhoUseThem() {
+        XCTAssertEqual(SupportAsk.cardReason(cardReady()), .agents)
+        XCTAssertEqual(SupportAsk.cardReason(coverReady()), .cover)
+        XCTAssertEqual(SupportAsk.cardReason(coverReady { $0.pingUnlocks = 3 }), .cover)
+        XCTAssertFalse(SupportCardView.opening(for: .cover).localizedCaseInsensitiveContains("agent"))
+        XCTAssertTrue(SupportCardView.opening(for: .agents).contains("agents"))
     }
 }
 
