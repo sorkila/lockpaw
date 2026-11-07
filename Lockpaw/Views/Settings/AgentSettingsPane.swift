@@ -8,6 +8,8 @@ struct AgentSettingsPane: View {
     @AppStorage(Constants.lockScreenShowsProjectsKey) private var showsProjects = false
 
     @State private var statuses: [String: AgentConnection.Status] = [:]
+    @State private var presenceConfigured = false
+    @State private var presenceCopied = false
     @State private var results: [String: SetupResult] = [:]
 
     var body: some View {
@@ -40,6 +42,36 @@ struct AgentSettingsPane: View {
             } footer: {
                 Text("One click adds Lockpaw's ping to the agent's settings and keeps a backup. Codex asks you to trust new hooks once: run /hooks in Codex.")
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        Button(presenceCopied ? "Copied" : "Copy Setup", action: copyPresenceSetup)
+                        Button {
+                            run(["install-hook", "claude", "--presence"], mark: Self.presenceMark)
+                        } label: {
+                            switch results[Self.presenceMark] {
+                            case .running: ProgressView().controlSize(.small)
+                            default:
+                                if presenceIsSetUp {
+                                    Label("Set Up", systemImage: "checkmark.circle.fill")
+                                } else {
+                                    Text("Set Up")
+                                }
+                            }
+                        }
+                        .disabled(results[Self.presenceMark] == .running)
+                        .help(presenceIsSetUp ? "Set up in Claude Code. Click to write it again." : "Adds the env line and the Claude Code hook to ~/.claude/settings.json.")
+                    }
+                } label: {
+                    SettingLabel(
+                        "Claude phone pushes only while away",
+                        detail: presenceIsSetUp
+                            ? "On. Claude Code skips Remote Control pushes while this Mac is unlocked. Lock or step away and they come to your phone."
+                            : "With Remote Control, Claude Code can skip phone pushes while you're at this Mac. Lockpaw tells it when you lock or step away."
+                    )
+                }
             }
 
             Section("When an agent pings") {
@@ -119,7 +151,7 @@ struct AgentSettingsPane: View {
     }
 
     private var failureMessage: String? {
-        for mark in AgentConnection.agents + ["cli"] {
+        for mark in AgentConnection.agents + [Self.presenceMark, "cli"] {
             if case .failure(let message) = results[mark], !message.isEmpty { return message }
         }
         return nil
@@ -130,6 +162,31 @@ struct AgentSettingsPane: View {
             statuses = await Task.detached(priority: .utility) {
                 Dictionary(uniqueKeysWithValues: AgentConnection.agents.map { ($0, AgentConnection.status($0)) })
             }.value
+            presenceConfigured = await Task.detached(priority: .utility) {
+                guard let url = AgentConnection.configURL(for: "claude"),
+                      let data = try? Data(contentsOf: url) else { return false }
+                return ClaudePresence.isConfigured(settingsData: data)
+            }.value
+        }
+    }
+
+    // MARK: - Claude presence marker
+
+    private static let presenceMark = "presence"
+
+    private var presenceIsSetUp: Bool {
+        results[Self.presenceMark] == .success || (results[Self.presenceMark] == nil && presenceConfigured)
+    }
+
+    /// The env line for settings.json, for anyone who keeps that file by hand.
+    private func copyPresenceSetup() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(ClaudePresence.settingsSnippet(path: ClaudePresence.markerURL.path), forType: .string)
+        presenceCopied = true
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(Constants.Timing.copiedConfirmation * 1_000_000_000))
+            presenceCopied = false
         }
     }
 
@@ -180,6 +237,8 @@ struct AgentSettingsPane: View {
                 results[mark] = result
                 // install-hook installs the CLI as a side effect; mirror that.
                 if mark != "cli", result == .success { results["cli"] = .success }
+                // The presence setup writes the Claude hook too.
+                if mark == Self.presenceMark, result == .success { results["claude"] = .success }
             }
         }
     }

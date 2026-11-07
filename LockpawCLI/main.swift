@@ -40,11 +40,14 @@ func printUsage() {
       lockpaw install-hook <tool>   Wire up an agent. <tool>: claude | codex | gemini |
                                     cursor | copilot | aider
                                     Add --print to show the snippet without writing it.
+                                    claude --presence also sets CLAUDE_CLIENT_PRESENCE_FILE,
+                                    so Claude's phone pushes only come while you're away.
       lockpaw --help                Show this help
 
     EXAMPLES:
       lockpaw install-cli
       lockpaw install-hook claude
+      lockpaw install-hook claude --presence
       lockpaw install-hook codex --print
 
     Lockpaw stays locked while you're away; ping just lets you know it's time to look.
@@ -244,23 +247,46 @@ func claudeStyleSnippet(path: String, events: [String], command: String, matcher
     """
 }
 
-func installClaudeHook(printOnly: Bool) {
+/// `presence` also points Claude Code's `CLAUDE_CLIENT_PRESENCE_FILE` at the marker the app
+/// keeps while you're at the Mac, so Remote Control pushes reach the phone only while
+/// you're away. Opt-in: it changes when Claude Code pushes, so it takes an explicit flag
+/// (or the Settings button). Someone else's value is never overwritten.
+func installClaudeHook(printOnly: Bool, presence: Bool) {
     let url = claudeConfigDirectory().appendingPathComponent("settings.json")
     // StopFailure runs instead of Stop when a turn ends on an API error.
     let events = ["Notification", "Stop", "StopFailure"]
     let command = shellPingCommand(agent: "claude")
     let matchers = ["Notification": AgentHookConfig.claudeNotificationMatcher]
+    let markerPath = ClaudePresence.markerURL.path
     if printOnly {
         print(claudeStyleSnippet(path: url.path, events: events, command: command, matchers: matchers))
+        if presence { print("\n  \(ClaudePresence.settingsSnippet(path: markerPath))") }
         return
     }
     requireCLISymlink()
-    writeJSON(
-        AgentHookConfig.mergingPingHook(
-            into: readJSONObject(at: url), events: events, command: command, matchers: matchers
-        ),
-        to: url, label: "Claude Code"
+    var root = AgentHookConfig.mergingPingHook(
+        into: readJSONObject(at: url), events: events, command: command, matchers: matchers
     )
+    var envResult: ClaudePresence.EnvMerge?
+    if presence {
+        let merged = ClaudePresence.mergingEnv(into: root, path: markerPath)
+        root = merged.root
+        envResult = merged.result
+    }
+    writeJSON(root, to: url, label: "Claude Code")
+    switch envResult {
+    case nil:
+        break
+    case .added, .upgraded, .unchanged:
+        print("✓ Claude's phone pushes now only come while you're away (\(ClaudePresence.environmentKey)).")
+        print("  New Claude Code sessions pick it up. Lockpaw keeps the marker while you're at this Mac.")
+    case .foreign:
+        print("""
+        ⚠️  \(url.path) already sets `\(ClaudePresence.environmentKey)` (or its `env` isn't an object),
+        so it was left untouched. To use Lockpaw's marker, set it to:
+            \(ClaudePresence.settingsSnippet(path: markerPath))
+        """)
+    }
 }
 
 /// Codex's config directory: $CODEX_HOME if set, otherwise ~/.codex.
@@ -549,7 +575,7 @@ case "install-hook":
     }
     let printOnly = args.contains("--print")
     switch args[1] {
-    case "claude": installClaudeHook(printOnly: printOnly)
+    case "claude": installClaudeHook(printOnly: printOnly, presence: args.contains("--presence"))
     case "codex": installCodexHook(printOnly: printOnly)
     case "gemini": installGeminiHook(printOnly: printOnly)
     case "cursor": installCursorHook(printOnly: printOnly)

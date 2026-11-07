@@ -58,6 +58,7 @@
 | Hide the menu bar icon | Settings → General → Show in menu bar (open Lockpaw from Applications to bring it back) |
 | Keep agents running with the lid closed | Settings → General → Keep running with the lid closed |
 | Send pings to your phone | Settings → Agents → Send pings off this Mac → Send to |
+| Claude's phone pushes only while you're away | Settings → Agents → Claude phone pushes only while away → Set Up |
 
 <br>
 
@@ -99,6 +100,33 @@ there if you just want the command on your PATH.
 
 Under the hood, `lockpaw ping` posts a local notification that Lockpaw listens for. It
 never launches the app if it isn't already running.
+
+### Claude phone pushes only while you're away
+
+Claude Code's [Remote Control](https://code.claude.com/docs/en/remote-control) can push to
+your phone. It skips the push while a marker file exists, if you set
+[`CLAUDE_CLIENT_PRESENCE_FILE`](https://code.claude.com/docs/en/env-vars) (Claude Code
+2.1.181 or later). Lockpaw keeps that file for you.
+
+- The file is `~/Library/Application Support/Lockpaw/present`. It is empty.
+- It exists while your Mac is unlocked and awake. Lockpaw removes it when you lock
+  Lockpaw, when macOS locks, when the Mac or its displays sleep, and when Lockpaw quits.
+- It comes back when you unlock.
+
+Lockpaw always keeps the file. Nothing reads it until you set the variable, so that is
+the switch. Click **Set Up** in **Settings → Agents**, or run
+`lockpaw install-hook claude --presence`. Both add this to `~/.claude/settings.json`
+(or `$CLAUDE_CONFIG_DIR`) next to the Claude hook, with a `.bak` backup:
+
+```json
+"env": { "CLAUDE_CLIENT_PRESENCE_FILE": "/Users/you/Library/Application Support/Lockpaw/present" }
+```
+
+A value you set yourself is never overwritten. **Copy Setup** puts the line on the
+clipboard if you'd rather add it by hand. New Claude Code sessions pick it up.
+
+One edge: if Lockpaw crashes while unlocked, the file stays and pushes stay quiet. The
+next launch fixes it, and it removes the file at once if the screen is locked.
 
 <br>
 
