@@ -58,6 +58,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Lid-closed mode: clear a sleep block a crashed previous run may have left.
         LidSleepController.shared.applicationDidLaunch()
 
+        // Claude Code's phone pushes: the presence marker exists while someone is at the
+        // Mac. Launch rewrites it from the real state, which clears one a crash left behind.
+        MainActor.assumeIsolated { ClaudePresenceMarker.shared.start() }
+
         // Start Sparkle after app is fully launched
         updateCheckViewModel.bind(to: updaterController.updater)
         MainActor.assumeIsolated {
@@ -159,6 +163,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if TerminationPolicy.allowsQuit(state: state) { return .terminateNow }
         logger.notice("Quit refused while \(String(describing: state))")
         return .terminateCancel
+    }
+
+    /// Quitting means nobody is watching for you any more, so Claude's pushes go to the phone.
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { ClaudePresenceMarker.shared.handle(.willQuit) }
     }
 
     /// Reopening Lockpaw (double-click in Applications, `open -a Lockpaw`) is the
