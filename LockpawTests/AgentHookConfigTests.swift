@@ -115,45 +115,173 @@ final class AgentHookConfigTests: XCTestCase {
 
     // MARK: - Codex notify (TOML)
 
+    private let lockpawArgv = ["/Users/me/.local/bin/lockpaw", "ping", "--agent", "codex"]
     private let notify = #"notify = ["/Users/me/.local/bin/lockpaw", "ping", "--agent", "codex"]"#
+
+    private func merge(_ config: String) -> AgentHookConfig.CodexNotifyMerge {
+        AgentHookConfig.mergingCodexNotify(into: config, command: lockpawArgv)
+    }
+
+    func testCodexNotifyLineIsTheArgvAsATomlArray() {
+        XCTAssertEqual(CodexConfig.notifyLine(lockpawArgv), notify)
+        XCTAssertEqual(CodexConfig.quoted(#"say "done" \ now"#), #""say \"done\" \\ now""#)
+    }
+
+    // Absent
 
     func testCodexNotifyGoesAboveTheFirstTable() {
         let config = "model = \"gpt-5\"\n\n[mcp_servers.github]\ncommand = \"gh\"\n"
-        guard case .added(let result) = AgentHookConfig.mergingCodexNotify(into: config, line: notify) else {
-            return XCTFail("expected added")
-        }
-        XCTAssertEqual(result, "model = \"gpt-5\"\n\(notify)\n\n[mcp_servers.github]\ncommand = \"gh\"\n")
+        XCTAssertEqual(merge(config), .added("model = \"gpt-5\"\n\(notify)\n\n[mcp_servers.github]\ncommand = \"gh\"\n"))
     }
 
     func testCodexNotifyAppendsWhenThereAreNoTables() {
-        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "model = \"x\"", line: notify), .added("model = \"x\"\n\(notify)\n"))
-        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "", line: notify), .added("\(notify)\n"))
+        XCTAssertEqual(merge("model = \"x\""), .added("model = \"x\"\n\(notify)\n"))
+        XCTAssertEqual(merge(""), .added("\(notify)\n"))
     }
 
     func testCodexNotifyIntoAFileThatStartsWithATable() {
-        guard case .added(let result) = AgentHookConfig.mergingCodexNotify(into: "[profiles.work]\nmodel = \"o3\"\n", line: notify) else {
+        guard case .added(let result) = merge("[profiles.work]\nmodel = \"o3\"\n") else {
             return XCTFail("expected added")
         }
         XCTAssertTrue(result.hasPrefix("\(notify)\n\n[profiles.work]"))
     }
 
-    func testCodexOldLockpawNotifyIsUpgradedInPlace() {
-        let config = "notify = [\"/x/lockpaw\", \"ping\"]\n[tui]\nnotifications = true\n"
-        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: config, line: notify),
-                       .upgraded("\(notify)\n[tui]\nnotifications = true\n"))
-        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "\(notify)\n", line: notify), .unchanged)
-    }
-
-    func testCodexForeignNotifyIsLeftAlone() {
-        XCTAssertEqual(AgentHookConfig.mergingCodexNotify(into: "notify = [\"terminal-notifier\"]\n", line: notify), .foreign)
+    /// A comment right above a header describes the table, so the new line goes above it.
+    func testCodexNotifyKeepsAHeadersCommentWithItsHeader() {
+        let config = "# Codex\nmodel = \"o3\" # fast\n# MCP servers\n[mcp_servers.x]\ncommand = \"x\"\n"
+        XCTAssertEqual(merge(config), .added("# Codex\nmodel = \"o3\" # fast\n\(notify)\n\n# MCP servers\n[mcp_servers.x]\ncommand = \"x\"\n"))
     }
 
     /// A `notify` key inside a table isn't the top-level one Codex reads.
     func testNotifyInsideATableDoesNotCount() {
         let config = "[profiles.work]\nnotify = [\"other\"]\n"
-        guard case .added(let result) = AgentHookConfig.mergingCodexNotify(into: config, line: notify) else {
-            return XCTFail("expected added")
-        }
+        guard case .added(let result) = merge(config) else { return XCTFail("expected added") }
         XCTAssertTrue(result.hasPrefix(notify))
+        XCTAssertTrue(result.hasSuffix("[profiles.work]\nnotify = [\"other\"]\n"))
+    }
+
+    /// `[` inside a value (an array, a string) is not a table header.
+    func testBracketsInsideValuesAreNotHeaders() {
+        let config = "sandbox = [\n  \"a\",\n  \"[b]\",\n]\nmodel = \"[x]\"\n[tui]\n"
+        XCTAssertEqual(merge(config), .added("sandbox = [\n  \"a\",\n  \"[b]\",\n]\nmodel = \"[x]\"\n\(notify)\n\n[tui]\n"))
+    }
+
+    func testAnEmptyNotifyIsReplaced() {
+        XCTAssertEqual(merge("notify = []\n[tui]\n"), .added("\(notify)\n[tui]\n"))
+    }
+
+    // Already Lockpaw
+
+    func testCodexOldLockpawNotifyIsUpgradedInPlace() {
+        let config = "notify = [\"/x/lockpaw\", \"ping\"]\n[tui]\nnotifications = true\n"
+        XCTAssertEqual(merge(config), .upgraded("\(notify)\n[tui]\nnotifications = true\n"))
+        XCTAssertEqual(merge("\(notify)\n"), .unchanged)
+    }
+
+    /// Same argv written another way (multi-line, literal strings) is already right.
+    func testCodexLockpawNotifyInAnotherLayoutIsUnchanged() {
+        let config = "notify = [\n  '/Users/me/.local/bin/lockpaw', # Lockpaw\n  \"ping\", \"--agent\", \"codex\",\n]\n"
+        XCTAssertEqual(merge(config), .unchanged)
+    }
+
+    /// Upgrading Lockpaw's own entry keeps whatever it already chains to.
+    func testCodexUpgradeKeepsTheChain() {
+        let config = "notify = [\"/x/lockpaw\", \"ping\", \"--\", \"terminal-notifier\", \"-title\", \"Codex\"]\n"
+        let chained = CodexConfig.notifyLine(lockpawArgv + ["--", "terminal-notifier", "-title", "Codex"])
+        XCTAssertEqual(merge(config), .upgraded("\(chained)\n"))
+        XCTAssertEqual(merge("\(chained)\n"), .unchanged)
+    }
+
+    // Another tool's notify
+
+    /// #45: another tool's notify used to be left alone, so Codex never called Lockpaw.
+    /// Now it runs after Lockpaw's ping, unchanged.
+    func testCodexForeignNotifyIsChainedAfterLockpaw() {
+        let config = "model = \"o3\"\nnotify = [\"python3\", \"/Users/me/notify.py\"]\n\n[tui]\n"
+        let expected = CodexConfig.notifyLine(lockpawArgv + ["--", "python3", "/Users/me/notify.py"])
+        XCTAssertEqual(merge(config), .chained("model = \"o3\"\n\(expected)\n\n[tui]\n", original: ["python3", "/Users/me/notify.py"]))
+        // Running it again finds Lockpaw's line and changes nothing.
+        guard case .chained(let once, _) = merge(config) else { return XCTFail("expected chained") }
+        XCTAssertEqual(merge(once), .unchanged)
+    }
+
+    func testCodexForeignNotifyWithEscapesSurvivesTheRoundTrip() {
+        let config = #"notify = ['C:\odd path\n.sh', "say \"done\"", "tab\there"]"# + "\n"
+        let original = [#"C:\odd path\n.sh"#, "say \"done\"", "tab\there"]
+        guard case .chained(let text, let parsed) = merge(config) else { return XCTFail("expected chained") }
+        XCTAssertEqual(parsed, original)
+        XCTAssertEqual(CodexConfig.scan(text)?.notify?.argv, lockpawArgv + ["--"] + original)
+    }
+
+    func testCodexNotifyThatIsNotAnArrayOfStringsIsNeverRewritten() {
+        XCTAssertEqual(merge("notify = \"terminal-notifier\"\n"), .unreadable)
+        XCTAssertEqual(merge("notify = [\"a\", 1]\n"), .unreadable)
+    }
+
+    func testCodexConfigThatDoesNotScanIsNeverRewritten() {
+        XCTAssertEqual(merge("model = \"unterminated\n[tui]\n"), .unreadable)
+        XCTAssertEqual(merge("notify = [\"a\"\n"), .unreadable)
+        XCTAssertEqual(merge("notify = [\"a\"]\nnotify = [\"b\"]\n"), .unreadable)
+    }
+
+    // Tables and comments
+
+    /// Only the notify statement changes. Comments, tables, multi-line strings and
+    /// inline tables around it come through byte for byte.
+    func testCodexChainPreservesEverythingElse() {
+        let before = """
+        # Codex settings
+        model = "gpt-5" # default
+        instructions = \"\"\"
+        [not a table]
+        notify = ["fake"]
+        \"\"\"
+        env = { PATH = "/bin", list = [1, 2] }
+        """
+        let after = """
+
+        # The notifier
+        [mcp_servers.github] # tools
+        command = "gh"
+        notify = ["table-scoped"]
+
+        [profiles.work]
+        model = "o3"
+
+        """
+        let config = before + "\nnotify = [\n  \"/usr/local/bin/notifier\", # mine\n  \"--quiet\",\n] # keep this\n" + after
+        let expected = before + "\n" + CodexConfig.notifyLine(lockpawArgv + ["--", "/usr/local/bin/notifier", "--quiet"]) + " # keep this\n" + after
+        XCTAssertEqual(merge(config), .chained(expected, original: ["/usr/local/bin/notifier", "--quiet"]))
+    }
+
+    func testCodexScanFindsTheFirstTableAndOnlyTheTopLevelNotify() {
+        let config = "a = 1\n# [comment]\nnotify = [\"x\"]\n  [tui]\nnotify = [\"y\"]\n"
+        let scan = CodexConfig.scan(config)
+        XCTAssertEqual(scan?.notify?.argv, ["x"])
+        XCTAssertEqual(scan?.firstTable, config.distance(from: config.startIndex, to: config.range(of: "  [tui]")!.lowerBound))
+    }
+
+    func testCodexScanReadsQuotedKeysAndCRLF() {
+        XCTAssertEqual(CodexConfig.scan("\"notify\" = [\"x\"]\r\n[tui]\r\n")?.notify?.argv, ["x"])
+        XCTAssertNil(CodexConfig.scan("notify.inner = [\"x\"]\n")?.notify)
+    }
+
+    // The chain at ping time
+
+    func testSplitChainKeepsTheirCommandAndPassesThePayloadToBoth() {
+        let payload = #"{"type":"agent-turn-complete","thread-id":"t1"}"#
+        let split = CodexConfig.splitChain(["ping", "--agent", "codex", "--", "notify.sh", "--done", payload])
+        XCTAssertEqual(split.own, ["ping", "--agent", "codex", payload])
+        XCTAssertEqual(split.chained, ["notify.sh", "--done", payload])
+        // Their flags never reach Lockpaw's parser: --done after the separator is theirs.
+        let theirs = CodexConfig.splitChain(["ping", "--agent", "codex", "--", "notify.sh", "--error"])
+        XCTAssertNil(AgentPing.userInfo(arguments: theirs.own, stdinPayload: [:])[AgentPing.Key.kind])
+        XCTAssertEqual(AgentPing.userInfo(arguments: split.own, stdinPayload: [:])[AgentPing.Key.sessionID], "t1")
+    }
+
+    func testSplitChainWithoutASeparatorIsAPlainPing() {
+        let split = CodexConfig.splitChain(["ping", "--agent", "codex", "{\"type\":\"x\"}"])
+        XCTAssertEqual(split.own, ["ping", "--agent", "codex", "{\"type\":\"x\"}"])
+        XCTAssertEqual(split.chained, [])
     }
 }

@@ -84,7 +84,7 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 | Agent | Setup | What it hooks |
 |-------|-------|---------------|
 | **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` + `StopFailure` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`); `Notification` is matched to the types that need you, so `auth_success` and the like stay quiet |
-| **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` for *finished*, plus a `PermissionRequest` hook in `~/.codex/hooks.json` for *waiting*. Trust it once via `/hooks` in Codex (honors `$CODEX_HOME`) |
+| **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` for *finished*, plus a `PermissionRequest` hook in `~/.codex/hooks.json` for *waiting*. Trust it once via `/hooks` in Codex (honors `$CODEX_HOME`). If another tool already uses `notify`, it keeps running, right after Lockpaw |
 | **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json` |
 | **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` (`--done`) |
 | **Copilot CLI** | `lockpaw install-hook copilot` | `agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json` (honors `$COPILOT_HOME`) |

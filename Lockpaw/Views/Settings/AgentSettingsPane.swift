@@ -7,7 +7,7 @@ struct AgentSettingsPane: View {
     @AppStorage(Constants.agentPingSoundKey) private var pingSound = false
     @AppStorage(Constants.lockScreenShowsProjectsKey) private var showsProjects = false
 
-    @State private var connected: Set<String> = []
+    @State private var statuses: [String: AgentConnection.Status] = [:]
     @State private var results: [String: SetupResult] = [:]
 
     var body: some View {
@@ -30,6 +30,10 @@ struct AgentSettingsPane: View {
                         .font(.callout)
                         .foregroundStyle(Color("LockpawAmber"))
                         .textSelection(.enabled)
+                } else if let note = attentionMessage {
+                    Text(note)
+                        .font(.callout)
+                        .foregroundStyle(Color("LockpawAmber"))
                 }
             } header: {
                 Text("Connect an agent")
@@ -98,8 +102,20 @@ struct AgentSettingsPane: View {
         case .running: return .running
         case .failure: return .failed
         case .success: return .connected
-        case nil: return connected.contains(agent) ? .connected : .idle
+        case nil:
+            switch statuses[agent] ?? .notConnected {
+            case .connected: return .connected
+            case .notifyUsedByAnotherTool: return .attention
+            case .notConnected: return .idle
+            }
         }
+    }
+
+    /// Codex runs one notify command. When another tool's is set, Codex never calls
+    /// Lockpaw, so the button must not read as connected.
+    private var attentionMessage: String? {
+        guard results["codex"] == nil, statuses["codex"] == .notifyUsedByAnotherTool else { return nil }
+        return "Codex: notify is used by another tool. Click Codex to keep it and run Lockpaw first."
     }
 
     private var failureMessage: String? {
@@ -111,14 +127,14 @@ struct AgentSettingsPane: View {
 
     private func refreshConnections() {
         Task {
-            connected = await Task.detached(priority: .utility) {
-                Set(AgentConnection.agents.filter { AgentConnection.isConnected($0) })
+            statuses = await Task.detached(priority: .utility) {
+                Dictionary(uniqueKeysWithValues: AgentConnection.agents.map { ($0, AgentConnection.status($0)) })
             }.value
         }
     }
 
     /// Runs the bundled `lockpaw` CLI off the main thread. A ⚠️ on stdout with exit 0 (a
-    /// foreign Codex `notify` it won't overwrite) counts as a failure, so the button never
+    /// Codex `notify` it can't safely edit) counts as a failure, so the button never
     /// claims a write that didn't happen.
     private func run(_ arguments: [String], mark: String, treatWarningAsFailure: Bool = true) {
         if results[mark] == .running { return }
@@ -172,7 +188,7 @@ struct AgentSettingsPane: View {
 /// One agent: its name, and a check once Lockpaw's hook is in its settings. Clicking a
 /// connected agent runs the installer again, which upgrades the hook in place.
 private struct AgentButton: View {
-    enum State { case idle, running, connected, failed }
+    enum State { case idle, running, connected, attention, failed }
 
     let name: String
     let state: State
@@ -190,6 +206,8 @@ private struct AgentButton: View {
                     ProgressView().controlSize(.small)
                 case .connected:
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(settingsAccentColor)
+                case .attention:
+                    Image(systemName: "exclamationmark.circle").foregroundStyle(Color("LockpawAmber"))
                 case .failed:
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color("LockpawAmber"))
                 }
@@ -201,7 +219,15 @@ private struct AgentButton: View {
         .disabled(state == .running)
         .accessibilityLabel(name)
         .accessibilityValue(accessibilityValue)
-        .help(state == .connected ? "Connected. Click to update the hook." : "Connect \(name)")
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        switch state {
+        case .connected: return "Connected. Click to update the hook."
+        case .attention: return "Notify is used by another tool. Click to keep it and run Lockpaw first."
+        default: return "Connect \(name)"
+        }
     }
 
     private var accessibilityValue: String {
@@ -209,6 +235,7 @@ private struct AgentButton: View {
         case .idle: return "Not connected"
         case .running: return "Connecting"
         case .connected: return "Connected"
+        case .attention: return "Notify is used by another tool"
         case .failed: return "Couldn't connect"
         }
     }
