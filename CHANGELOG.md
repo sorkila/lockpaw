@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-11-07
+
 ### Added
 
 - Claude's phone pushes only while you're away. Lockpaw keeps an empty marker file while your Mac is unlocked and in use. It removes it when you lock, when macOS locks or sleeps, and when Lockpaw quits. Point Claude Code's `CLAUDE_CLIENT_PRESENCE_FILE` at it and Remote Control stops pushing to your phone while you're at the Mac. Set it up in Settings → Agents, or run `lockpaw install-hook claude --presence`. A value you set yourself is never overwritten.
@@ -10,6 +12,7 @@
 
 - Codex alerts work when your Codex config already has a `notify` command (#45). Lockpaw used to leave it alone, so Codex never told Lockpaw a turn had finished. Now `lockpaw install-hook codex` runs Lockpaw first and your command right after, with the same details from Codex. A backup of the old config is kept. If the setting is in a form Lockpaw can't safely edit, it changes nothing and prints the exact line to add.
 - Settings > Agents no longer shows Codex as connected when its `notify` belongs to another tool, or sits under a `[section]` where Codex never reads it. It says "Codex: notify is used by another tool" until you click Codex.
+- Touch ID could stop listening after a click on the lock screen. The click brought Lockpaw to the front, the sensor went quiet without telling Lockpaw, and only the password or the shortcut got you back in. Lockpaw now notices and re-arms Touch ID within a few seconds.
 
 ## [1.7.1] - 2026-10-26
 
