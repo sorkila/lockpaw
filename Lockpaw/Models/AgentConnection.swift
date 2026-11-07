@@ -31,7 +31,7 @@ enum AgentConnection {
         }
         switch agent {
         case "claude": return dir("CLAUDE_CONFIG_DIR", default: ".claude").appendingPathComponent("settings.json")
-        case "codex": return dir("CODEX_HOME", default: ".codex").appendingPathComponent("config.toml")
+        case "codex": return CodexConfig.directory(environment: environment, home: home).appendingPathComponent("config.toml")
         case "gemini": return home.appendingPathComponent(".gemini/settings.json")
         case "cursor": return home.appendingPathComponent(".cursor/hooks.json")
         case "copilot": return dir("COPILOT_HOME", default: ".copilot").appendingPathComponent("hooks/lockpaw.json")
@@ -40,13 +40,40 @@ enum AgentConnection {
         }
     }
 
+    enum Status: Equatable {
+        case notConnected
+        case connected
+        /// Codex runs one `notify` command, and another tool's is set there. Connecting
+        /// keeps it and runs it after Lockpaw's ping.
+        case notifyUsedByAnotherTool
+    }
+
     /// A config holds Lockpaw's hook when any line of it runs a lockpaw ping.
     static func isConnected(configContents: String) -> Bool {
         configContents.split(whereSeparator: \.isNewline).contains { AgentHookConfig.isLockpawPingCommand(String($0)) }
     }
 
+    /// Codex only reads a top-level `notify`, so that one statement decides. A Lockpaw line
+    /// under a `[table]` does nothing, and another tool's notify means Codex never calls
+    /// Lockpaw. A file that doesn't scan falls back to the line check.
+    static func status(_ agent: String, configContents: String) -> Status {
+        guard agent == "codex", let scan = CodexConfig.scan(configContents) else {
+            return isConnected(configContents: configContents) ? .connected : .notConnected
+        }
+        guard let notify = scan.notify else { return .notConnected }
+        if let argv = notify.argv {
+            if argv.isEmpty { return .notConnected }
+            return CodexConfig.isLockpawNotify(argv) ? .connected : .notifyUsedByAnotherTool
+        }
+        return .notifyUsedByAnotherTool
+    }
+
+    static func status(_ agent: String) -> Status {
+        guard let url = configURL(for: agent), let contents = try? String(contentsOf: url, encoding: .utf8) else { return .notConnected }
+        return status(agent, configContents: contents)
+    }
+
     static func isConnected(_ agent: String) -> Bool {
-        guard let url = configURL(for: agent), let contents = try? String(contentsOf: url, encoding: .utf8) else { return false }
-        return isConnected(configContents: contents)
+        status(agent) == .connected
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Codex alerts work when your Codex config already has a `notify` command (#45). Lockpaw used to leave it alone, so Codex never told Lockpaw a turn had finished. Now `lockpaw install-hook codex` runs Lockpaw first and your command right after, with the same details from Codex. A backup of the old config is kept. If the setting is in a form Lockpaw can't safely edit, it changes nothing and prints the exact line to add.
+- Settings > Agents no longer shows Codex as connected when its `notify` belongs to another tool, or sits under a `[section]` where Codex never reads it. It says "Codex: notify is used by another tool" until you click Codex.
+
 ## [1.7.1] - 2026-10-26
 
 ### Changed

@@ -77,40 +77,65 @@ enum AgentHookConfig {
         case added(String)
         case upgraded(String)
         case unchanged
-        /// Someone else's `notify` is already set; never clobbered.
-        case foreign
+        /// Someone else's `notify` was set. It now runs right after Lockpaw's ping, with the
+        /// same payload. `original` is their command, as it was.
+        case chained(String, original: [String])
+        /// A `notify` (or a file) Lockpaw can't read safely. Never rewritten.
+        case unreadable
     }
 
-    /// Put lockpaw's `notify = [...]` into a Codex config.toml as a **top-level** key. TOML
-    /// assigns a key to the most recent `[table]` header above it, and real configs end with
-    /// one (`[mcp_servers.x]`, `[profiles.y]`), so appending to the file would have written
-    /// `mcp_servers.x.notify`, which Codex ignores. So only the top-level region (before
-    /// the first header) is searched, and a new line goes at its end.
-    static func mergingCodexNotify(into contents: String, line: String) -> CodexNotifyMerge {
-        var lines = contents.components(separatedBy: "\n")
-        let isHeader = { (text: String) in text.trimmingCharacters(in: .whitespaces).hasPrefix("[") }
-        let firstHeader = lines.firstIndex(where: isHeader) ?? lines.count
-        let isNotify = { (text: String) in
-            text.range(of: #"^\s*notify\s*="#, options: .regularExpression) != nil
+    /// Put lockpaw's `notify` into a Codex config.toml as a **top-level** key. TOML assigns a
+    /// key to the most recent `[table]` header above it, and real configs end with one
+    /// (`[mcp_servers.x]`, `[profiles.y]`), so appending to the file would have written
+    /// `mcp_servers.x.notify`, which Codex ignores. So only the top level (before the first
+    /// header) is searched, and a new line goes at its end.
+    ///
+    /// Codex runs one `notify` command. When another tool already owns it, skipping left
+    /// Lockpaw silent (#45), and replacing it would break that tool. So Lockpaw chains:
+    /// `notify = [lockpaw, "ping", "--agent", "codex", "--", <their command>]`. The ping
+    /// runs, then hands off to their command with Codex's payload still last. Only the
+    /// `notify` statement changes. Comments and every other line stay as they were.
+    static func mergingCodexNotify(into contents: String, command: [String]) -> CodexNotifyMerge {
+        guard let scan = CodexConfig.scan(contents) else { return .unreadable }
+        let chars = Array(contents)
+
+        if let notify = scan.notify {
+            guard let argv = notify.argv else { return .unreadable }
+            let wanted: [String]
+            if argv.isEmpty {
+                wanted = command
+            } else if CodexConfig.isLockpawNotify(argv) {
+                let chained = CodexConfig.chainedCommand(in: argv)
+                wanted = chained.isEmpty ? command : command + [CodexConfig.chainSeparator] + chained
+                if argv == wanted { return .unchanged }
+            } else {
+                wanted = command + [CodexConfig.chainSeparator] + argv
+            }
+            let text = String(chars[..<notify.range.lowerBound])
+                + CodexConfig.notifyLine(wanted)
+                + String(chars[notify.range.upperBound...])
+            if argv.isEmpty { return .added(text) }
+            return CodexConfig.isLockpawNotify(argv) ? .upgraded(text) : .chained(text, original: argv)
         }
 
-        if let existing = lines[..<firstHeader].firstIndex(where: isNotify) {
-            guard isLockpawPingCommand(lines[existing]) else { return .foreign }
-            guard lines[existing] != line else { return .unchanged }
-            lines[existing] = line
-            return .upgraded(lines.joined(separator: "\n"))
-        }
-
-        if firstHeader == lines.count {
+        let line = CodexConfig.notifyLine(command)
+        if scan.firstTable == chars.count {
             var result = contents
             if !result.isEmpty && !result.hasSuffix("\n") { result += "\n" }
             return .added(result + line + "\n")
         }
-        // Before the first table, after any top-level keys, with a blank line before the header.
-        var insertAt = firstHeader
-        while insertAt > 0, lines[insertAt - 1].trimmingCharacters(in: .whitespaces).isEmpty { insertAt -= 1 }
-        let blankAlreadyFollows = insertAt < firstHeader
-        lines.insert(contentsOf: blankAlreadyFollows ? [line] : [line, ""], at: insertAt)
-        return .added(lines.joined(separator: "\n"))
+        // Before the first table, after the last top-level key, with a blank line before the
+        // header. A comment right above the header belongs to it, so the line goes above that.
+        var lines = String(chars[..<scan.firstTable]).components(separatedBy: "\n")
+        // The prefix ends at the start of the header's line, so its last element is empty.
+        if lines.last == "" { lines.removeLast() }
+        let isBlank = { (text: String) in text.trimmingCharacters(in: .whitespaces).isEmpty }
+        let isComment = { (text: String) in text.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
+        var insertAt = lines.count
+        while insertAt > 0, isComment(lines[insertAt - 1]) { insertAt -= 1 }
+        while insertAt > 0, isBlank(lines[insertAt - 1]) { insertAt -= 1 }
+        let blankFollows = insertAt < lines.count && isBlank(lines[insertAt])
+        lines.insert(contentsOf: blankFollows ? [line] : [line, ""], at: insertAt)
+        return .added(lines.joined(separator: "\n") + "\n" + String(chars[scan.firstTable...]))
     }
 }
