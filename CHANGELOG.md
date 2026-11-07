@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- If you use Lockpaw only to cover your screen, with no agents connected, the supporter card can now find you too: after 20 locks and two weeks. It's the same card, shown once ever, and it doesn't mention agents you don't have. Nothing in Lockpaw is gated, and that doesn't change.
+
 ## [1.7.1] - 2026-10-26
 
 ### Changed

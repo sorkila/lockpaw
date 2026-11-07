@@ -8,7 +8,8 @@ import SwiftUI
 @MainActor
 final class SupportCardPanel {
     enum Phase: Equatable {
-        case ask
+        /// The ask, with its opening line chosen by how this user uses Lockpaw.
+        case ask(SupportAsk.CardReason)
         case thanks
         case notNow
         case already

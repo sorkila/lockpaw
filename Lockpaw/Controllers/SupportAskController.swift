@@ -1,8 +1,8 @@
 import AppKit
 import Combine
 
-/// Persists `SupportAsk.State` and applies its rules. `LockController` reports the good
-/// moment (an unlock after an agent ping); this decides between the once-ever card
+/// Persists `SupportAsk.State` and applies its rules. `LockController` reports every
+/// unlock, and whether an agent pinged during it; this decides between the once-ever card
 /// (`SupportCardPanel`) and the yearly menu line, which the menu bar dropdown reads from
 /// `isShowing`.
 @MainActor
@@ -16,6 +16,7 @@ final class SupportAskController: ObservableObject {
         static let dismissedForever = "supportAskNever"
         static let pingUnlocks = "supportAskPingUnlocks"
         static let cardShown = "supportAskCardShown"
+        static let locks = "supportAskLocks"
     }
 
     /// The support page, tagged so visits from the card can be told apart in the site's stats.
@@ -54,7 +55,8 @@ final class SupportAskController: ObservableObject {
                 pendingSince: defaults.object(forKey: Key.pendingSince) as? Date,
                 dismissedForever: defaults.bool(forKey: Key.dismissedForever),
                 pingUnlocks: defaults.integer(forKey: Key.pingUnlocks),
-                cardShown: defaults.bool(forKey: Key.cardShown)
+                cardShown: defaults.bool(forKey: Key.cardShown),
+                locks: defaults.integer(forKey: Key.locks)
             )
         }
         set {
@@ -64,17 +66,20 @@ final class SupportAskController: ObservableObject {
             defaults.set(newValue.dismissedForever, forKey: Key.dismissedForever)
             defaults.set(newValue.pingUnlocks, forKey: Key.pingUnlocks)
             defaults.set(newValue.cardShown, forKey: Key.cardShown)
+            defaults.set(newValue.locks, forKey: Key.locks)
         }
     }
 
-    /// Lockpaw just did its job: the user unlocked after an agent pinged. `allFinished`:
-    /// every ping this lock was an agent finishing, none waiting or failed.
-    func noteUnlockAfterPing(allFinished: Bool, now: Date = Date()) {
-        var current = SupportAsk.countingPingUnlock(SupportAsk.expiring(state, now: now))
+    /// Lockpaw just did its job: the user unlocked. Every unlock counts toward the
+    /// cover-only route to the card. Only one after an agent ping may raise the yearly menu
+    /// line, as before.
+    func noteUnlock(_ unlock: SupportAsk.Unlock, now: Date = Date()) {
+        var current = SupportAsk.countingLock(SupportAsk.expiring(state, now: now))
+        if unlock != .plain { current = SupportAsk.countingPingUnlock(current) }
         let isSupporter = Supporter.shared.isSupporter
-        if SupportAsk.cardIsDue(current, isSupporter: isSupporter, allFinished: allFinished, now: now) {
-            scheduleCard()
-        } else if SupportAsk.shouldRaise(after: current, isSupporter: isSupporter, now: now) {
+        if SupportAsk.cardIsDue(current, isSupporter: isSupporter, unlock: unlock, now: now) {
+            scheduleCard(after: unlock)
+        } else if unlock != .plain, SupportAsk.shouldRaise(after: current, isSupporter: isSupporter, now: now) {
             current.pendingSince = now
         }
         state = current
@@ -115,18 +120,19 @@ final class SupportAskController: ObservableObject {
 
     /// The cover is still fading out and the user is turning back to their agent's work,
     /// so the card waits a moment, then checks the moment is still right.
-    private func scheduleCard() {
+    private func scheduleCard(after unlock: SupportAsk.Unlock) {
         pendingCard?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingCard = nil
             let now = Date()
             guard LockStatus.shared.state == .unlocked, Self.isCalm,
-                  SupportAsk.cardIsDue(self.state, isSupporter: Supporter.shared.isSupporter, allFinished: true, now: now)
+                  SupportAsk.cardIsDue(self.state, isSupporter: Supporter.shared.isSupporter, unlock: unlock, now: now)
             else { return }
+            let reason = SupportAsk.cardReason(self.state)
             self.state = SupportAsk.showingCard(self.state, now: now)
             self.refresh(now: now)
-            self.card.show(.ask)
+            self.card.show(.ask(reason))
         }
         pendingCard = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Constants.Timing.supportCardDelay, execute: work)
@@ -178,7 +184,7 @@ final class SupportAskController: ObservableObject {
     /// touching the stored state.
     func previewCard() {
         isPreviewing = true
-        card.show(.ask)
+        card.show(.ask(.agents))
     }
 
     private var isPreviewing = false
