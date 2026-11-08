@@ -129,25 +129,51 @@ final class PassiveAuthTests: XCTestCase {
     /// while the evaluation stayed in flight, so a press on the sensor locked macOS instead.
     func testThirdPartyAppInFront_lostFocus() {
         XCTAssertTrue(PassiveAuthPolicy.armedPromptLostFocus(
-            frontmostBundleID: "com.logi.pluginservice", ownBundleID: own, systemScreenLocked: false))
+            frontmostBundleID: "com.logi.pluginservice", ownBundleID: own, systemScreenLocked: false,
+            ownAppFrontTicks: 0))
     }
 
-    func testPromptAgentOrLockpawInFront_keepsTheEvaluation() {
-        for front in [PassiveAuthPolicy.promptAgentBundleID, own] {
+    func testPromptAgentInFront_keepsTheEvaluation() {
+        for ticks in [0, 1, 10] {
             XCTAssertFalse(PassiveAuthPolicy.armedPromptLostFocus(
-                frontmostBundleID: front, ownBundleID: own, systemScreenLocked: false), front)
+                frontmostBundleID: PassiveAuthPolicy.promptAgentBundleID, ownBundleID: own,
+                systemScreenLocked: false, ownAppFrontTicks: ticks))
         }
+    }
+
+    /// Arming leaves Lockpaw in front for a moment, and the prompt agent can take the
+    /// front back about a second after Lockpaw reactivates: no re-arm inside the grace.
+    func testLockpawBrieflyInFront_keepsTheEvaluation() {
+        for ticks in 0..<PassiveAuthPolicy.ownAppFrontGraceTicks {
+            XCTAssertFalse(PassiveAuthPolicy.armedPromptLostFocus(
+                frontmostBundleID: own, ownBundleID: own, systemScreenLocked: false,
+                ownAppFrontTicks: ticks), "\(ticks)")
+        }
+    }
+
+    /// A click on the lock screen put Lockpaw in front, coreauthd stopped the sensor on
+    /// "UI lost focus" and the prompt agent never came back: Touch ID stayed dead until the
+    /// password (2026-11-07). Holding the front past the grace counts as lost focus.
+    func testLockpawHoldingTheFront_lostFocus() {
+        XCTAssertTrue(PassiveAuthPolicy.armedPromptLostFocus(
+            frontmostBundleID: own, ownBundleID: own, systemScreenLocked: false,
+            ownAppFrontTicks: PassiveAuthPolicy.ownAppFrontGraceTicks))
+        XCTAssertFalse(PassiveAuthPolicy.armedPromptLostFocus(
+            frontmostBundleID: own, ownBundleID: own, systemScreenLocked: true,
+            ownAppFrontTicks: PassiveAuthPolicy.ownAppFrontGraceTicks))
     }
 
     /// loginwindow owns the front while macOS is locked; re-arming every tick would churn.
     func testMacOSLocked_doesNotRearm() {
         XCTAssertFalse(PassiveAuthPolicy.armedPromptLostFocus(
-            frontmostBundleID: "com.apple.loginwindow", ownBundleID: own, systemScreenLocked: true))
+            frontmostBundleID: "com.apple.loginwindow", ownBundleID: own, systemScreenLocked: true,
+            ownAppFrontTicks: 0))
     }
 
     func testUnknownFrontApp_doesNotRearm() {
         XCTAssertFalse(PassiveAuthPolicy.armedPromptLostFocus(
-            frontmostBundleID: nil, ownBundleID: own, systemScreenLocked: false))
+            frontmostBundleID: nil, ownBundleID: own, systemScreenLocked: false,
+            ownAppFrontTicks: 0))
     }
 
     // MARK: - Outcome mapping

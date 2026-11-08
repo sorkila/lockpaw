@@ -34,7 +34,7 @@
 - **Every screen covered.** All displays, including ones you plug in while locked.
 - **Agents keep running.** AI coding tools, builds, downloads and SSH sessions carry on underneath.
 - **Agent alerts.** The locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot or Aider needs you, and the notification says which agent and why.
-- **Lid closed, still running.** Optional. Close the MacBook lid while locked and your agents keep going, no external display needed. It uses one small helper you approve once, and sleep comes back when you unlock, when the Mac runs hot, or at 20% battery.
+- **Lid closed, still running.** Optional. Close the MacBook lid while locked and your agents keep going, no external display needed. It uses one small helper you approve once, and sleep comes back when you unlock, when the Mac runs hot, or at 20% battery. How it works, the alternatives and how to check it: [keep Claude Code running with the lid closed](https://getlockpaw.com/claude-code-lid-closed/).
 - **Pings on your phone.** Optional. Forward agent pings to ntfy, Pushover or any webhook, such as Home Assistant.
 - **Shortcuts and Spotlight.** *Lock Screen* and *Is Lockpaw Locked?* actions. There's no unlock action, on purpose.
 - **Your wallpaper, Aerials included.** Optionally shows each display's macOS wallpaper behind the lock screen; Aerials keep moving while plugged in.
@@ -58,6 +58,7 @@
 | Hide the menu bar icon | Settings → General → Show in menu bar (open Lockpaw from Applications to bring it back) |
 | Keep agents running with the lid closed | Settings → General → Keep running with the lid closed |
 | Send pings to your phone | Settings → Agents → Send pings off this Mac → Send to |
+| Claude's phone pushes only while you're away | Settings → Agents → Claude phone pushes only while away → Set Up |
 
 <br>
 
@@ -84,7 +85,7 @@ including installing itself into `~/.local/bin` (add `--print` to just see the s
 | Agent | Setup | What it hooks |
 |-------|-------|---------------|
 | **Claude Code** | `lockpaw install-hook claude` | `Notification` + `Stop` + `StopFailure` hooks in `~/.claude/settings.json` (honors `$CLAUDE_CONFIG_DIR`); `Notification` is matched to the types that need you, so `auth_success` and the like stay quiet |
-| **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` for *finished*, plus a `PermissionRequest` hook in `~/.codex/hooks.json` for *waiting*. Trust it once via `/hooks` in Codex (honors `$CODEX_HOME`) |
+| **Codex CLI** | `lockpaw install-hook codex` | `notify` in `~/.codex/config.toml` for *finished*, plus a `PermissionRequest` hook in `~/.codex/hooks.json` for *waiting*. Trust it once via `/hooks` in Codex (honors `$CODEX_HOME`). If another tool already uses `notify`, it keeps running, right after Lockpaw |
 | **Gemini CLI** | `lockpaw install-hook gemini` | `Notification` + `AfterAgent` hooks in `~/.gemini/settings.json` |
 | **Cursor** | `lockpaw install-hook cursor` | `stop` hook in `~/.cursor/hooks.json` (`--done`) |
 | **Copilot CLI** | `lockpaw install-hook copilot` | `agentStop` + `notification` hooks in `~/.copilot/hooks/lockpaw.json` (honors `$COPILOT_HOME`) |
@@ -99,6 +100,33 @@ there if you just want the command on your PATH.
 
 Under the hood, `lockpaw ping` posts a local notification that Lockpaw listens for. It
 never launches the app if it isn't already running.
+
+### Claude phone pushes only while you're away
+
+Claude Code's [Remote Control](https://code.claude.com/docs/en/remote-control) can push to
+your phone. It skips the push while a marker file exists, if you set
+[`CLAUDE_CLIENT_PRESENCE_FILE`](https://code.claude.com/docs/en/env-vars) (Claude Code
+2.1.181 or later). Lockpaw keeps that file for you.
+
+- The file is `~/Library/Application Support/Lockpaw/present`. It is empty.
+- It exists while your Mac is unlocked and awake. Lockpaw removes it when you lock
+  Lockpaw, when macOS locks, when the Mac or its displays sleep, and when Lockpaw quits.
+- It comes back when you unlock.
+
+Lockpaw always keeps the file. Nothing reads it until you set the variable, so that is
+the switch. Click **Set Up** in **Settings → Agents**, or run
+`lockpaw install-hook claude --presence`. Both add this to `~/.claude/settings.json`
+(or `$CLAUDE_CONFIG_DIR`) next to the Claude hook, with a `.bak` backup:
+
+```json
+"env": { "CLAUDE_CLIENT_PRESENCE_FILE": "/Users/you/Library/Application Support/Lockpaw/present" }
+```
+
+A value you set yourself is never overwritten. **Copy Setup** puts the line on the
+clipboard if you'd rather add it by hand. New Claude Code sessions pick it up.
+
+One edge: if Lockpaw crashes while unlocked, the file stays and pushes stay quiet. The
+next launch fixes it, and it removes the file at once if the screen is locked.
 
 <br>
 
@@ -274,6 +302,14 @@ Pushes to `main` and PRs run the build and the full unit test suite via GitHub A
 Everything in Lockpaw is free and MIT-licensed, and everything that ships stays free. No feature is ever moved behind a payment.
 
 If Lockpaw earns its place on your Mac, you can [become a supporter](https://getlockpaw.com/support/) (once, $9 or $19 suggested, or pay what you want) or [sponsor me on GitHub](https://github.com/sponsors/sorkila). Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no more asks: Lockpaw asks once, in a small card after it has done its job, and after that at most once a year in the menu bar. Contributors get a supporter licence on the house.
+
+<br>
+
+## Guides
+
+- [Keep Claude Code running with the MacBook lid closed](https://getlockpaw.com/claude-code-lid-closed/): what macOS does when you close the lid, `caffeinate`, `pmset disablesleep`, Amphetamine, LidRun and Lockpaw, and how to verify it with `pmset`.
+- [Claude Code notifications on Mac](https://getlockpaw.com/claude-code-notifications/): copy-paste Notification and Stop hooks for any terminal.
+- [Amphetamine alternatives for Mac, compared](https://getlockpaw.com/vs/): Amphetamine, caffeinate, KeepingYouAwake, Lidless, Adrafinil and the agent-era tools in one table, with when each one is the better pick.
 
 <br>
 

@@ -34,15 +34,20 @@ func printUsage() {
                                     on stdin adds the project and the reason.
                                     --done | --waiting | --error say what happened when
                                     the payload doesn't. --print shows what would be sent.
+                                    -- <command> runs that command next, with the
+                                    arguments the agent added (keeps another Codex notify).
       lockpaw install-cli           Symlink this tool into your PATH (~/.local/bin)
       lockpaw install-hook <tool>   Wire up an agent. <tool>: claude | codex | gemini |
                                     cursor | copilot | aider
                                     Add --print to show the snippet without writing it.
+                                    claude --presence also sets CLAUDE_CLIENT_PRESENCE_FILE,
+                                    so Claude's phone pushes only come while you're away.
       lockpaw --help                Show this help
 
     EXAMPLES:
       lockpaw install-cli
       lockpaw install-hook claude
+      lockpaw install-hook claude --presence
       lockpaw install-hook codex --print
 
     Lockpaw stays locked while you're away; ping just lets you know it's time to look.
@@ -75,8 +80,8 @@ func readHookPayload(deadline seconds: TimeInterval = 2, limit: Int = 4 << 20) -
     return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
 }
 
-func sendPing(arguments: [String], printOnly: Bool) {
-    let info = AgentPing.userInfo(arguments: arguments, stdinPayload: readHookPayload())
+func sendPing(arguments: [String], printOnly: Bool, readsStdin: Bool = true) {
+    let info = AgentPing.userInfo(arguments: arguments, stdinPayload: readsStdin ? readHookPayload() : [:])
 
     if printOnly {
         for key in info.keys.sorted() { print("\(key): \(info[key] ?? "")") }
@@ -88,6 +93,19 @@ func sendPing(arguments: [String], printOnly: Bool) {
         userInfo: info.isEmpty ? nil : info,
         deliverImmediately: true
     )
+}
+
+/// Hands off to the user's own Codex notify command once the ping is sent. `exec` keeps
+/// its stdin, stdout, environment and exit status, so it runs exactly as Codex would have
+/// run it, payload included. The command is looked up on PATH, as Codex does.
+func runChainedNotify(_ argv: [String], printOnly: Bool) {
+    if printOnly {
+        print("then runs: \(argv.joined(separator: " "))")
+        return
+    }
+    var cArgs: [UnsafeMutablePointer<CChar>?] = argv.map { strdup($0) } + [nil]
+    execvp(argv[0], &cArgs)
+    fail("Could not run the notify command after Lockpaw (\(argv[0])): \(String(cString: strerror(errno)))")
 }
 
 // MARK: - install-cli
@@ -229,31 +247,51 @@ func claudeStyleSnippet(path: String, events: [String], command: String, matcher
     """
 }
 
-func installClaudeHook(printOnly: Bool) {
+/// `presence` also points Claude Code's `CLAUDE_CLIENT_PRESENCE_FILE` at the marker the app
+/// keeps while you're at the Mac, so Remote Control pushes reach the phone only while
+/// you're away. Opt-in: it changes when Claude Code pushes, so it takes an explicit flag
+/// (or the Settings button). Someone else's value is never overwritten.
+func installClaudeHook(printOnly: Bool, presence: Bool) {
     let url = claudeConfigDirectory().appendingPathComponent("settings.json")
     // StopFailure runs instead of Stop when a turn ends on an API error.
     let events = ["Notification", "Stop", "StopFailure"]
     let command = shellPingCommand(agent: "claude")
     let matchers = ["Notification": AgentHookConfig.claudeNotificationMatcher]
+    let markerPath = ClaudePresence.markerURL.path
     if printOnly {
         print(claudeStyleSnippet(path: url.path, events: events, command: command, matchers: matchers))
+        if presence { print("\n  \(ClaudePresence.settingsSnippet(path: markerPath))") }
         return
     }
     requireCLISymlink()
-    writeJSON(
-        AgentHookConfig.mergingPingHook(
-            into: readJSONObject(at: url), events: events, command: command, matchers: matchers
-        ),
-        to: url, label: "Claude Code"
+    var root = AgentHookConfig.mergingPingHook(
+        into: readJSONObject(at: url), events: events, command: command, matchers: matchers
     )
+    var envResult: ClaudePresence.EnvMerge?
+    if presence {
+        let merged = ClaudePresence.mergingEnv(into: root, path: markerPath)
+        root = merged.root
+        envResult = merged.result
+    }
+    writeJSON(root, to: url, label: "Claude Code")
+    switch envResult {
+    case nil:
+        break
+    case .added, .upgraded, .unchanged:
+        print("✓ Claude's phone pushes now only come while you're away (\(ClaudePresence.environmentKey)).")
+        print("  New Claude Code sessions pick it up. Lockpaw keeps the marker while you're at this Mac.")
+    case .foreign:
+        print("""
+        ⚠️  \(url.path) already sets `\(ClaudePresence.environmentKey)` (or its `env` isn't an object),
+        so it was left untouched. To use Lockpaw's marker, set it to:
+            \(ClaudePresence.settingsSnippet(path: markerPath))
+        """)
+    }
 }
 
 /// Codex's config directory: $CODEX_HOME if set, otherwise ~/.codex.
 func codexHomeDirectory() -> URL {
-    if let dir = ProcessInfo.processInfo.environment["CODEX_HOME"], !dir.isEmpty {
-        return URL(fileURLWithPath: (dir as NSString).expandingTildeInPath, isDirectory: true)
-    }
-    return homeDirectory().appendingPathComponent(".codex", isDirectory: true)
+    CodexConfig.directory(environment: ProcessInfo.processInfo.environment, home: homeDirectory())
 }
 
 /// Codex gets two hooks, split by role. `notify` says a turn finished: stable, no trust
@@ -295,32 +333,55 @@ func installCodexPermissionHook(printOnly: Bool) {
 
 func installCodexNotify(printOnly: Bool) {
     // Codex executes `notify` as an argv array (no shell), so the path must be
-    // literal — the ~/.local/bin symlink keeps it stable across app moves/updates.
+    // literal. The ~/.local/bin symlink keeps it stable across app moves and updates.
     let linkPath = homeDirectory().appendingPathComponent(".local/bin/lockpaw").path
-    let line = "notify = [\"\(linkPath)\", \"ping\", \"--agent\", \"codex\"]"
+    let command = [linkPath, "ping", "--agent", "codex"]
+    let line = CodexConfig.notifyLine(command)
+    let url = codexHomeDirectory().appendingPathComponent("config.toml")
     if printOnly {
-        print("Add to ~/.codex/config.toml, the user-level file (Codex ignores `notify` in project configs):\n\n  \(line)")
+        print("""
+        Add to \(url.path), at the top level, before any [section]. Codex ignores `notify` in project configs.
+
+          \(line)
+
+        If notify is already set, put Lockpaw first and keep yours after a --:
+          notify = ["\(linkPath)", "ping", "--agent", "codex", "--", <your command>]
+        """)
         return
     }
 
     requireCLISymlink()
 
     let fm = FileManager.default
-    let url = codexHomeDirectory().appendingPathComponent("config.toml")
     let contents = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
 
     let merged: String
-    switch AgentHookConfig.mergingCodexNotify(into: contents, line: line) {
+    var chainedFrom: [String]?
+    switch AgentHookConfig.mergingCodexNotify(into: contents, command: command) {
     case .unchanged:
         print("✓ Codex config already routes notify through Lockpaw.")
         return
-    case .foreign:
+    case .unreadable:
         print("""
-        ⚠️  \(url.path) already defines `notify`, so it was left untouched.
-        To route Codex through Lockpaw, set it to:
+        ⚠️  Lockpaw did not change \(url.path).
+        Its notify setting, or the file around it, is in a form Lockpaw can't safely edit.
+        Until notify runs Lockpaw, Codex won't tell Lockpaw when a turn finishes.
+
+        Edit the file by hand. Put this line at the top level, before any [section]:
+
             \(line)
+
+        Replace any notify line that's already there. Codex reads only one.
+        To keep your own notify command too, add it after a --:
+
+            notify = ["\(linkPath)", "ping", "--agent", "codex", "--", <your command>]
+
+        Then restart Codex.
         """)
         return
+    case .chained(let text, let original):
+        merged = text
+        chainedFrom = original
     case .added(let text), .upgraded(let text):
         merged = text
     }
@@ -330,6 +391,14 @@ func installCodexNotify(printOnly: Bool) {
         backupFile(at: url)
         try merged.write(to: url, atomically: true, encoding: .utf8)
         print("✓ Set notify in Codex config at \(url.path)")
+        if let original = chainedFrom {
+            print("""
+            → notify already ran another command. It still runs, right after Lockpaw's ping.
+              The previous file is at \(url.path).bak.
+              If you remove Lockpaw, set notify back to:
+                \(CodexConfig.notifyLine(original))
+            """)
+        }
     } catch {
         fail("Could not write Codex config: \(error.localizedDescription)")
     }
@@ -493,8 +562,11 @@ func installAiderHook(printOnly: Bool) {
 let args = Array(CommandLine.arguments.dropFirst())
 switch args.first {
 case "ping":
-    // Unknown trailing args are ignored — Codex appends a JSON payload to the notify program.
-    sendPing(arguments: args, printOnly: args.contains("--print"))
+    // Unknown trailing args are ignored. Codex appends a JSON payload to the notify program.
+    // Anything after `--` is the user's own Codex notify, run once the ping is sent (#45).
+    let (own, chained) = CodexConfig.splitChain(args)
+    sendPing(arguments: own, printOnly: own.contains("--print"), readsStdin: chained.isEmpty)
+    if !chained.isEmpty { runChainedNotify(chained, printOnly: own.contains("--print")) }
 case "install-cli":
     installCLI()
 case "install-hook":
@@ -503,7 +575,7 @@ case "install-hook":
     }
     let printOnly = args.contains("--print")
     switch args[1] {
-    case "claude": installClaudeHook(printOnly: printOnly)
+    case "claude": installClaudeHook(printOnly: printOnly, presence: args.contains("--presence"))
     case "codex": installCodexHook(printOnly: printOnly)
     case "gemini": installGeminiHook(printOnly: printOnly)
     case "cursor": installCursorHook(printOnly: printOnly)
