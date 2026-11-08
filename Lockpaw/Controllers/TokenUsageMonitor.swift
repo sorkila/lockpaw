@@ -6,18 +6,22 @@ import os
 private let logger = Logger(subsystem: "com.eriknielsen.lockpaw", category: "TokenUsage")
 
 /// App side of the token counter: publishes today's and this year's tokens for the lock
-/// screen. It runs only while the counter is switched on (`TokenCounterPreference`, off by
-/// default): `followPreference()` watches that one UserDefaults key, starting a worker when it
-/// turns on and stopping it when it turns off. With no worker there is no scan, no FSEvents
-/// stream, no cache file and no SQLite connection. All reading happens on one serial utility
-/// queue (`TokenUsageWorker`); this object only receives snapshots, at most twice a second.
+/// screen. It runs only while Lockpaw is locked *and* the counter is switched on
+/// (`TokenCounterPreference`, off by default). `lockBegan()` / `lockEnded()` come from
+/// `LockController`, and `followPreference()` watches that one UserDefaults key; a worker
+/// exists only while both say yes. The worker catches up from the cache file at lock (well
+/// under a second) and is released at unlock, so Lockpaw does not follow transcript writes
+/// while you are working. With no worker there is no scan, no FSEvents stream, no cache
+/// write and no SQLite connection. Switching the counter off also deletes the cache file:
+/// its transcript paths carry project folder names. All reading happens on one serial
+/// utility queue (`TokenUsageWorker`); this object only receives snapshots, twice a second
+/// at most.
 @MainActor
 final class TokenUsageMonitor: ObservableObject {
     static let shared = TokenUsageMonitor()
 
     @Published private(set) var todayTokens: Int64 = 0
     @Published private(set) var yearTokens: Int64 = 0
-    @Published private(set) var yearCost: Double = 0
     @Published private(set) var year: Int = Calendar.current.component(.year, from: Date())
     /// True until the first numbers are known (the one-time scan, or the cache on relaunch).
     @Published private(set) var isCounting = true
@@ -27,7 +31,7 @@ final class TokenUsageMonitor: ObservableObject {
     /// "+N" chip key off it.
     @Published private(set) var arrival = TokenArrival()
 
-    /// The running worker, or nil while the counter is off.
+    /// The running worker, or nil whenever the counter is off or the screen is unlocked.
     private(set) var worker: TokenUsageWorker?
     var isRunning: Bool { worker != nil }
 
@@ -39,14 +43,21 @@ final class TokenUsageMonitor: ObservableObject {
     /// Bumped on every start and stop, so a snapshot still in flight from a stopped worker
     /// is dropped instead of repainting the reset numbers.
     private var generation = 0
+    private var isLocked = false
+    /// The setting as it was last applied: nil until `followPreference()` has looked. Only a
+    /// change from on to off deletes the cache file, so a launch with the counter off (the
+    /// default) touches no paths at all.
+    private var wasOn: Bool?
+    /// Local day of the numbers kept from the last lock, or nil when nothing is kept.
+    private var pausedDay: Date?
 
     init(defaults: UserDefaults = .standard, paths: @escaping () -> TokenUsagePaths = { .standard() }) {
         self.defaults = defaults
         self.makePaths = paths
     }
 
-    /// Called once at launch. Starts the monitor if the counter is on, then follows the
-    /// setting for as long as the app runs.
+    /// Called once at launch: follows the setting for as long as the app runs. Nothing starts
+    /// here — counting begins at the first lock.
     func followPreference() {
         guard preferenceObserver == nil else { return }
         preferenceObserver = DefaultsKeyObserver(defaults: defaults, key: TokenCounterPreference.showKey) { [weak self] in
@@ -64,12 +75,39 @@ final class TokenUsageMonitor: ObservableObject {
             : defaults.bool(forKey: TokenCounterPreference.showKey)
     }
 
+    /// Lockpaw locked. With the counter on, the worker starts and catches up from the cache.
+    func lockBegan() {
+        isLocked = true
+        applyPreference()
+    }
+
+    /// Unlocked. The worker stops and is released; the numbers it last published stay for the
+    /// next lock, and its cache file stays on disk so that lock resumes instead of rescanning.
+    func lockEnded() {
+        isLocked = false
+        applyPreference()
+    }
+
     private func applyPreference() {
-        if preferenceIsOn { start() } else { stop() }
+        let isOn = preferenceIsOn
+        let wasOn = self.wasOn
+        self.wasOn = isOn
+        guard isOn else {
+            let hadWorker = worker != nil
+            stop(resettingNumbers: true)
+            // Only when it was just switched off: a launch with it already off reads nothing.
+            if wasOn == true || hadWorker { deleteSavedProgress() }
+            return
+        }
+        if isLocked { start() } else { stop(resettingNumbers: false) }
     }
 
     private func start() {
         guard worker == nil else { return }
+        // Numbers kept from an earlier lock belong to the day they were counted on: after
+        // midnight "tokens today" must not show yesterday's while the cache is read.
+        if let pausedDay, !Calendar.current.isDate(pausedDay, inSameDayAs: Date()) { resetNumbers() }
+        pausedDay = nil
         generation &+= 1
         let generation = self.generation
         let worker = TokenUsageWorker(paths: makePaths()) { [weak self] snapshot in
@@ -91,20 +129,37 @@ final class TokenUsageMonitor: ObservableObject {
     }
 
     /// Stops the worker and releases everything it held: the FSEvents stream, the database
-    /// connection, the engine. The cache file stays, so turning the counter back on resumes.
-    private func stop() {
-        guard let worker else { return }
-        self.worker = nil
-        generation &+= 1
-        for (center, token) in observers { center.removeObserver(token) }
-        observers.removeAll()
-        worker.stop()
-        todayTokens = 0
-        yearTokens = 0
-        yearCost = 0
-        isCounting = true
+    /// connection, the engine. At an unlock the last numbers are kept, so the next lock shows
+    /// them while the cache is read; switching the counter off clears them instead.
+    private func stop(resettingNumbers: Bool) {
+        if let worker {
+            self.worker = nil
+            generation &+= 1
+            for (center, token) in observers { center.removeObserver(token) }
+            observers.removeAll()
+            worker.stop()
+        }
+        // Nothing is being watched, so there is no rate and no arrival to animate.
         recent = TokenRateWindow()
         arrival = TokenArrival()
+        if resettingNumbers {
+            resetNumbers()
+            pausedDay = nil
+        } else {
+            pausedDay = Date()
+        }
+    }
+
+    private func resetNumbers() {
+        todayTokens = 0
+        yearTokens = 0
+        isCounting = true
+    }
+
+    /// The cache file lists the transcripts it has read, so it names project folders. It goes
+    /// as soon as the counter is switched off, after any save the stopped worker had queued.
+    private func deleteSavedProgress() {
+        TokenUsageWorker.deleteSavedProgress(at: makePaths().cacheFile)
     }
 
     /// The lock screen's counter came on / went off screen. Only matters when FSEvents could
@@ -133,7 +188,6 @@ final class TokenUsageMonitor: ObservableObject {
         guard generation == self.generation else { return }
         if todayTokens != snapshot.todayTokens { todayTokens = snapshot.todayTokens }
         if yearTokens != snapshot.yearTokens { yearTokens = snapshot.yearTokens }
-        if yearCost != snapshot.yearCost { yearCost = snapshot.yearCost }
         if year != snapshot.year { year = snapshot.year }
         if isCounting != snapshot.isCounting { isCounting = snapshot.isCounting }
         if recent != snapshot.recent { recent = snapshot.recent }
@@ -311,7 +365,6 @@ final class TokenUsageWorker: @unchecked Sendable {
             engine.syncClaude(paths: nil)
         } else {
             engine.syncClaude(paths: nil) { self.emitProgress() }
-            engine.reconcileClaudeAfterScan()
         }
         guard !stopped else { return }
         if resumed.opencode {
@@ -505,7 +558,6 @@ final class TokenUsageWorker: @unchecked Sendable {
         engine.reportsArrivals = false
         engine.begin(with: nil)
         engine.syncClaude(paths: nil) { self.emitProgress() }
-        engine.reconcileClaudeAfterScan()
         report(engine.scanOpencodeYear(opencode) { self.emitProgress() })
         guard !stopped else { return }
         engine.finishFullScan()
@@ -548,9 +600,8 @@ final class TokenUsageWorker: @unchecked Sendable {
         if var pending = pendingSnapshot {
             pending.arrivedTokens += snapshot.arrivedTokens
             pendingSnapshot = TokenUsageSnapshot(year: snapshot.year, todayTokens: snapshot.todayTokens,
-                                                 yearTokens: snapshot.yearTokens, yearCost: snapshot.yearCost,
-                                                 isCounting: snapshot.isCounting, recent: snapshot.recent,
-                                                 arrivedTokens: pending.arrivedTokens)
+                                                 yearTokens: snapshot.yearTokens, isCounting: snapshot.isCounting,
+                                                 recent: snapshot.recent, arrivedTokens: pending.arrivedTokens)
         } else {
             pendingSnapshot = snapshot
         }
@@ -600,6 +651,22 @@ final class TokenUsageWorker: @unchecked Sendable {
             try engine.makeCache().write(to: paths.cacheFile)
         } catch {
             logger.error("could not save token cache: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Removes the saved progress. It runs on the same serial queue as every worker, so a
+    /// save a just-stopped worker had queued lands first and is then deleted with the rest.
+    static func deleteSavedProgress(at url: URL, then: (@Sendable () -> Void)? = nil) {
+        sharedQueue.async {
+            do {
+                try FileManager.default.removeItem(at: url)
+                logger.info("counter switched off — saved progress deleted")
+            } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
+                // Never saved, or already gone.
+            } catch {
+                logger.error("could not delete the token cache: \(error.localizedDescription, privacy: .public)")
+            }
+            then?()
         }
     }
 

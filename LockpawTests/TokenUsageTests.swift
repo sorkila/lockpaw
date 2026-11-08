@@ -21,13 +21,10 @@ private final class TestClock: @unchecked Sendable {
 
 private func usageLine(id: String, model: String = "claude-opus-4-6", time: String = "2026-11-05T18:00:00Z",
                        input: Int = 0, output: Int = 0, cacheRead: Int = 0, write5m: Int = 0, write1h: Int = 0,
-                       speed: String? = nil, geo: String? = nil, type: String = "assistant",
-                       breakdown: Bool = true, pretty: Bool = false) -> String {
+                       type: String = "assistant", breakdown: Bool = true, pretty: Bool = false) -> String {
     var usage: [String: Any] = ["input_tokens": input, "output_tokens": output, "cache_read_input_tokens": cacheRead,
                                 "cache_creation_input_tokens": write5m + write1h, "service_tier": "standard"]
     if breakdown { usage["cache_creation"] = ["ephemeral_5m_input_tokens": write5m, "ephemeral_1h_input_tokens": write1h] }
-    if let speed { usage["speed"] = speed }
-    if let geo { usage["inference_geo"] = geo }
     let object: [String: Any] = [
         "parentUuid": "p-1", "isSidechain": false, "type": type, "timestamp": time, "uuid": UUID().uuidString,
         "requestId": "req_" + id,
@@ -97,7 +94,6 @@ private struct Sandbox {
 private func firstScan(_ engine: TokenUsageEngine) {
     engine.begin(with: nil)
     engine.syncClaude(paths: nil)
-    engine.reconcileClaudeAfterScan()
     engine.finishFullScan()
 }
 
@@ -115,25 +111,21 @@ private final class StubOpencode: OpencodeRowSource {
 
 private func ms(_ iso: String) -> Int64 { Int64(ISOTimestamp.parse(iso)! * 1000) }
 
-/// Dollar amounts compared to a relative tolerance.
+/// Doubles compared to a relative tolerance.
 private func assertClose(_ a: Double, _ b: Double, _ tolerance: Double = 1e-9,
                          file: StaticString = #filePath, line: UInt = #line) {
     XCTAssertEqual(a, b, accuracy: tolerance * max(1, abs(b)), file: file, line: line)
 }
 
-/// Expected dollar amounts as a plain sum.
-private func sum(_ terms: Double...) -> Double { terms.reduce(0, +) }
-
 // MARK: - Parsing
 
 final class TokenTranscriptLineTests: XCTestCase {
     func testReadsUsageModelIDAndTime() throws {
-        let u = try XCTUnwrap(parse(usageLine(id: "msg_1", input: 2, output: 2668, cacheRead: 707_394, write1h: 3177, geo: "global")))
+        let u = try XCTUnwrap(parse(usageLine(id: "msg_1", input: 2, output: 2668, cacheRead: 707_394, write1h: 3177)))
         XCTAssertEqual(u.id, "msg_1")
         XCTAssertEqual(u.model, "claude-opus-4-6")
         XCTAssertEqual(u.timestamp, ISOTimestamp.parse("2026-11-05T18:00:00Z"))
-        XCTAssertEqual(u.counts, TokenCounts(input: 2, output: 2668, cacheRead: 707_394, cacheWrite1h: 3177))
-        XCTAssertEqual(u.geo, "global")
+        XCTAssertEqual(u.counts, TokenCounts(input: 2, output: 2668, cacheRead: 707_394, cacheWrite: 3177))
     }
 
     func testTheRealLineShapeFromClaudeCodeParses() throws {
@@ -142,9 +134,7 @@ final class TokenTranscriptLineTests: XCTestCase {
         let u = try XCTUnwrap(parse(line))
         XCTAssertEqual(u.model, "claude-opus-5-5")
         XCTAssertEqual(u.counts.total, 2 + 3177 + 707_394 + 2668)
-        XCTAssertEqual(u.counts.cacheWrite1h, 3177)
-        XCTAssertEqual(u.counts.cacheWrite5m, 0)
-        XCTAssertEqual(u.speed, "standard")
+        XCTAssertEqual(u.counts.cacheWrite, 3177)
     }
 
     func testSkipsWhatDoesNotCount() {
@@ -171,13 +161,11 @@ final class TokenTranscriptLineTests: XCTestCase {
         XCTAssertEqual(u.counts.output, 9)
     }
 
-    func testWithoutABreakdownCacheWritesAreOneHour() throws {
+    func testCacheWritesCountWithOrWithoutTheirBreakdown() throws {
         let u = try XCTUnwrap(parse(usageLine(id: "m", write5m: 0, write1h: 500, breakdown: false)))
-        XCTAssertEqual(u.counts.cacheWrite1h, 500)
-        XCTAssertEqual(u.counts.cacheWrite5m, 0)
+        XCTAssertEqual(u.counts.cacheWrite, 500)
         let split = try XCTUnwrap(parse(usageLine(id: "m", write5m: 300, write1h: 200)))
-        XCTAssertEqual(split.counts.cacheWrite5m, 300)
-        XCTAssertEqual(split.counts.cacheWrite1h, 200)
+        XCTAssertEqual(split.counts.cacheWrite, 500)
     }
 
     func testFallsBackToRequestIDWithoutAMessageID() throws {
@@ -204,8 +192,8 @@ final class TokenBytePrefilterTests: XCTestCase {
     func testNeverDropsARealUsageLine() throws {
         for pretty in [false, true] {
             for (i, model) in ["claude-opus-4-6", "glm-5.3", "claude-haiku-5-5"].enumerated() {
-                let line = usageLine(id: "msg_\(i)", model: model, input: i + 1, output: 10 * i, cacheRead: 99, write5m: i, write1h: 7,
-                                     speed: i == 1 ? "fast" : nil, geo: "us", pretty: pretty)
+                let line = usageLine(id: "msg_\(i)", model: model, input: i + 1, output: 10 * i, cacheRead: 99,
+                                     write5m: i, write1h: 7, pretty: pretty)
                 XCTAssertTrue(prefilter(line), "prefilter dropped \(model) pretty=\(pretty)")
                 let parsed = try XCTUnwrap(parse(line))
                 let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
@@ -235,31 +223,21 @@ final class TokenUsageLedgerTests: XCTestCase {
     func testRepeatedStreamingLinesAddOnlyTheirGrowth() {
         var ledger = UsageLedger()
         let key = UsageLedger.key("msg_1")
-        let first = ledger.record(key, counts: TokenCounts(input: 10, output: 5, cacheRead: 1000), seen: 1) { _ in 0 }
-        XCTAssertEqual(first.tokens.total, 1015)
-        let same = ledger.record(key, counts: TokenCounts(input: 10, output: 5, cacheRead: 1000), seen: 2) { _ in 0 }
-        XCTAssertTrue(same.tokens.isZero)
-        let grown = ledger.record(key, counts: TokenCounts(input: 10, output: 80, cacheRead: 1000), seen: 3) { _ in 0 }
-        XCTAssertEqual(grown.tokens, TokenCounts(output: 75))
+        let first = ledger.record(key, counts: TokenCounts(input: 10, output: 5, cacheRead: 1000), seen: 1)
+        XCTAssertEqual(first.total, 1015)
+        let same = ledger.record(key, counts: TokenCounts(input: 10, output: 5, cacheRead: 1000), seen: 2)
+        XCTAssertTrue(same.isZero)
+        let grown = ledger.record(key, counts: TokenCounts(input: 10, output: 80, cacheRead: 1000), seen: 3)
+        XCTAssertEqual(grown, TokenCounts(output: 75))
         // An out-of-order, smaller sighting never subtracts.
-        let older = ledger.record(key, counts: TokenCounts(input: 10, output: 20, cacheRead: 1000), seen: 4) { _ in 0 }
-        XCTAssertTrue(older.tokens.isZero)
-    }
-
-    func testCostGrowsWithTheMergedTotals() {
-        var ledger = UsageLedger()
-        let key = UsageLedger.key("m")
-        let price: (TokenCounts) -> Double = { TokenPricing.cost($0, model: "claude-opus-4-6")! }
-        let a = ledger.record(key, counts: TokenCounts(output: 1_000_000), seen: 0, price: price)
-        let b = ledger.record(key, counts: TokenCounts(output: 2_000_000), seen: 0, price: price)
-        assertClose(a.cost, 25)
-        assertClose(b.cost, 25)
+        let older = ledger.record(key, counts: TokenCounts(input: 10, output: 20, cacheRead: 1000), seen: 4)
+        XCTAssertTrue(older.isZero)
     }
 
     func testIDsUnseenForADayArePruned() {
         var ledger = UsageLedger()
-        _ = ledger.record(UsageLedger.key("old"), counts: TokenCounts(input: 1), seen: 100) { _ in 0 }
-        _ = ledger.record(UsageLedger.key("new"), counts: TokenCounts(input: 1), seen: 100 + 90_000) { _ in 0 }
+        _ = ledger.record(UsageLedger.key("old"), counts: TokenCounts(input: 1), seen: 100)
+        _ = ledger.record(UsageLedger.key("new"), counts: TokenCounts(input: 1), seen: 100 + 90_000)
         ledger.prune(olderThan: 100 + 90_000 - 86_400)
         XCTAssertFalse(ledger.contains(UsageLedger.key("old")))
         XCTAssertTrue(ledger.contains(UsageLedger.key("new")))
@@ -290,89 +268,6 @@ final class TokenLocalDayTests: XCTestCase {
     }
 }
 
-// MARK: - Prices
-
-final class TokenPricingTests: XCTestCase {
-    func testDatedAndPrefixedIDsMatchTheirFamily() {
-        XCTAssertEqual(TokenPricing.family(for: "claude-opus-4-5-20251101"), "opus-4-5")
-        XCTAssertEqual(TokenPricing.family(for: "claude-haiku-4-5-20251001"), "haiku-4-5")
-        XCTAssertEqual(TokenPricing.family(for: "claude-sonnet-4-5-20250929"), "sonnet-4-5")
-        XCTAssertEqual(TokenPricing.family(for: "claude-opus-5"), "opus-5")
-        XCTAssertEqual(TokenPricing.family(for: "claude-opus-5-20260301"), "opus-5")
-        XCTAssertEqual(TokenPricing.family(for: "claude-opus-5-5"), "opus-5-5")
-        XCTAssertEqual(TokenPricing.family(for: "claude-fable-5-1"), "fable-5-1")
-        XCTAssertEqual(TokenPricing.family(for: "claude-mythos-5-1"), "mythos-5-1")
-        XCTAssertEqual(TokenPricing.family(for: "us.anthropic.claude-opus-4-6-v1:0"), "opus-4-6")
-        XCTAssertEqual(TokenPricing.family(for: "anthropic/claude-sonnet-4.6"), "sonnet-4-6")
-        XCTAssertEqual(TokenPricing.family(for: "claude-opus-4-6[1m]"), "opus-4-6")
-    }
-
-    func testUnknownAndNonAnthropicModelsAreUnpriced() {
-        for model in ["glm-5.3", "z-ai/glm-5.3-flash", "deepseek-v4-flash", "deepseek/deepseek-v4-flash-0731",
-                      "qwen/qwen3.8-flash", "x-ai/grok-4.6", "claude-opus-4-1", "claude-3-5-sonnet-20241022", "opus-4-6", ""] {
-            XCTAssertNil(TokenPricing.family(for: model), "\(model) should be unpriced")
-            XCTAssertNil(TokenPricing.cost(TokenCounts(input: 1_000_000), model: model))
-        }
-    }
-
-    func testBaseRatesPerTokenKind() {
-        let m = "claude-opus-4-6"
-        assertClose(TokenPricing.cost(TokenCounts(input: 1_000_000), model: m)!, 5)
-        assertClose(TokenPricing.cost(TokenCounts(output: 1_000_000), model: m)!, 25)
-        assertClose(TokenPricing.cost(TokenCounts(cacheRead: 1_000_000), model: m)!, 0.5)
-        assertClose(TokenPricing.cost(TokenCounts(cacheWrite5m: 1_000_000), model: m)!, 6.25)
-        assertClose(TokenPricing.cost(TokenCounts(cacheWrite1h: 1_000_000), model: m)!, 10)
-        assertClose(TokenPricing.cost(TokenCounts(input: 1_000_000, output: 1_000_000), model: "claude-opus-5-5")!, 24)
-        assertClose(TokenPricing.cost(TokenCounts(cacheRead: 1_000_000), model: "claude-sonnet-5-5")!, 0.10)
-        assertClose(TokenPricing.cost(TokenCounts(cacheRead: 1_000_000), model: "claude-fable-5")!, 1)
-        assertClose(TokenPricing.cost(TokenCounts(cacheRead: 1_000_000), model: "claude-fable-5-1")!, 0.25)
-        XCTAssertEqual(TokenPricing.fetchedOn, "2026-11-05")
-    }
-
-    func testHaikuFiveFiveLongPromptTier() {
-        let m = "claude-haiku-5-5"
-        // Prompt = input + cache read + cache write; the tier starts above 100K.
-        let atLimit = TokenCounts(input: 50_000, output: 1_000, cacheRead: 40_000, cacheWrite1h: 10_000)
-        let baseTier = [50_000.0 * 0.10, 1_000.0 * 0.50, 40_000.0 * 0.01, 10_000.0 * 0.20].reduce(0, +) / 1e6
-        assertClose(TokenPricing.cost(atLimit, model: m)!, baseTier)
-        let over = TokenCounts(input: 50_001, output: 1_000, cacheRead: 40_000, cacheWrite1h: 10_000)
-        let longTier = [50_001.0 * 0.50, 1_000.0 * 2.50, 40_000.0 * 0.05, 10_000.0 * 1.0].reduce(0, +) / 1e6
-        assertClose(TokenPricing.cost(over, model: m)!, longTier)
-        let over5m = TokenCounts(input: 200_000, cacheWrite5m: 1_000)
-        let longWrite = [200_000.0 * 0.50, 1_000.0 * 0.625].reduce(0, +) / 1e6
-        assertClose(TokenPricing.cost(over5m, model: m)!, longWrite)
-        // Summed stats-cache totals are never judged as one huge prompt.
-        assertClose(TokenPricing.cost(TokenCounts(input: 1_000_000), model: m, aggregate: true)!, 0.10)
-    }
-
-    func testFastModeRatesAndScaledCache() {
-        let c = TokenCounts(input: 1_000_000, output: 1_000_000, cacheRead: 1_000_000, cacheWrite5m: 1_000_000, cacheWrite1h: 1_000_000)
-        // opus-5-5: in 8, out 40, cache ×2.
-        assertClose(TokenPricing.cost(c, model: "claude-opus-5-5", speed: "fast")!, sum(8, 40, 0.4, 10, 16))
-        // opus-5 and opus-4-8: in 10, out 50, cache ×2.
-        assertClose(TokenPricing.cost(c, model: "claude-opus-5", speed: "fast")!, sum(10, 50, 1, 12.5, 20))
-        assertClose(TokenPricing.cost(c, model: "claude-opus-4-8", speed: "fast")!, sum(10, 50, 1, 12.5, 20))
-        // No fast price listed: base rates.
-        assertClose(TokenPricing.cost(c, model: "claude-opus-4-6", speed: "fast")!, sum(5, 25, 0.5, 6.25, 10))
-        assertClose(TokenPricing.cost(c, model: "claude-opus-5", speed: "standard")!, sum(5, 25, 0.5, 6.25, 10))
-    }
-
-    func testUSGeoIsTenPercentOnFourSixAndLater() {
-        let c = TokenCounts(input: 1_000_000)
-        assertClose(TokenPricing.cost(c, model: "claude-opus-4-6", geo: "us")!, 5.5)
-        assertClose(TokenPricing.cost(c, model: "claude-sonnet-5", geo: "us")!, 2.2)
-        assertClose(TokenPricing.cost(c, model: "claude-opus-4-5-20251101", geo: "us")!, 5)
-        assertClose(TokenPricing.cost(c, model: "claude-haiku-4-5-20251001", geo: "us")!, 1)
-        assertClose(TokenPricing.cost(c, model: "claude-opus-4-6", geo: "global")!, 5)
-        // Fast and US together.
-        assertClose(TokenPricing.cost(c, model: "claude-opus-5", speed: "fast", geo: "us")!, 11)
-    }
-
-    func testFiveMinuteAndOneHourWritesPriceDifferently() {
-        assertClose(TokenPricing.cost(TokenCounts(cacheWrite5m: 2_000_000, cacheWrite1h: 1_000_000), model: "claude-sonnet-4-6")!, sum(7.5, 6))
-    }
-}
-
 // MARK: - Baseline
 
 final class TokenStatsBaselineTests: XCTestCase {
@@ -385,32 +280,15 @@ final class TokenStatsBaselineTests: XCTestCase {
                            .init(date: "2026-10-17", tokensByModel: ["claude-opus-4-6": 700_000])])
 
     func testFirstSessionThisYearUsesModelUsage() {
-        var split = CacheWriteSplit()
-        split.add(family: "opus-4-6", fiveMinute: 1_000_000, oneHour: 3_000_000)
-        let b = ClaudeStatsBaseline.compute(stats, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: 2026, split: split)
+        let b = ClaudeStatsBaseline.compute(stats, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: 2026)
         XCTAssertEqual(b.tokens, 14_000_000 + 1_000)
         XCTAssertEqual(b.cutoffKey, 20261017)
-        // 2M cache writes split 25% 5-minute / 75% 1-hour by the measured ratio.
-        assertClose(b.cost, sum(5, 25, 5, 0.5 * 6.25, 1.5 * 10))
     }
 
-    func testFirstSessionLastYearUsesThisYearsDaysAtBlendedRates() {
-        let b = ClaudeStatsBaseline.compute(stats, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: 2025, split: CacheWriteSplit())
+    func testFirstSessionLastYearUsesThisYearsDays() {
+        let b = ClaudeStatsBaseline.compute(stats, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: 2025)
         // 2025-12-31 is not this year; both 2026 days count, through lastComputedDate.
         XCTAssertEqual(b.tokens, 1_400_000 + 100 + 700_000)
-        let blended = ClaudeStatsBaseline.cost(of: stats.modelUsage!["claude-opus-4-6"]!, model: "claude-opus-4-6", split: CacheWriteSplit())! / 14_000_000
-        assertClose(b.cost, 2_100_000 * blended)
-    }
-
-    func testNoMeasuredSplitMeansOneHourWritesThenTheGlobalRatio() {
-        let totals = ClaudeStatsCache.ModelTotals(cacheCreationInputTokens: 1_000_000)
-        assertClose(ClaudeStatsBaseline.cost(of: totals, model: "claude-opus-4-6", split: CacheWriteSplit())!, 10)
-        var global = CacheWriteSplit()
-        global.add(family: "sonnet-4-6", fiveMinute: 500, oneHour: 500)   // too little for its own ratio, but it is all there is
-        assertClose(ClaudeStatsBaseline.cost(of: totals, model: "claude-opus-4-6", split: global)!, 0.5 * 6.25 + 0.5 * 10)
-        var own = global
-        own.add(family: "opus-4-6", fiveMinute: 0, oneHour: 2_000_000)
-        assertClose(ClaudeStatsBaseline.cost(of: totals, model: "claude-opus-4-6", split: own)!, 10)
     }
 
     func testCachedDaysNeverIncludeToday() {
@@ -418,13 +296,13 @@ final class TokenStatsBaselineTests: XCTestCase {
         var today = stats
         today.lastComputedDate = "2026-11-05"
         today.dailyModelTokens!.append(.init(date: "2026-11-05", tokensByModel: ["claude-opus-4-6": 7_000_000]))
-        let b = ClaudeStatsBaseline.compute(today, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: 2026, split: CacheWriteSplit())
+        let b = ClaudeStatsBaseline.compute(today, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: 2026)
         XCTAssertEqual(b.cutoffKey, 20261104)
         XCTAssertEqual(b.tokens, 7_000_000 + 1_000)
     }
 
     func testNoCacheMeansTranscriptsCoverTheYear() {
-        let b = ClaudeStatsBaseline.compute(nil, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: nil, split: CacheWriteSplit())
+        let b = ClaudeStatsBaseline.compute(nil, year: 2026, todayKey: 20261105, yesterdayKey: 20261104, firstSessionYear: nil)
         XCTAssertEqual(b, ClaudeBaseline())
     }
 }
@@ -438,29 +316,26 @@ final class OpencodeUsageTests: XCTestCase {
         XCTAssertEqual(counts.reasoning, 497)
         XCTAssertTrue(OpencodeUsage.counts(tokensJSON: nil).isZero)
         XCTAssertTrue(OpencodeUsage.counts(tokensJSON: "garbage").isZero)
-        XCTAssertEqual(OpencodeUsage.row(id: "r", createdMs: 1, updatedMs: 2, tokensJSON: nil, cost: -.infinity).cost, 0)
     }
 
-    func testStreamingRowsAreDedupedAndCostIsRecorded() {
+    func testStreamingRowsAreDeduped() {
         let s = Sandbox(); defer { s.remove() }
         let engine = s.engine(TestClock(noon))
         engine.begin(with: nil)
         let source = StubOpencode()
         let created = ms("2026-11-05T19:00:00Z")
-        source.rows = [OpencodeUsage.row(id: "a", createdMs: created, updatedMs: created + 1000, tokensJSON: #"{"input":100,"output":10}"#, cost: 0)]
+        source.rows = [OpencodeUsage.row(id: "a", createdMs: created, updatedMs: created + 1000, tokensJSON: #"{"input":100,"output":10}"#)]
         XCTAssertEqual(engine.scanOpencodeYear(source), .ok(rows: 1))
         XCTAssertEqual(engine.snapshot(isCounting: false).todayTokens, 110)
-        // The same row rewritten while streaming: only the growth counts, cost is opencode's own.
-        source.rows = [OpencodeUsage.row(id: "a", createdMs: created, updatedMs: created + 5000, tokensJSON: #"{"input":100,"output":60,"reasoning":5}"#, cost: 0.25)]
+        // The same row rewritten while streaming: only the growth counts.
+        source.rows = [OpencodeUsage.row(id: "a", createdMs: created, updatedMs: created + 5000, tokensJSON: #"{"input":100,"output":60,"reasoning":5}"#)]
         XCTAssertEqual(engine.pollOpencode(source), .ok(rows: 1))
-        let snap = engine.snapshot(isCounting: false)
-        XCTAssertEqual(snap.todayTokens, 165)
-        assertClose(snap.yearCost, 0.25)
+        XCTAssertEqual(engine.snapshot(isCounting: false).todayTokens, 165)
         // Re-reading it again (the poll overlaps) adds nothing.
         _ = engine.pollOpencode(source)
         XCTAssertEqual(engine.snapshot(isCounting: false).todayTokens, 165)
         // Last year's rows never count.
-        source.rows.append(OpencodeUsage.row(id: "old", createdMs: ms("2025-12-31T12:00:00Z"), updatedMs: created + 9000, tokensJSON: #"{"input":5}"#, cost: 9))
+        source.rows.append(OpencodeUsage.row(id: "old", createdMs: ms("2025-12-31T12:00:00Z"), updatedMs: created + 9000, tokensJSON: #"{"input":5}"#))
         _ = engine.pollOpencode(source)
         XCTAssertEqual(engine.snapshot(isCounting: false).yearTokens, 165)
     }
@@ -471,7 +346,7 @@ final class OpencodeUsageTests: XCTestCase {
         engine.begin(with: nil)
         let source = StubOpencode()
         let updated = ms("2026-11-05T19:00:00Z")
-        source.rows = [OpencodeUsage.row(id: "a", createdMs: updated - 1000, updatedMs: updated, tokensJSON: #"{"input":1}"#, cost: 0)]
+        source.rows = [OpencodeUsage.row(id: "a", createdMs: updated - 1000, updatedMs: updated, tokensJSON: #"{"input":1}"#)]
         _ = engine.scanOpencodeYear(source)
         XCTAssertGreaterThan(source.queries.count, 40)   // a week at a time
         _ = engine.pollOpencode(source)
@@ -495,7 +370,7 @@ final class OpencodeUsageTests: XCTestCase {
         engine.reportsArrivals = true
         source.failure = nil
         source.rows = [OpencodeUsage.row(id: "a", createdMs: ms("2026-03-01T12:00:00Z"), updatedMs: ms("2026-03-01T12:01:00Z"),
-                                         tokensJSON: #"{"input":500}"#, cost: 0)]
+                                         tokensJSON: #"{"input":500}"#)]
         XCTAssertEqual(engine.pollOpencode(source), .ok(rows: 1))
         let snap = engine.snapshot(isCounting: false)
         XCTAssertEqual(snap.yearTokens, 500)
@@ -527,8 +402,7 @@ final class OpencodeUsageTests: XCTestCase {
         let rows = try source.rows(updatedAfterMs: 0, createdFromMs: 0, createdToMs: 5000).get()
         XCTAssertEqual(rows.map(\.id).sorted(), ["a", "c"])
         let a = try XCTUnwrap(rows.first { $0.id == "a" })
-        XCTAssertEqual(a.counts.total, 23)
-        XCTAssertEqual(a.cost, 0.5)
+        XCTAssertEqual(a.counts.total, 23)   // the row's own `cost` is not read
         XCTAssertTrue(try source.rows(updatedAfterMs: 2000, createdFromMs: 0, createdToMs: 5000).get().isEmpty)
         // The writer keeps writing while our connection stays open.
         sqlite3_exec(db, "UPDATE session_message SET time_updated = 3000, data = '{\"tokens\":{\"input\":50}}' WHERE id = 'c'", nil, nil, nil)
@@ -558,14 +432,6 @@ final class TokenFormatTests: XCTestCase {
         XCTAssertEqual(TokenFormat.short(999_700), "1.0M")
         XCTAssertEqual(TokenFormat.rate(perMinute: 2_400_000), "2.4M/min")
         XCTAssertEqual(TokenFormat.spoken(123_456_000_000), "123.5 billion")
-    }
-
-    func testDollars() {
-        XCTAssertEqual(TokenFormat.cost(12_345.4), "$12,345")
-        XCTAssertEqual(TokenFormat.cost(98_765.43), "$98,765")
-        XCTAssertEqual(TokenFormat.cost(7.421), "$7.42")
-        XCTAssertEqual(TokenFormat.cost(0), "$0.00")
-        XCTAssertEqual(TokenFormat.cost(.nan), "$0")
     }
 }
 
@@ -724,8 +590,6 @@ final class TokenUsageEngineTests: XCTestCase {
         let snap = engine.snapshot(isCounting: false)
         XCTAssertEqual(snap.todayTokens, 3_510 + 40)
         XCTAssertEqual(snap.yearTokens, 14_000_000 + 2_000 + 3_510 + 40 + 4_000)
-        let transcriptCost = sum(9_500 * 25, 10 * 5) / 1e6
-        assertClose(snap.yearCost, sum(5, 25, 5, 20, transcriptCost))   // 2M writes, no split measured: 1-hour
         XCTAssertEqual(snap.year, 2026)
     }
 
@@ -760,7 +624,6 @@ final class TokenUsageEngineTests: XCTestCase {
         let snap = engine.snapshot(isCounting: false)
         XCTAssertEqual(snap.todayTokens, 0)
         XCTAssertEqual(snap.yearTokens, 0)
-        XCTAssertEqual(snap.yearCost, 0)
     }
 
     func testMidnightStartsANewDayAndJanuaryANewYear() {
@@ -834,7 +697,7 @@ final class TokenUsageEngineTests: XCTestCase {
         XCTAssertEqual(engine.snapshot(isCounting: false).todayTokens, 0)
         let source = StubOpencode()
         source.rows = [OpencodeUsage.row(id: "o", createdMs: ms("2026-03-01T12:00:00Z"), updatedMs: ms("2026-03-01T12:01:00Z"),
-                                         tokensJSON: #"{"input":5}"#, cost: 0)]
+                                         tokensJSON: #"{"input":5}"#)]
         XCTAssertEqual(engine.scanOpencodeYear(source), .busy)
         XCTAssertTrue(source.queries.isEmpty)
         XCTAssertTrue(engine.opencodeNeedsYearScan)
@@ -867,7 +730,6 @@ final class TokenUsageCacheTests: XCTestCase {
         let after = second.snapshot(isCounting: false)
         XCTAssertEqual(after.todayTokens, before.todayTokens)
         XCTAssertEqual(after.yearTokens, before.yearTokens)
-        assertClose(after.yearCost, before.yearCost)
 
         // Only the appended bytes are read next time.
         let appended = usageLine(id: "d", output: 4) + "\n"
@@ -941,14 +803,15 @@ final class TokenUsageCacheTests: XCTestCase {
     }
 }
 
-// MARK: - Off by default, and off means off
+// MARK: - Off by default, off means off, and only while locked
 
 @MainActor
 final class TokenUsageMonitorTests: XCTestCase {
     private var sandbox: Sandbox!
     private var suiteName: String!
     private var defaults: UserDefaults!
-    /// Set when the monitor resolves its paths — which it does only to start a worker.
+    /// Set when the monitor resolves its paths — which it does only to start a worker, or to
+    /// delete the cache when the counter is switched off.
     private var pathsResolved = 0
 
     override func setUpWithError() throws {
@@ -977,6 +840,10 @@ final class TokenUsageMonitorTests: XCTestCase {
 
     private var cacheExists: Bool { FileManager.default.fileExists(atPath: sandbox.paths.cacheFile.path) }
 
+    private func cacheModified() throws -> Date? {
+        try FileManager.default.attributesOfItem(atPath: sandbox.paths.cacheFile.path)[.modificationDate] as? Date
+    }
+
     private func waitUntil(_ seconds: Double = 10, _ condition: () -> Bool) async throws -> Bool {
         let deadline = Date().addingTimeInterval(seconds)
         while !condition() {
@@ -991,13 +858,16 @@ final class TokenUsageMonitorTests: XCTestCase {
         XCTAssertEqual(TokenCounterPreference.showKey, "showTokenCounter")
     }
 
-    /// With the setting never touched, nothing runs: no worker, no paths resolved (so no
-    /// file access, no FSEvents stream, no SQLite connection), and no cache file appears.
+    /// With the setting never touched, nothing runs — not even while locked: no worker, no
+    /// paths resolved (so no file access, no FSEvents stream, no SQLite connection), and no
+    /// cache file appears.
     func testOffMeansTheMonitorNeverStarts() async throws {
         let monitor = makeMonitor()
         monitor.followPreference()
         XCTAssertFalse(monitor.isRunning)
         XCTAssertNil(monitor.worker)
+        monitor.lockBegan()
+        XCTAssertFalse(monitor.isRunning)
         // Activity in the watched folder while off changes nothing either.
         sandbox.append("a.jsonl", usageLine(id: "more", time: ISO8601DateFormatter().string(from: Date()), output: 5) + "\n")
         try await Task.sleep(nanoseconds: 2_500_000_000)
@@ -1007,25 +877,32 @@ final class TokenUsageMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.todayTokens, 0)
         XCTAssertTrue(monitor.isCounting)
 
-        // Explicitly off is the same as never set.
+        // Explicitly off is the same as never set, and nothing is deleted that was never written.
         defaults.set(false, forKey: TokenCounterPreference.showKey)
         try await Task.sleep(nanoseconds: 300_000_000)
         XCTAssertFalse(monitor.isRunning)
         XCTAssertEqual(pathsResolved, 0)
+        monitor.lockEnded()
     }
 
-    /// Settings flips it while the app runs: on starts the worker (it counts and saves its
-    /// cache); off stops it and the worker is released — its FSEvents stream retained it, so
-    /// a released worker means the stream is gone, and the database connection with it — and
-    /// nothing is read or written afterwards.
-    func testTurningItOnStartsAndTurningItOffReleasesEverything() async throws {
+    /// The worker lives for one lock session: with the counter on, locking starts it (catching
+    /// up from the cache) and unlocking releases it — its FSEvents stream retained it, so a
+    /// released worker means the stream is gone, and the database connection with it. Nothing
+    /// is read while the Mac is in use, and the numbers already published stay on screen for
+    /// the next lock.
+    func testTheWorkerRunsOnlyWhileLocked() async throws {
         let monitor = makeMonitor()
-        monitor.followPreference()
-        XCTAssertFalse(monitor.isRunning)
-
         defaults.set(true, forKey: TokenCounterPreference.showKey)
-        let started = try await waitUntil { monitor.isRunning }
-        XCTAssertTrue(started)
+        monitor.followPreference()
+
+        // On, but unlocked: nothing runs, and no path is even resolved.
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertFalse(monitor.isRunning)
+        XCTAssertEqual(pathsResolved, 0)
+        XCTAssertFalse(cacheExists)
+
+        monitor.lockBegan()
+        XCTAssertTrue(monitor.isRunning)
         XCTAssertEqual(pathsResolved, 1)
         let counted = try await waitUntil { !monitor.isCounting && monitor.todayTokens == 100 }
         XCTAssertTrue(counted, "today: \(monitor.todayTokens), counting: \(monitor.isCounting)")
@@ -1034,28 +911,57 @@ final class TokenUsageMonitorTests: XCTestCase {
 
         weak var worker = monitor.worker
         XCTAssertNotNil(worker)
+        monitor.lockEnded()
+        XCTAssertFalse(monitor.isRunning)
+        let released = try await waitUntil { worker == nil }
+        XCTAssertTrue(released, "the stopped worker is still alive")
+        // The numbers stay for the next lock; so does the cache, so that lock resumes.
+        XCTAssertEqual(monitor.todayTokens, 100)
+        XCTAssertFalse(monitor.isCounting)
+        XCTAssertTrue(cacheExists)
+
+        // Tokens spent while the Mac is in use are not followed: nothing is read, and the
+        // cache is not touched, until the next lock picks them up.
+        let written = try cacheModified()
+        sandbox.append("a.jsonl", usageLine(id: "while-unlocked", time: ISO8601DateFormatter().string(from: Date()), output: 7) + "\n")
+        try await Task.sleep(nanoseconds: 2_500_000_000)
+        XCTAssertEqual(monitor.todayTokens, 100)
+        XCTAssertEqual(written, try cacheModified())
+        XCTAssertEqual(pathsResolved, 1)
+
+        monitor.lockBegan()
+        let caughtUp = try await waitUntil { monitor.todayTokens == 107 }
+        XCTAssertTrue(caughtUp, "today: \(monitor.todayTokens)")
+        monitor.lockEnded()
+        _ = try await waitUntil { !monitor.isRunning }
+    }
+
+    /// Switching the counter off stops the worker and deletes its saved progress: that file
+    /// lists the transcripts it has read, so it carries project folder names.
+    func testSwitchingItOffDeletesTheSavedProgress() async throws {
+        let monitor = makeMonitor()
+        defaults.set(true, forKey: TokenCounterPreference.showKey)
+        monitor.followPreference()
+        monitor.lockBegan()
+        let saved = try await waitUntil { !monitor.isCounting && self.cacheExists }
+        XCTAssertTrue(saved)
+
+        weak var worker = monitor.worker
         defaults.set(false, forKey: TokenCounterPreference.showKey)
         let stopped = try await waitUntil { !monitor.isRunning }
         XCTAssertTrue(stopped)
         let released = try await waitUntil { worker == nil }
         XCTAssertTrue(released, "the stopped worker is still alive")
+        let deleted = try await waitUntil { !self.cacheExists }
+        XCTAssertTrue(deleted, "token-usage.json is still there")
         XCTAssertEqual(monitor.todayTokens, 0)
         XCTAssertTrue(monitor.isCounting)
 
-        // Off again: new tokens in the watched folder are not read and the cache is not touched.
-        let written = try FileManager.default.attributesOfItem(atPath: sandbox.paths.cacheFile.path)[.modificationDate] as? Date
-        sandbox.append("a.jsonl", usageLine(id: "after-off", time: ISO8601DateFormatter().string(from: Date()), output: 7) + "\n")
-        try await Task.sleep(nanoseconds: 2_500_000_000)
-        let after = try FileManager.default.attributesOfItem(atPath: sandbox.paths.cacheFile.path)[.modificationDate] as? Date
-        XCTAssertEqual(written, after)
-        XCTAssertEqual(monitor.todayTokens, 0)
-        XCTAssertEqual(pathsResolved, 1)
-
-        // And on once more resumes from the cache it left.
+        // Back on during the same lock: its progress is gone, so it counts again from scratch.
         defaults.set(true, forKey: TokenCounterPreference.showKey)
-        let resumed = try await waitUntil { !monitor.isCounting && monitor.todayTokens == 107 }
-        XCTAssertTrue(resumed, "today: \(monitor.todayTokens)")
-        defaults.set(false, forKey: TokenCounterPreference.showKey)
+        let recounted = try await waitUntil { !monitor.isCounting && monitor.todayTokens == 100 }
+        XCTAssertTrue(recounted, "today: \(monitor.todayTokens)")
+        monitor.lockEnded()
         _ = try await waitUntil { !monitor.isRunning }
     }
 }

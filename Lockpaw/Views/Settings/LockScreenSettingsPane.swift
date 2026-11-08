@@ -71,7 +71,7 @@ struct LockScreenSettingsPane: View {
 
             Section("Token counter") {
                 Toggle(isOn: $showTokenCounter) {
-                    SettingLabel("Show token usage", detail: "Reads Claude Code and opencode usage on this Mac and shows it on the lock screen.")
+                    SettingLabel("Show token usage", detail: "Shows today's tokens and this year's on the lock screen. While locked, Lockpaw reads Claude Code's transcripts and opencode's database on this Mac to count them. Nothing leaves your Mac.")
                 }
             }
 

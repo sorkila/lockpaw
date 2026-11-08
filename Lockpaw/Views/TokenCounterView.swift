@@ -1,8 +1,8 @@
 import SwiftUI
 
 // The lock screen's token counter, under the timer: today's tokens with the live rate, and
-// this year's total with its API-equivalent cost — one combined total across every model and
-// tool, never per model. Shown only when Settings → Lock Screen → Token counter is on.
+// this year's total — one combined total across every model and tool, never per model. Shown
+// only when Settings → Lock Screen → Token counter is on.
 //
 // `TokenCounterView` observes the monitor itself, so a token update re-renders only this
 // subtree and never `LockScreenView`'s body (which already runs every breath frame);
@@ -24,9 +24,9 @@ struct TokenCounterView: View, Equatable {
     static func == (a: TokenCounterView, b: TokenCounterView) -> Bool { a.compact == b.compact }
 
     var body: some View {
-        TokenCounterHero(today: monitor.todayTokens, yearTokens: monitor.yearTokens, yearCost: monitor.yearCost,
-                         year: monitor.year, isCounting: monitor.isCounting, recent: monitor.recent,
-                         arrival: monitor.arrival, compact: compact)
+        TokenCounterHero(today: monitor.todayTokens, yearTokens: monitor.yearTokens, year: monitor.year,
+                         isCounting: monitor.isCounting, recent: monitor.recent, arrival: monitor.arrival,
+                         compact: compact)
             .onAppear { monitor.counterAppeared() }
             .onDisappear { monitor.counterDisappeared() }
     }
@@ -37,7 +37,6 @@ struct TokenCounterView: View, Equatable {
 struct TokenCounterHero: View {
     let today: Int64
     let yearTokens: Int64
-    let yearCost: Double
     let year: Int
     let isCounting: Bool
     let recent: TokenRateWindow
@@ -165,7 +164,7 @@ struct TokenCounterHero: View {
     }
 
     private var yearLine: some View {
-        Text(String(year) + " \u{00B7} " + TokenFormat.compact(yearTokens) + " tokens \u{00B7} \u{2248} " + TokenFormat.cost(yearCost))
+        Text(String(year) + " \u{00B7} " + TokenFormat.compact(yearTokens) + " tokens")
             .font(.lockCaption.monospacedDigit())
             .tracking(0.5)
             .foregroundStyle(.white.opacity(0.3))
@@ -192,7 +191,7 @@ struct TokenCounterHero: View {
         if isCounting { return "Counting tokens" }
         let perMinute = recent.tokensPerMinute(now: Date().timeIntervalSince1970)
         let rate = perMinute == 0 ? "idle" : "\(TokenFormat.spoken(perMinute)) tokens a minute"
-        return "\(TokenFormat.grouped(today)) tokens today, \(rate). \(TokenFormat.spoken(yearTokens)) tokens in \(year), about \(TokenFormat.cost(yearCost)) at API prices."
+        return "\(TokenFormat.grouped(today)) tokens today, \(rate). \(TokenFormat.spoken(yearTokens)) tokens in \(year)."
     }
 }
 

@@ -8,7 +8,7 @@ import SQLite3
 final class OpencodeUsageSource: OpencodeRowSource {
     /// `time_created` first so SQLite walks its index; `json_extract` runs only on matches.
     static let query = """
-        SELECT id, time_created, time_updated, json_extract(data, '$.tokens'), json_extract(data, '$.cost')
+        SELECT id, time_created, time_updated, json_extract(data, '$.tokens')
         FROM session_message
         WHERE type = 'assistant' AND time_updated > ?1 AND time_created >= ?2 AND time_created < ?3
         """
@@ -47,10 +47,9 @@ final class OpencodeUsageSource: OpencodeRowSource {
                 switch code {
                 case SQLITE_ROW:
                     guard let id = text(statement, 0) else { continue }
-                    let cost: Double? = sqlite3_column_type(statement, 4) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 4)
                     rows.append(OpencodeUsage.row(id: id, createdMs: sqlite3_column_int64(statement, 1),
                                                   updatedMs: sqlite3_column_int64(statement, 2),
-                                                  tokensJSON: text(statement, 3), cost: cost))
+                                                  tokensJSON: text(statement, 3)))
                 case SQLITE_DONE:
                     return .success(rows)
                 case SQLITE_BUSY, SQLITE_LOCKED:

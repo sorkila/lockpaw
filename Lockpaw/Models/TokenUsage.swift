@@ -15,20 +15,15 @@ enum TokenCounterPreference {
 
 // MARK: - Counts
 
-/// Tokens of one message, or a sum of them. Cache writes are kept by lifetime because the
-/// 5-minute and 1-hour writes are priced differently.
+/// Tokens of one message, or a sum of them.
 struct TokenCounts: Equatable, Codable, Sendable {
     var input: Int64 = 0
     var output: Int64 = 0
     var reasoning: Int64 = 0
     var cacheRead: Int64 = 0
-    var cacheWrite5m: Int64 = 0
-    var cacheWrite1h: Int64 = 0
+    var cacheWrite: Int64 = 0
 
-    var cacheWrite: Int64 { cacheWrite5m + cacheWrite1h }
     var total: Int64 { input + output + reasoning + cacheRead + cacheWrite }
-    /// What the model read for a request — the size the long-context tiers are judged on.
-    var prompt: Int64 { input + cacheRead + cacheWrite }
     var isZero: Bool { self == TokenCounts() }
 
     /// Field-wise maximum: a message logged several times while streaming carries its
@@ -36,20 +31,19 @@ struct TokenCounts: Equatable, Codable, Sendable {
     func merged(with other: TokenCounts) -> TokenCounts {
         TokenCounts(input: max(input, other.input), output: max(output, other.output),
                     reasoning: max(reasoning, other.reasoning), cacheRead: max(cacheRead, other.cacheRead),
-                    cacheWrite5m: max(cacheWrite5m, other.cacheWrite5m), cacheWrite1h: max(cacheWrite1h, other.cacheWrite1h))
+                    cacheWrite: max(cacheWrite, other.cacheWrite))
     }
 
     /// Field-wise increase over `old`, never negative.
     func increase(from old: TokenCounts) -> TokenCounts {
         TokenCounts(input: max(0, input - old.input), output: max(0, output - old.output),
                     reasoning: max(0, reasoning - old.reasoning), cacheRead: max(0, cacheRead - old.cacheRead),
-                    cacheWrite5m: max(0, cacheWrite5m - old.cacheWrite5m), cacheWrite1h: max(0, cacheWrite1h - old.cacheWrite1h))
+                    cacheWrite: max(0, cacheWrite - old.cacheWrite))
     }
 
     static func + (a: TokenCounts, b: TokenCounts) -> TokenCounts {
         TokenCounts(input: a.input + b.input, output: a.output + b.output, reasoning: a.reasoning + b.reasoning,
-                    cacheRead: a.cacheRead + b.cacheRead, cacheWrite5m: a.cacheWrite5m + b.cacheWrite5m,
-                    cacheWrite1h: a.cacheWrite1h + b.cacheWrite1h)
+                    cacheRead: a.cacheRead + b.cacheRead, cacheWrite: a.cacheWrite + b.cacheWrite)
     }
 }
 
@@ -352,8 +346,6 @@ struct ClaudeUsageLine: Equatable, Sendable {
     var model: String
     var timestamp: Double
     var counts: TokenCounts
-    var speed: String?
-    var geo: String?
 }
 
 enum ClaudeTranscriptLine {
@@ -398,14 +390,11 @@ enum ClaudeTranscriptLine {
 
         var counts = TokenCounts()
         var creation: Int64?, write5m: Int64?, write1h: Int64?
-        var speed: String?, geo: String?
         guard JSONBytes.forEachMember(p, in: usage, { key, value in
             if JSONBytes.equals(p, key, "input_tokens") { counts.input = max(0, JSONBytes.int64(p, value) ?? 0) }
             else if JSONBytes.equals(p, key, "output_tokens") { counts.output = max(0, JSONBytes.int64(p, value) ?? 0) }
             else if JSONBytes.equals(p, key, "cache_read_input_tokens") { counts.cacheRead = max(0, JSONBytes.int64(p, value) ?? 0) }
             else if JSONBytes.equals(p, key, "cache_creation_input_tokens") { creation = JSONBytes.int64(p, value) }
-            else if JSONBytes.equals(p, key, "speed") { speed = JSONBytes.string(p, value) }
-            else if JSONBytes.equals(p, key, "inference_geo") { geo = JSONBytes.string(p, value) }
             else if JSONBytes.equals(p, key, "cache_creation"), p[value.lowerBound] == JSONBytes.openBrace {
                 JSONBytes.forEachMember(p, in: value) { k, v in
                     if JSONBytes.equals(p, k, "ephemeral_5m_input_tokens") { write5m = JSONBytes.int64(p, v) }
@@ -414,12 +403,10 @@ enum ClaudeTranscriptLine {
             }
         }) else { return nil }
 
-        // The total is authoritative; the breakdown only says how much of it was 5-minute.
-        // Without a breakdown the write is taken as 1-hour (what Claude Code requests).
-        let written = max(0, creation ?? ((write5m ?? 0) + (write1h ?? 0)))
-        counts.cacheWrite5m = min(written, max(0, write5m ?? 0))
-        counts.cacheWrite1h = written - counts.cacheWrite5m
-        return ClaudeUsageLine(id: messageID, model: modelName, timestamp: time, counts: counts, speed: speed, geo: geo)
+        // `cache_creation_input_tokens` is the authoritative total; the per-lifetime
+        // breakdown under `cache_creation` is only used when it is missing.
+        counts.cacheWrite = max(0, creation ?? ((write5m ?? 0) + (write1h ?? 0)))
+        return ClaudeUsageLine(id: messageID, model: modelName, timestamp: time, counts: counts)
     }
 
     static func parse(_ data: Data) -> ClaudeUsageLine? {
@@ -436,14 +423,10 @@ struct OpencodeRow: Equatable, Sendable {
     var createdMs: Int64
     var updatedMs: Int64
     var counts: TokenCounts
-    /// What opencode itself recorded the message as costing, in USD (often 0).
-    var cost: Double
 }
 
 enum OpencodeUsage {
     /// `data.tokens` as stored: `{"input":…,"output":…,"reasoning":…,"cache":{"read":…,"write":…}}`.
-    /// opencode doesn't say which cache lifetime it wrote; the row is never priced from tokens
-    /// (opencode's own `cost` is used), so the writes are filed under 5-minute.
     static func counts(tokensJSON: String?) -> TokenCounts {
         guard var text = tokensJSON, !text.isEmpty else { return TokenCounts() }
         return text.withUTF8 { buffer -> TokenCounts in
@@ -456,7 +439,7 @@ enum OpencodeUsage {
                 else if JSONBytes.equals(p, key, "cache"), p[value.lowerBound] == JSONBytes.openBrace {
                     JSONBytes.forEachMember(p, in: value) { k, v in
                         if JSONBytes.equals(p, k, "read") { counts.cacheRead = max(0, JSONBytes.int64(p, v) ?? 0) }
-                        else if JSONBytes.equals(p, k, "write") { counts.cacheWrite5m = max(0, JSONBytes.int64(p, v) ?? 0) }
+                        else if JSONBytes.equals(p, k, "write") { counts.cacheWrite = max(0, JSONBytes.int64(p, v) ?? 0) }
                     }
                 }
             }
@@ -464,9 +447,8 @@ enum OpencodeUsage {
         }
     }
 
-    static func row(id: String, createdMs: Int64, updatedMs: Int64, tokensJSON: String?, cost: Double?) -> OpencodeRow {
-        let usd = cost.map { $0.isFinite ? max(0, $0) : 0 } ?? 0
-        return OpencodeRow(id: id, createdMs: createdMs, updatedMs: updatedMs, counts: counts(tokensJSON: tokensJSON), cost: usd)
+    static func row(id: String, createdMs: Int64, updatedMs: Int64, tokensJSON: String?) -> OpencodeRow {
+        OpencodeRow(id: id, createdMs: createdMs, updatedMs: updatedMs, counts: counts(tokensJSON: tokensJSON))
     }
 }
 
@@ -479,13 +461,7 @@ enum OpencodeUsage {
 struct UsageLedger: Sendable {
     struct Entry: Equatable, Sendable {
         var counts: TokenCounts
-        var cost: Double
         var lastSeen: Double
-    }
-
-    struct Increase: Equatable, Sendable {
-        var tokens: TokenCounts
-        var cost: Double
     }
 
     private(set) var entries: [UInt64: Entry] = [:]
@@ -503,23 +479,17 @@ struct UsageLedger: Sendable {
     func contains(_ key: UInt64) -> Bool { entries[key] != nil }
 
     /// Records the running totals `counts` seen at `seen` and returns only the increase.
-    /// `price` maps the merged running totals to the message's cost so far (for a recorded
-    /// cost, return it unchanged); cost is increase-only too.
-    mutating func record(_ key: UInt64, counts: TokenCounts, seen: Double, price: (TokenCounts) -> Double) -> Increase {
+    mutating func record(_ key: UInt64, counts: TokenCounts, seen: Double) -> TokenCounts {
         if var entry = entries[key] {
             let merged = entry.counts.merged(with: counts)
             let grown = merged.increase(from: entry.counts)
-            let cost = max(entry.cost, price(merged))
-            let increase = Increase(tokens: grown, cost: cost - entry.cost)
             entry.counts = merged
-            entry.cost = cost
             entry.lastSeen = max(entry.lastSeen, seen)
             entries[key] = entry
-            return increase
+            return grown
         }
-        let cost = max(0, price(counts))
-        entries[key] = Entry(counts: counts, cost: cost, lastSeen: seen)
-        return Increase(tokens: counts, cost: cost)
+        entries[key] = Entry(counts: counts, lastSeen: seen)
+        return counts
     }
 
     mutating func prune(olderThan cutoff: Double) {
@@ -556,164 +526,17 @@ struct LedgerRecord: Codable, Equatable, Sendable {
         counts.output = try c.decode(Int64.self)
         counts.reasoning = try c.decode(Int64.self)
         counts.cacheRead = try c.decode(Int64.self)
-        counts.cacheWrite5m = try c.decode(Int64.self)
-        counts.cacheWrite1h = try c.decode(Int64.self)
-        let cost = try c.decode(Double.self)
+        counts.cacheWrite = try c.decode(Int64.self)
         let seen = try c.decode(Double.self)
-        entry = UsageLedger.Entry(counts: counts, cost: cost, lastSeen: seen)
+        entry = UsageLedger.Entry(counts: counts, lastSeen: seen)
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.unkeyedContainer()
         try c.encode(key)
         let t = entry.counts
-        for value in [t.input, t.output, t.reasoning, t.cacheRead, t.cacheWrite5m, t.cacheWrite1h] { try c.encode(value) }
-        try c.encode(entry.cost)
+        for value in [t.input, t.output, t.reasoning, t.cacheRead, t.cacheWrite] { try c.encode(value) }
         try c.encode(entry.lastSeen)
-    }
-}
-
-// MARK: - Prices
-
-/// USD per million tokens.
-struct TokenRates: Equatable, Sendable {
-    var input: Double
-    var cacheWrite5m: Double
-    var cacheWrite1h: Double
-    var cacheRead: Double
-    var output: Double
-
-    init(_ input: Double, _ cacheWrite5m: Double, _ cacheWrite1h: Double, _ cacheRead: Double, _ output: Double) {
-        self.input = input
-        self.cacheWrite5m = cacheWrite5m
-        self.cacheWrite1h = cacheWrite1h
-        self.cacheRead = cacheRead
-        self.output = output
-    }
-}
-
-struct ModelPricing: Equatable, Sendable {
-    var base: TokenRates
-    /// A higher tier for long prompts: applies when `prompt > threshold`.
-    var longPrompt: (threshold: Int64, rates: TokenRates)?
-    /// Fast-mode input/output rates; cache rates scale by the same factor as input.
-    var fast: (input: Double, output: Double)?
-    /// `inference_geo == "us"` costs ×1.1 on 4.6-and-later models.
-    var usGeoSurcharge: Bool
-
-    static func == (a: ModelPricing, b: ModelPricing) -> Bool {
-        a.base == b.base && a.longPrompt?.threshold == b.longPrompt?.threshold && a.longPrompt?.rates == b.longPrompt?.rates
-            && a.fast?.input == b.fast?.input && a.fast?.output == b.fast?.output && a.usGeoSurcharge == b.usGeoSurcharge
-    }
-}
-
-/// Anthropic API list prices — the "≈ $" on the lock screen is what this usage would cost at
-/// API rates. Unknown and non-Anthropic models (GLM, DeepSeek, … through gateways) are
-/// unpriced: their tokens count, their cost doesn't.
-enum TokenPricing {
-    static let fetchedOn = "2026-11-05"
-    static let source = "https://platform.claude.com/docs/en/about-claude/pricing"
-    static let usGeoMultiplier = 1.1
-
-    static let table: [String: ModelPricing] = [
-        "opus-5-5": ModelPricing(base: TokenRates(4, 5, 8, 0.20, 20), fast: (8, 40), usGeoSurcharge: true),
-        "opus-5": ModelPricing(base: TokenRates(5, 6.25, 10, 0.50, 25), fast: (10, 50), usGeoSurcharge: true),
-        "opus-4-8": ModelPricing(base: TokenRates(5, 6.25, 10, 0.50, 25), fast: (10, 50), usGeoSurcharge: true),
-        "opus-4-7": ModelPricing(base: TokenRates(5, 6.25, 10, 0.50, 25), usGeoSurcharge: true),
-        "opus-4-6": ModelPricing(base: TokenRates(5, 6.25, 10, 0.50, 25), usGeoSurcharge: true),
-        "opus-4-5": ModelPricing(base: TokenRates(5, 6.25, 10, 0.50, 25), usGeoSurcharge: false),
-        "sonnet-5-5": ModelPricing(base: TokenRates(2, 2.50, 4, 0.10, 10), usGeoSurcharge: true),
-        "sonnet-5": ModelPricing(base: TokenRates(2, 2.50, 4, 0.20, 10), usGeoSurcharge: true),
-        "sonnet-4-6": ModelPricing(base: TokenRates(3, 3.75, 6, 0.30, 15), usGeoSurcharge: true),
-        "sonnet-4-5": ModelPricing(base: TokenRates(3, 3.75, 6, 0.30, 15), usGeoSurcharge: false),
-        "haiku-5-5": ModelPricing(base: TokenRates(0.10, 0.125, 0.20, 0.01, 0.50),
-                                  longPrompt: (100_000, TokenRates(0.50, 0.625, 1, 0.05, 2.50)), usGeoSurcharge: true),
-        "haiku-4-5": ModelPricing(base: TokenRates(1, 1.25, 2, 0.10, 5), usGeoSurcharge: false),
-        "fable-5-1": ModelPricing(base: TokenRates(10, 12.50, 20, 0.25, 50), usGeoSurcharge: true),
-        "fable-5": ModelPricing(base: TokenRates(10, 12.50, 20, 1, 50), usGeoSurcharge: true),
-        "mythos-5-1": ModelPricing(base: TokenRates(10, 12.50, 20, 0.25, 50), usGeoSurcharge: true),
-    ]
-
-    private static let families: Set<Substring> = ["opus", "sonnet", "haiku", "fable", "mythos"]
-
-    /// The price-table family of a model id, matched by family and version so dated and
-    /// provider-prefixed ids price like the base model: "claude-opus-4-5-20251101" →
-    /// "opus-4-5", "us.anthropic.claude-opus-4-6-v1:0" → "opus-4-6". A version the table
-    /// doesn't list is unpriced rather than rounded to a neighbour.
-    static func family(for modelID: String) -> String? {
-        let id = modelID.lowercased()
-        guard id.contains("claude") else { return nil }
-        let parts = id.split(whereSeparator: { !($0.isLetter || $0.isNumber) })
-        for (i, part) in parts.enumerated() where families.contains(part) {
-            guard i + 1 < parts.count, parts[i + 1].count <= 2, let major = Int(parts[i + 1]) else { continue }
-            let base = "\(part)-\(major)"
-            if i + 2 < parts.count, parts[i + 2].count <= 2, let minor = Int(parts[i + 2]) {
-                let versioned = "\(base)-\(minor)"
-                return table[versioned] != nil ? versioned : nil
-            }
-            return table[base] != nil ? base : nil
-        }
-        return nil
-    }
-
-    static func pricing(for modelID: String) -> ModelPricing? {
-        family(for: modelID).flatMap { table[$0] }
-    }
-
-    /// API-equivalent USD for `counts` on `model`, or nil when the model is unpriced.
-    /// `aggregate` marks totals summed over many requests (the stats-cache baseline): their
-    /// combined prompt says nothing about any one request's tier, so the base tier applies.
-    static func cost(_ counts: TokenCounts, model: String, speed: String? = nil, geo: String? = nil,
-                     aggregate: Bool = false) -> Double? {
-        guard let pricing = pricing(for: model) else { return nil }
-        var rates = pricing.base
-        if !aggregate, let tier = pricing.longPrompt, counts.prompt > tier.threshold { rates = tier.rates }
-        if speed == "fast", let fast = pricing.fast {
-            let factor = fast.input / rates.input
-            rates = TokenRates(fast.input, rates.cacheWrite5m * factor, rates.cacheWrite1h * factor,
-                               rates.cacheRead * factor, fast.output)
-        }
-        var usd = Double(counts.input) * rates.input
-            + Double(counts.cacheWrite5m) * rates.cacheWrite5m
-            + Double(counts.cacheWrite1h) * rates.cacheWrite1h
-            + Double(counts.cacheRead) * rates.cacheRead
-            + Double(counts.output + counts.reasoning) * rates.output
-        usd /= 1_000_000
-        if geo == "us" && pricing.usGeoSurcharge { usd *= usGeoMultiplier }
-        return usd
-    }
-}
-
-// MARK: - Cache-write lifetime split
-
-/// 5-minute vs 1-hour cache writes measured from scanned transcripts, per price family.
-/// `stats-cache.json` only has one cache-creation total per model, so its cost uses this split.
-struct CacheWriteSplit: Codable, Equatable, Sendable {
-    struct Tally: Codable, Equatable, Sendable {
-        var fiveMinute: Int64 = 0
-        var oneHour: Int64 = 0
-        var total: Int64 { fiveMinute + oneHour }
-    }
-
-    /// A model's own ratio is trusted from this many measured write tokens.
-    static let minimumSample: Int64 = 1_000_000
-
-    var byFamily: [String: Tally] = [:]
-
-    mutating func add(family: String?, fiveMinute: Int64, oneHour: Int64) {
-        guard let family, fiveMinute > 0 || oneHour > 0 else { return }
-        byFamily[family, default: Tally()].fiveMinute += fiveMinute
-        byFamily[family, default: Tally()].oneHour += oneHour
-    }
-
-    /// Share of cache writes that were 5-minute: the model's own ratio with enough data, else
-    /// the ratio over every model, else 0 (all 1-hour).
-    func fiveMinuteShare(family: String?) -> Double {
-        if let family, let own = byFamily[family], own.total >= Self.minimumSample {
-            return Double(own.fiveMinute) / Double(own.total)
-        }
-        let all = byFamily.values.reduce(Tally()) { Tally(fiveMinute: $0.fiveMinute + $1.fiveMinute, oneHour: $0.oneHour + $1.oneHour) }
-        return all.total > 0 ? Double(all.fiveMinute) / Double(all.total) : 0
     }
 }
 
@@ -794,7 +617,6 @@ private extension KeyedDecodingContainer {
 /// What the stats cache contributes to this year, and where transcripts take over.
 struct ClaudeBaseline: Equatable, Sendable {
     var tokens: Int64 = 0
-    var cost: Double = 0
     /// Days up to and including this key come from the stats cache; later ones from
     /// transcripts. nil = no usable cache: transcripts cover the whole year.
     var cutoffKey: Int?
@@ -803,12 +625,12 @@ struct ClaudeBaseline: Equatable, Sendable {
 enum ClaudeStatsBaseline {
     /// The year rule. `modelUsage` is all-time since `firstSessionDate`, so it is this year's
     /// baseline only when the first session was this year; otherwise this year's days of
-    /// `dailyModelTokens` count, priced at each model's blended `modelUsage` rate. Cached days
-    /// count only through `lastComputedDate` — and never today, which transcripts own (a cache
-    /// computed today would otherwise freeze the live count), so a cache that already holds
-    /// today has today's per-model share taken back out of `modelUsage`.
+    /// `dailyModelTokens` count. Cached days count only through `lastComputedDate` — and never
+    /// today, which transcripts own (a cache computed today would otherwise freeze the live
+    /// count), so a cache that already holds today has today's per-model share taken back out
+    /// of `modelUsage`.
     static func compute(_ stats: ClaudeStatsCache?, year: Int, todayKey: Int, yesterdayKey: Int,
-                        firstSessionYear: Int?, split: CacheWriteSplit) -> ClaudeBaseline {
+                        firstSessionYear: Int?) -> ClaudeBaseline {
         guard let stats, let last = stats.lastComputedDate.flatMap(LocalDayKeyer.key(isoDate:)) else {
             return ClaudeBaseline()
         }
@@ -829,28 +651,13 @@ enum ClaudeStatsBaseline {
                 guard total > 0 else { continue }
                 let keep = Double(max(0, total - (excluded[model] ?? 0))) / Double(total)
                 result.tokens += Int64((Double(total) * keep).rounded())
-                result.cost += (cost(of: totals, model: model, split: split) ?? 0) * keep
             }
         } else {
             for (key, byModel) in days where key / 10_000 == year && key <= cutoff {
-                for (model, tokens) in byModel where tokens > 0 {
-                    result.tokens += tokens
-                    if let totals = usage[model], totals.total > 0, let usd = cost(of: totals, model: model, split: split) {
-                        result.cost += Double(tokens) * usd / Double(totals.total)
-                    }
-                }
+                for tokens in byModel.values where tokens > 0 { result.tokens += tokens }
             }
         }
         return result
-    }
-
-    /// A model's cached totals priced with the measured cache-write lifetime split.
-    static func cost(of totals: ClaudeStatsCache.ModelTotals, model: String, split: CacheWriteSplit) -> Double? {
-        let share = split.fiveMinuteShare(family: TokenPricing.family(for: model))
-        let fiveMinute = Int64((Double(totals.cacheCreationInputTokens) * share).rounded())
-        let counts = TokenCounts(input: totals.inputTokens, output: totals.outputTokens, cacheRead: totals.cacheReadInputTokens,
-                                 cacheWrite5m: fiveMinute, cacheWrite1h: totals.cacheCreationInputTokens - fiveMinute)
-        return TokenPricing.cost(counts, model: model, aggregate: true)
     }
 }
 
@@ -1074,14 +881,6 @@ enum TokenFormat {
 
     /// "2.4M/min".
     static func rate(perMinute n: Int64) -> String { short(n) + "/min" }
-
-    /// "$12,345" from $100, "$7.42" below.
-    static func cost(_ usd: Double) -> String {
-        guard usd.isFinite else { return "$0" }
-        let v = max(0, usd)
-        if v < 100 { return String(format: "$%.2f", v) }
-        return "$" + grouped(Int64(v.rounded()))
-    }
 
     /// For VoiceOver: "123.5 billion", "950".
     static func spoken(_ n: Int64) -> String {

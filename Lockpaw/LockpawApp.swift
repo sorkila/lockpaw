@@ -58,8 +58,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Lid-closed mode: clear a sleep block a crashed previous run may have left.
         LidSleepController.shared.applicationDidLaunch()
 
-        // Token counter: runs only while Settings → Lock Screen → Token counter is on (off by
-        // default), and starts or stops as that setting changes.
+        // Token counter: follow Settings → Lock Screen → Token counter (off by default). It
+        // counts only while locked — LockController starts and stops it — so nothing is read
+        // here.
         MainActor.assumeIsolated { TokenUsageMonitor.shared.followPreference() }
 
         // Start Sparkle after app is fully launched

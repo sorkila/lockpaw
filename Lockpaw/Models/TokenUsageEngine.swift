@@ -37,20 +37,11 @@ struct TokenUsagePaths: Sendable, Equatable {
     }
 }
 
-/// Tokens and API-equivalent cost of one source on one local day.
-struct SourceDay: Codable, Equatable, Sendable {
-    var tokens: Int64 = 0
-    var cost: Double = 0
-
-    private enum CodingKeys: String, CodingKey { case tokens = "t", cost = "c" }
-}
-
 /// What the lock screen shows, published by the monitor.
 struct TokenUsageSnapshot: Equatable, Sendable {
     var year: Int
     var todayTokens: Int64
     var yearTokens: Int64
-    var yearCost: Double
     var isCounting: Bool
     var recent: TokenRateWindow
     /// Tokens that arrived live since the previous snapshot (0 while scanning or catching up).
@@ -59,7 +50,7 @@ struct TokenUsageSnapshot: Equatable, Sendable {
 
 /// The persisted progress: `token-usage.json` in Lockpaw's Application Support folder.
 struct TokenUsageCache: Codable, Equatable {
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     struct Claude: Codable, Equatable {
         var statsLastComputedDate: String?
@@ -67,15 +58,15 @@ struct TokenUsageCache: Codable, Equatable {
         var cutoffKey: Int?
         /// Paths relative to `projects/`.
         var files: [String: TrackedFile]
-        var days: [String: SourceDay]
-        var split: CacheWriteSplit
+        /// Tokens per local day, keyed yyyymmdd.
+        var days: [String: Int64]
         var coverageStart: Double?
         var ledger: [LedgerRecord]
     }
 
     struct Opencode: Codable, Equatable {
         var watermarkMs: Int64?
-        var days: [String: SourceDay]
+        var days: [String: Int64]
         var coverageStart: Double?
         var ledger: [LedgerRecord]
     }
@@ -124,22 +115,20 @@ final class TokenUsageEngine {
         var baseline = ClaudeBaseline()
         var files: [String: TrackedFile] = [:]
         var ledger = UsageLedger()
-        var days: [Int: SourceDay] = [:]
-        var split = CacheWriteSplit()
+        var days: [Int: Int64] = [:]
         /// Lines older than this whose message isn't in the ledger were counted before the
         /// ledger forgot them (pruned, or not persisted). nil = the ledger is complete.
         var coverageStart: Double?
 
         static func == (a: ClaudeState, b: ClaudeState) -> Bool {
             a.statsLastComputedDate == b.statsLastComputedDate && a.baseline == b.baseline && a.files == b.files
-                && a.days == b.days && a.split == b.split && a.coverageStart == b.coverageStart
-                && a.ledger.entries == b.ledger.entries
+                && a.days == b.days && a.coverageStart == b.coverageStart && a.ledger.entries == b.ledger.entries
         }
     }
 
     struct OpencodeState {
         var ledger = UsageLedger()
-        var days: [Int: SourceDay] = [:]
+        var days: [Int: Int64] = [:]
         /// Largest `time_updated` seen; nil until the year has been read once.
         var watermarkMs: Int64?
         var coverageStart: Double?
@@ -151,9 +140,9 @@ final class TokenUsageEngine {
 
     /// For the real-data harness report only — the UI shows one combined total.
     struct Breakdown {
-        var claudeBaselineTokens: Int64, claudeBaselineCost: Double
-        var claudeTranscriptYearTokens: Int64, claudeTranscriptYearCost: Double, claudeTodayTokens: Int64
-        var opencodeYearTokens: Int64, opencodeYearCost: Double, opencodeTodayTokens: Int64
+        var claudeBaselineTokens: Int64
+        var claudeTranscriptYearTokens: Int64, claudeTodayTokens: Int64
+        var opencodeYearTokens: Int64, opencodeTodayTokens: Int64
         var cutoffKey: Int?
         var ledgerEntries: Int, trackedFiles: Int
     }
@@ -264,7 +253,6 @@ final class TokenUsageEngine {
                cache.claude.statsLastComputedDate == stats?.lastComputedDate {
                 claude.files = cache.claude.files
                 claude.days = Self.days(cache.claude.days)
-                claude.split = cache.claude.split
                 claude.ledger = UsageLedger(records: cache.claude.ledger)
                 claude.coverageStart = Self.coverage(cache.claude.coverageStart, savedAt: cache.savedAt)
                 claude.baseline.cutoffKey = cache.claude.cutoffKey
@@ -295,8 +283,8 @@ final class TokenUsageEngine {
         max(stored ?? -.infinity, savedAt - persistedLedgerHorizon)
     }
 
-    private static func days(_ stored: [String: SourceDay]) -> [Int: SourceDay] {
-        var out: [Int: SourceDay] = [:]
+    private static func days(_ stored: [String: Int64]) -> [Int: Int64] {
+        var out: [Int: Int64] = [:]
         for (key, day) in stored { if let k = Int(key) { out[k] = day } }
         return out
     }
@@ -325,10 +313,10 @@ final class TokenUsageEngine {
 
     private func computeBaseline() -> ClaudeBaseline {
         ClaudeStatsBaseline.compute(stats, year: year, todayKey: todayKey, yesterdayKey: yesterdayKey,
-                                    firstSessionYear: firstSessionYear, split: claude.split)
+                                    firstSessionYear: firstSessionYear)
     }
 
-    /// Re-derives the baseline (after the stats cache changed, a new day, or new split data).
+    /// Re-derives the baseline (after the stats cache changed, or a new day began).
     /// A changed `lastComputedDate` — or a cutoff that moved backwards — needs a rebuild of the
     /// transcript side. A cutoff that only moved forward because a new day began drops the
     /// days the cache now covers.
@@ -358,12 +346,6 @@ final class TokenUsageEngine {
         return .baseline
     }
 
-    /// The first scan measured the 5-minute/1-hour cache-write split; price the baseline with it.
-    func reconcileClaudeAfterScan() {
-        let base = computeBaseline()
-        if base != claude.baseline { claude.baseline = base; revision += 1 }
-    }
-
     /// Forget the transcript side and scan it again (new `lastComputedDate`, new year).
     func rebuildClaude(progress: () -> Void = {}) {
         // A rescan re-reads tokens already shown: they are neither live arrivals nor new
@@ -372,7 +354,6 @@ final class TokenUsageEngine {
         reportsArrivals = false
         resetClaude()
         syncClaude(paths: nil, progress: progress)
-        claude.baseline = computeBaseline()
         pruneLedgers(force: true)
         rate = keptRate
         arrived = keptArrived
@@ -527,15 +508,10 @@ final class TokenUsageEngine {
         if let cutoff = claude.baseline.cutoffKey, day <= cutoff { return }
         let key = UsageLedger.key(usage.id)
         if guarded, let coverage = claude.coverageStart, usage.timestamp < coverage, !claude.ledger.contains(key) { return }
-        let increase = claude.ledger.record(key, counts: usage.counts, seen: usage.timestamp) { merged in
-            TokenPricing.cost(merged, model: usage.model, speed: usage.speed, geo: usage.geo) ?? 0
-        }
-        guard !increase.tokens.isZero || increase.cost > 0 else { return }
-        claude.days[day, default: SourceDay()].tokens += increase.tokens.total
-        claude.days[day, default: SourceDay()].cost += increase.cost
-        claude.split.add(family: TokenPricing.family(for: usage.model),
-                         fiveMinute: increase.tokens.cacheWrite5m, oneHour: increase.tokens.cacheWrite1h)
-        noteArrival(increase.tokens.total, at: usage.timestamp)
+        let increase = claude.ledger.record(key, counts: usage.counts, seen: usage.timestamp)
+        guard !increase.isZero else { return }
+        claude.days[day, default: 0] += increase.total
+        noteArrival(increase.total, at: usage.timestamp)
         revision += 1
     }
 
@@ -617,11 +593,10 @@ final class TokenUsageEngine {
         let key = UsageLedger.key(row.id)
         if let coverage = opencode.coverageStart, created < coverage, !opencode.ledger.contains(key) { return }
         let updated = Double(row.updatedMs) / 1000
-        let increase = opencode.ledger.record(key, counts: row.counts, seen: updated) { _ in row.cost }
-        guard !increase.tokens.isZero || increase.cost > 0 else { return }
-        opencode.days[day, default: SourceDay()].tokens += increase.tokens.total
-        opencode.days[day, default: SourceDay()].cost += increase.cost
-        noteArrival(increase.tokens.total, at: updated)
+        let increase = opencode.ledger.record(key, counts: row.counts, seen: updated)
+        guard !increase.isZero else { return }
+        opencode.days[day, default: 0] += increase.total
+        noteArrival(increase.total, at: updated)
         revision += 1
     }
 
@@ -652,19 +627,12 @@ final class TokenUsageEngine {
         rate.prune(now: now)
         let cutoff = claude.baseline.cutoffKey ?? Int.min
         var tokens = claude.baseline.tokens
-        var cost = claude.baseline.cost
-        for (key, day) in claude.days where key / 10_000 == year && key > cutoff {
-            tokens += day.tokens
-            cost += day.cost
-        }
-        for (key, day) in opencode.days where key / 10_000 == year {
-            tokens += day.tokens
-            cost += day.cost
-        }
-        let today = (claude.days[todayKey]?.tokens ?? 0) + (opencode.days[todayKey]?.tokens ?? 0)
+        for (key, day) in claude.days where key / 10_000 == year && key > cutoff { tokens += day }
+        for (key, day) in opencode.days where key / 10_000 == year { tokens += day }
+        let today = (claude.days[todayKey] ?? 0) + (opencode.days[todayKey] ?? 0)
         let arrival = arrived
         arrived = 0
-        return TokenUsageSnapshot(year: year, todayTokens: today, yearTokens: tokens, yearCost: cost,
+        return TokenUsageSnapshot(year: year, todayTokens: today, yearTokens: tokens,
                                   isCounting: isCounting, recent: rate, arrivedTokens: arrival)
     }
 
@@ -673,13 +641,11 @@ final class TokenUsageEngine {
         let claudeYear = claude.days.filter { $0.key / 10_000 == year && $0.key > cutoff }.values
         let openYear = opencode.days.filter { $0.key / 10_000 == year }.values
         return Breakdown(
-            claudeBaselineTokens: claude.baseline.tokens, claudeBaselineCost: claude.baseline.cost,
-            claudeTranscriptYearTokens: claudeYear.reduce(0) { $0 + $1.tokens },
-            claudeTranscriptYearCost: claudeYear.reduce(0) { $0 + $1.cost },
-            claudeTodayTokens: claude.days[todayKey]?.tokens ?? 0,
-            opencodeYearTokens: openYear.reduce(0) { $0 + $1.tokens },
-            opencodeYearCost: openYear.reduce(0) { $0 + $1.cost },
-            opencodeTodayTokens: opencode.days[todayKey]?.tokens ?? 0,
+            claudeBaselineTokens: claude.baseline.tokens,
+            claudeTranscriptYearTokens: claudeYear.reduce(0, +),
+            claudeTodayTokens: claude.days[todayKey] ?? 0,
+            opencodeYearTokens: openYear.reduce(0, +),
+            opencodeTodayTokens: opencode.days[todayKey] ?? 0,
             cutoffKey: claude.baseline.cutoffKey,
             ledgerEntries: claude.ledger.count + opencode.ledger.count, trackedFiles: claude.files.count)
     }
@@ -706,7 +672,7 @@ final class TokenUsageEngine {
                           cutoffKey: claude.baseline.cutoffKey,
                           files: claude.files.filter { $0.value.mtime >= from },
                           days: Dictionary(uniqueKeysWithValues: claude.days.map { (String($0.key), $0.value) }),
-                          split: claude.split, coverageStart: claude.coverageStart,
+                          coverageStart: claude.coverageStart,
                           ledger: claude.ledger.records(since: since)),
             opencode: .init(watermarkMs: opencode.watermarkMs,
                             days: Dictionary(uniqueKeysWithValues: opencode.days.map { (String($0.key), $0.value) }),
