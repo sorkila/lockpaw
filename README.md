@@ -34,7 +34,7 @@
 - **Every screen covered.** All displays, including ones you plug in while locked.
 - **Agents keep running.** AI coding tools, builds, downloads and SSH sessions carry on underneath.
 - **Agent alerts.** The locked screen glows when Claude Code, Codex, Gemini, Cursor, Copilot or Aider needs you, and the notification says which agent and why.
-- **Lid closed, still running.** Optional. Close the MacBook lid while locked and your agents keep going, no external display needed. It uses one small helper you approve once, and sleep comes back when you unlock, when the Mac runs hot, or at 20% battery.
+- **Lid closed, still running.** Optional. Close the MacBook lid while locked and your agents keep going, no external display needed. It uses one small helper you approve once, and sleep comes back when you unlock, when the Mac runs hot, or at 20% battery. How it works, the alternatives and how to check it: [keep Claude Code running with the lid closed](https://getlockpaw.com/claude-code-lid-closed/).
 - **Pings on your phone.** Optional. Forward agent pings to ntfy, Pushover or any webhook, such as Home Assistant.
 - **Shortcuts and Spotlight.** *Lock Screen* and *Is Lockpaw Locked?* actions. There's no unlock action, on purpose.
 - **Your wallpaper, Aerials included.** Optionally shows each display's macOS wallpaper behind the lock screen; Aerials keep moving while plugged in.
@@ -302,6 +302,14 @@ Pushes to `main` and PRs run the build and the full unit test suite via GitHub A
 Everything in Lockpaw is free and MIT-licensed, and everything that ships stays free. No feature is ever moved behind a payment.
 
 If Lockpaw earns its place on your Mac, you can [become a supporter](https://getlockpaw.com/support/) (once, $9 or $19 suggested, or pay what you want) or [sponsor me on GitHub](https://github.com/sponsors/sorkila). Supporters get a few thank-yous: four extra mascots, seasonal skins for the Dog and Cat, and no more asks: Lockpaw asks once, in a small card after it has done its job, and after that at most once a year in the menu bar. Contributors get a supporter licence on the house.
+
+<br>
+
+## Guides
+
+- [Keep Claude Code running with the MacBook lid closed](https://getlockpaw.com/claude-code-lid-closed/): what macOS does when you close the lid, `caffeinate`, `pmset disablesleep`, Amphetamine, LidRun and Lockpaw, and how to verify it with `pmset`.
+- [Claude Code notifications on Mac](https://getlockpaw.com/claude-code-notifications/): copy-paste Notification and Stop hooks for any terminal.
+- [Amphetamine alternatives for Mac, compared](https://getlockpaw.com/vs/): Amphetamine, caffeinate, KeepingYouAwake, Lidless, Adrafinil and the agent-era tools in one table, with when each one is the better pick.
 
 <br>
 
