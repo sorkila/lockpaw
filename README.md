@@ -39,7 +39,7 @@
 - **Shortcuts and Spotlight.** *Lock Screen* and *Is Lockpaw Locked?* actions. There's no unlock action, on purpose.
 - **Your wallpaper, Aerials included.** Optionally shows each display's macOS wallpaper behind the lock screen; Aerials keep moving while plugged in.
 - **Fade to black.** Optionally dims the lock screen to pure black after a while (good for OLED) without sleeping the display.
-- **Small and native.** About 14 MB of Swift. No Electron.
+- **Small and native.** About 15 MB of Swift. No Electron.
 - **No analytics.** No accounts, and the only network call is the signed update check, plus anything you switch on yourself.
 - **Dog, cat, or your own.** Pick the origami dog or cat, drop in your own image, or show no mascot at all.
 
