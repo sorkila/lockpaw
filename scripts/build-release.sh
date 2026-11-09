@@ -92,9 +92,11 @@ cp -R "${DMG_DIR}/${APP_NAME}.app" "${MOUNT_DIR}/"
 osascript -e "tell application \"Finder\" to make new alias file at POSIX file \"${MOUNT_DIR}\" to POSIX file \"/Applications\""
 mv "${MOUNT_DIR}/Applications alias" "${MOUNT_DIR}/Applications" 2>/dev/null || true
 
-# Set up background image
+# Set up background image. A multi-resolution TIFF (1x + 2x, from scripts/dmg-background.html):
+# Finder draws a bare @2x PNG at twice its size, which gave the window scrollbars.
 mkdir -p "${MOUNT_DIR}/.background"
-cp "scripts/dmg-background@2x.png" "${MOUNT_DIR}/.background/"
+cp "scripts/dmg-background.tiff" "${MOUNT_DIR}/.background/"
+chflags hidden "${MOUNT_DIR}/.background"
 
 # Set volume icon
 # Apply Finder window styling via AppleScript
@@ -108,16 +110,20 @@ tell application "Finder"
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set bounds of container window to {200, 120, 860, 600}
+    set pathbar visible of container window to false
+    -- 660 x 400 pt of content under a 33 pt title bar (measured on macOS 26), the background's size
+    set bounds of container window to {200, 120, 860, 553}
     set theViewOptions to icon view options of container window
     set arrangement of theViewOptions to not arranged
     set icon size of theViewOptions to 96
-    set text size of theViewOptions to 14
-    set background picture of theViewOptions to file ".background:dmg-background@2x.png"
-    -- Position only the two items we want visible
-    set position of item "${APP_NAME}.app" to {170, 170}
-    set position of item "Applications" to {490, 170}
-    -- Push everything else off-screen
+    set text size of theViewOptions to 13
+    set shows item info of theViewOptions to false
+    set background picture of theViewOptions to file ".background:dmg-background.tiff"
+    -- Position only the two items we want visible. position = icon centre; Finder draws the
+    -- label (always black on a picture background) 64 pt below it, on the background's tags.
+    set position of item "${APP_NAME}.app" to {165, 172}
+    set position of item "Applications" to {495, 172}
+    -- Push everything else off-screen (only seen by people who show hidden files)
     try
       set position of item ".background" to {900, 900}
     end try
@@ -139,6 +145,10 @@ APPLESCRIPT
 # Set volume icon AFTER AppleScript (the "update" command deletes .VolumeIcon.icns)
 cp "scripts/dmg-volume-icon.icns" "${MOUNT_DIR}/.VolumeIcon.icns"
 SetFile -a C "${MOUNT_DIR}"
+
+# fseventsd's log folder would show (and give scrollbars) for anyone who shows hidden files;
+# the final image is read-only, so it is never recreated.
+rm -rf "${MOUNT_DIR}/.fseventsd"
 
 # Convert to compressed read-only (single conversion, no metadata loss)
 sync

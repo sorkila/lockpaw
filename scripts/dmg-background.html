@@ -1,0 +1,123 @@
+<!--
+  Lockpaw DMG background (source). Finder window content is 660 x 400 pt.
+  Render at 1x and 2x (660x400 and 1320x800) with headless Chromium, replacing DOG_SRC
+  with a file:// URL to Lockpaw/Resources/Assets.xcassets/Mascot.imageset/Mascot.png, then:
+    tiffutil -cathidpicheck dmg-background.png dmg-background@2x.png -out dmg-background.tiff
+  Finder only picks the right scale from a multi-resolution TIFF; a bare @2x PNG is drawn at
+  twice the size and gives the window scrollbars.
+  Layout contract with build-release.sh / release.yml: icons centred at (165,172) and (495,172);
+  Finder draws their labels in black, centred 64 pt below the icon, on the amber/teal tags here.
+-->
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  /* Finder window content: 660 x 400 pt. Icons (96 pt) centred at (165,175) and (495,175). */
+  :root { --teal:#00D4AA; --amber:#FF9F43; --canvas:#09090b; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:660px; height:400px; overflow:hidden; background:var(--canvas); }
+  body { position:relative; font-family: -apple-system, system-ui, "SF Pro Text", sans-serif; -webkit-font-smoothing:antialiased; }
+
+  .layer { position:absolute; inset:0; }
+  /* faint violet-black lock-screen gradient + vignette */
+  .base { background:
+      radial-gradient(120% 90% at 50% 40%, #101015 0%, #09090b 55%, #050507 100%); }
+  /* destination glow: the ping bloom, behind Applications */
+  .glow-dest { background: radial-gradient(150px 135px at 495px 172px,
+      rgba(0,212,170,.26) 0%, rgba(0,212,170,.11) 45%, rgba(0,212,170,0) 100%); mix-blend-mode:screen; }
+  /* origin: a warm whisper behind the app */
+  .glow-src { background: radial-gradient(120px 110px at 165px 172px,
+      rgba(255,159,67,.13) 0%, rgba(255,159,67,.04) 50%, rgba(255,159,67,0) 100%); mix-blend-mode:screen; }
+  /* grain so the gradients don't band in Finder */
+  .grain { opacity:.05; mix-blend-mode:overlay; }
+
+  svg.trail { position:absolute; left:0; top:0; overflow:visible; }
+
+  .caption { position:absolute; left:0; right:0; top:229px; text-align:center;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.30); font-weight:500; }
+
+  .dog { position:absolute; right:58px; bottom:26px; width:118px; filter: drop-shadow(0 0 18px rgba(0,212,170,.22)); }
+  .ground { position:absolute; right:40px; bottom:18px; width:160px; height:22px;
+    background: radial-gradient(closest-side, rgba(0,212,170,.22), rgba(0,212,170,0)); }
+
+  .hint { position:absolute; left:44px; bottom:44px; display:flex; align-items:center; gap:7px;
+    font-size:13px; color:rgba(255,255,255,.50); font-weight:400; }
+  .hint .muted { color:rgba(255,255,255,.34); }
+  .kbd { display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 6px;
+    border-radius:6px; font-size:13px; font-weight:500; color:rgba(255,255,255,.80);
+    background: linear-gradient(#24242a, #18181d); border:1px solid rgba(255,255,255,.10);
+    box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 2px 0 rgba(0,0,0,.55); }
+  .sub { position:absolute; left:44px; bottom:24px; font-size:11px; color:rgba(255,255,255,.26); }
+
+  /* name tags behind Finder's labels: Finder draws them black, so give them a ground
+     (black on teal ~11:1, on amber ~10:1). Label centres at y=236 (icon centre + 64). */
+  .tag { position:absolute; top:225px; height:22px; border-radius:11px; }
+  .tag.src { left:127px; width:76px; background:linear-gradient(#FFB066,#F39333);
+             box-shadow:0 0 0 1px rgba(255,255,255,.18) inset, 0 0 18px rgba(255,159,67,.35); }
+  .tag.dst { left:446px; width:98px; background:linear-gradient(#2BE3BE,#00C29C);
+             box-shadow:0 0 0 1px rgba(255,255,255,.22) inset, 0 0 22px rgba(0,212,170,.45); }
+</style></head>
+<body>
+  <div class="layer base"></div>
+  <div class="layer glow-src"></div>
+  <div class="layer glow-dest"></div>
+  <svg class="layer grain" width="660" height="400"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>
+
+  <svg class="trail" width="660" height="400" viewBox="0 0 660 400">
+    <defs>
+      <!-- one paw, pointing +x (walking right), centred on 0,0 -->
+      <g id="paw">
+        <!-- main pad: three soft lobes at the back, rounded front -->
+        <path d="M6,0 C6,-7 1,-11.5 -4,-11.5 C-8,-11.5 -9.5,-8 -11,-6.5 C-13.5,-4 -14,-2 -12.5,0 C-14,2 -13.5,4 -11,6.5 C-9.5,8 -8,11.5 -4,11.5 C1,11.5 6,7 6,0 Z"/>
+        <!-- four toes on an arc in front of the pad -->
+        <ellipse cx="9"    cy="-13.5" rx="4.2" ry="3.5" transform="rotate(-38 9 -13.5)"/>
+        <ellipse cx="15.5" cy="-5"    rx="4.6" ry="3.7" transform="rotate(-12 15.5 -5)"/>
+        <ellipse cx="15.5" cy="5"     rx="4.6" ry="3.7" transform="rotate(12 15.5 5)"/>
+        <ellipse cx="9"    cy="13.5"  rx="4.2" ry="3.5" transform="rotate(38 9 13.5)"/>
+      </g>
+      <filter id="pawglow" x="-80%" y="-80%" width="260%" height="260%">
+        <feGaussianBlur stdDeviation="3.2" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <g id="prints" filter="url(#pawglow)"></g>
+  </svg>
+
+  <div class="tag src"></div><div class="tag dst"></div>
+  <div class="caption">drag to install</div>
+
+  <div class="ground"></div>
+  <img class="dog" src="DOG_SRC" alt="">
+
+  <div class="hint">
+    <span class="muted">then press</span>
+    <span class="kbd">⌘</span><span class="kbd">⇧</span><span class="kbd">L</span>
+    <span class="muted">to lock</span>
+  </div>
+  <div class="sub">The lock screen glows when your agent needs you.</div>
+
+<script>
+  // walk from the app to Applications: alternating left/right prints on a gentle arc,
+  // amber -> teal, fading in as they near the destination
+  const g = document.getElementById('prints');
+  const n = 7, x0 = 238, x1 = 418, yMid = 172;
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const amber=[255,159,67], teal=[0,212,170];
+  for (let i=0;i<n;i++){
+    const t = i/(n-1);
+    const x = lerp(x0,x1,t);
+    const arc = -10*Math.sin(Math.PI*t);         // slight hop upward mid-trail
+    const side = (i%2===0? -1 : 1)*8;            // left / right foot
+    const y = yMid + arc + side;
+    const ang = (Math.cos(Math.PI*t)*-10) + (i%2===0? -6 : 6);
+    const k = Math.min(1, t*1.15);
+    const c = amber.map((v,j)=>Math.round(lerp(v,teal[j],k)));
+    const u = document.createElementNS('http://www.w3.org/2000/svg','use');
+    u.setAttribute('href','#paw');
+    u.setAttribute('fill',`rgb(${c})`);
+    u.setAttribute('opacity', (0.30 + 0.65*t).toFixed(2));
+    const s = 0.62 + 0.10*t;
+    u.setAttribute('transform',`translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${ang.toFixed(1)}) scale(${s.toFixed(2)})`);
+    g.appendChild(u);
+  }
+</script>
+</body></html>

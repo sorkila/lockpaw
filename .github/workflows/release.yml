@@ -138,14 +138,14 @@ jobs:
           create-dmg \
             --volname "Lockpaw" \
             --volicon "scripts/dmg-volume-icon.icns" \
-            --background "scripts/dmg-background@2x.png" \
+            --background "scripts/dmg-background.tiff" \
             --window-pos 200 120 \
-            --window-size 660 400 \
+            --window-size 660 433 \
             --icon-size 96 \
-            --text-size 14 \
-            --icon "Lockpaw.app" 170 180 \
+            --text-size 13 \
+            --icon "Lockpaw.app" 165 172 \
             --hide-extension "Lockpaw.app" \
-            --icon "Applications" 490 180 \
+            --icon "Applications" 495 172 \
             --no-internet-enable \
             "$DMG_PATH" \
             "$DMG_DIR"
