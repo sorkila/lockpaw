@@ -44,6 +44,15 @@ struct AboutSettingsPane: View {
                 } label: {
                     SettingLabel("Updates", detail: updateDetail)
                 }
+
+                Toggle(isOn: Binding(get: { updates.checksAutomatically }, set: { updates.setChecksAutomatically($0) })) {
+                    SettingLabel("Check for updates automatically", detail: "Once a day. Every update is signed, and you're asked before it installs.")
+                }
+
+                Toggle(isOn: Binding(get: { updates.downloadsAutomatically }, set: { updates.setDownloadsAutomatically($0) })) {
+                    SettingLabel("Install updates automatically", detail: "Downloads in the background and installs the next time Lockpaw quits.")
+                }
+                .disabled(!updates.checksAutomatically)
             }
 
             Section {
@@ -95,6 +104,7 @@ struct AboutSettingsPane: View {
             }
         }
         .settingsPane(.about)
+        .onAppear { updates.refreshAutoUpdate() }
     }
 
     private var versionText: String {
