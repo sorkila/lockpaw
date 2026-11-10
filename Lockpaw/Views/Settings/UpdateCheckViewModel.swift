@@ -51,10 +51,12 @@ final class UpdateCheckViewModel: NSObject, ObservableObject, SPUUpdaterDelegate
     }
 
     /// Turning checks off also turns automatic installs off, so nothing installs unasked.
+    /// Installs go off first: Sparkle ignores a write to the install preference while checks
+    /// are off, so the other order leaves it stored as on and it returns with the next check.
     func setChecksAutomatically(_ on: Bool) {
         guard let autoUpdate else { return }
-        autoUpdate.automaticallyChecksForUpdates = on
         if !on { autoUpdate.automaticallyDownloadsUpdates = false }
+        autoUpdate.automaticallyChecksForUpdates = on
         refreshAutoUpdate()
     }
 
