@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-11-10
+
 ### Added
 
 - Settings → About has two switches for updates: check automatically, and install automatically. Turning checks off also turns automatic installs off, so nothing installs unless you ask. Every update is still signed and notarized, as before.
