@@ -25,7 +25,7 @@
 
 ---
 
-> You could set up Amphetamine, configure Hot Corners, tweak energy settings, and adjust your screen saver. Or you could press ⌘⇧L.
+> **Why not `caffeinate` plus Ctrl+Cmd+Q?** At a desk, on power, that pair does the job. Lockpaw is for what it leaves out: a locked screen that glows amber when an agent is waiting on you and teal when it is done, a lid you can close with sleep handed back on unlock, heat or 20% battery, and no keep-awake command to remember to stop.
 
 ## Features
 
