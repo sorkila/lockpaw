@@ -17,7 +17,9 @@ class LockController: ObservableObject {
     }
     @Published var lockStartTime: Date?
     @Published var elapsedTime: TimeInterval = 0
-    @Published private(set) var isAuthenticating = false
+    @Published private(set) var isAuthenticating = false {
+        didSet { LockStatus.shared.authenticating = isAuthenticating }
+    }
     @Published var lastError: String?
     @Published private(set) var unlockSucceeded = false
     @Published private(set) var failCount = 0
@@ -42,7 +44,9 @@ class LockController: ObservableObject {
 
     /// The overlay showing the lock screen's password field, or nil when it is closed. The
     /// armed Touch ID path is off and the app runs in kiosk mode for as long as it is set.
-    @Published private(set) var passwordEntryScreen: Int?
+    @Published private(set) var passwordEntryScreen: Int? {
+        didSet { LockStatus.shared.passwordEntryOpen = passwordEntryScreen != nil }
+    }
     var passwordEntryActive: Bool { passwordEntryScreen != nil }
 
     /// The precise state: an evaluation is armed right now. Internal — never drives the UI.

@@ -57,6 +57,7 @@ enum Constants {
         static let copiedConfirmation: TimeInterval = 2.0             // seconds a Settings "Copied" label stays before the button reads "Copy Setup" again
         static let hotkeyRefreshDelay: TimeInterval = 1.0             // seconds; let wake / unlock / session return settle before rebuilding the hotkey tap (debounced)
         static let passwordEntryIdleTimeout: TimeInterval = 30.0      // seconds without typing before the lock-screen password field closes and Touch ID re-arms
+        static let quietInstallCheckInterval: TimeInterval = 60       // seconds; how often a downloaded update looks for a quiet moment to install (QuietInstallPolicy)
         static let supportCardDelay: TimeInterval = 3.0               // seconds after an unlock before the supporter card appears (the cover is gone, the user is looking)
         static let supportCardAutoClose: TimeInterval = 3.0           // seconds the "No problem" ending stays before it fades
 
