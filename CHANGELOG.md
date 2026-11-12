@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- With automatic installs on, a downloaded update now installs and reopens Lockpaw at a quiet moment: after 10 minutes with nobody at the keyboard, or just after your Mac wakes or unlocks. It used to wait until you quit Lockpaw, which could take days, and Lockpaw checked for nothing newer meanwhile. It never happens while your screen is covered.
+
 ## [1.7.3] - 2026-11-10
 
 ### Added

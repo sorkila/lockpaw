@@ -31,9 +31,12 @@ final class UpdateCheckViewModel: NSObject, ObservableObject, SPUUpdaterDelegate
     weak var updater: SPUUpdater?
     private weak var autoUpdate: AutoUpdateSettings?
     private var userInitiated = false
+    /// Installs a downloaded update at a quiet moment instead of waiting for a quit.
+    private var quietInstall: QuietInstallController?
 
     func bind(to updater: SPUUpdater) {
         self.updater = updater
+        quietInstall = MainActor.assumeIsolated { QuietInstallController(updater: updater) }
         attach(autoUpdate: updater)
         updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
@@ -90,7 +93,37 @@ final class UpdateCheckViewModel: NSObject, ObservableObject, SPUUpdaterDelegate
         updateStatus = .upToDate
     }
 
+    /// With automatic installs on, Sparkle downloads an update and then waits for Lockpaw to
+    /// quit, running no more checks until then. Returning true takes the install over: the
+    /// block installs and relaunches with no UI, and `QuietInstallController` calls it at a
+    /// quiet moment (never while the screen is guarded). Sparkle still installs on quit if
+    /// that comes first.
+    func updater(
+        _ updater: SPUUpdater,
+        willInstallUpdateOnQuit item: SUAppcastItem,
+        immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
+    ) -> Bool {
+        guard let quietInstall else { return false }
+        let version = item.displayVersionString
+        MainActor.assumeIsolated { quietInstall.offer(version: version, install: immediateInstallHandler) }
+        return true
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        let quietInstall = quietInstall
+        MainActor.assumeIsolated { quietInstall?.clear("installing") }
+    }
+
+    /// The cycle that offered the block is over (an abort or a finished cycle), so the
+    /// block would do nothing now.
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
+        let quietInstall = quietInstall
+        MainActor.assumeIsolated { quietInstall?.clear("update cycle ended") }
+    }
+
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        let quietInstall = quietInstall
+        MainActor.assumeIsolated { quietInstall?.clear("aborted: \(error.localizedDescription)") }
         guard userInitiated else { return }
         userInitiated = false
         isChecking = false

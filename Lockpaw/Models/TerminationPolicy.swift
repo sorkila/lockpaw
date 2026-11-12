@@ -25,10 +25,17 @@ enum TerminationPolicy {
 final class LockStatus {
     static let shared = LockStatus()
     private(set) var state: LockState = .unlocked
+    /// When the screen last went from guarded to unlocked; nil if never this run.
+    private(set) var unlockedAt: Date?
+    /// The lock-screen password field is open.
+    var passwordEntryOpen = false
+    /// A typed password is being checked.
+    var authenticating = false
 
     private init() {}
 
-    func update(_ state: LockState) {
+    func update(_ state: LockState, now: Date = Date()) {
+        if state == .unlocked, self.state != .unlocked { unlockedAt = now }
         self.state = state
     }
 }
