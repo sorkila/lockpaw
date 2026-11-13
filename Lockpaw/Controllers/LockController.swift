@@ -320,6 +320,7 @@ class LockController: ObservableObject {
         pingGate.reset()
         transitionTo(.locked)
         LidSleepController.shared.lockBegan()
+        TokenUsageMonitor.shared.lockBegan()
     }
 
     /// Quick unlock via hotkey — no auth.
@@ -551,6 +552,7 @@ class LockController: ObservableObject {
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
         LidSleepController.shared.lockEnded()
+        TokenUsageMonitor.shared.lockEnded()
     }
 
     private func forceUnlock() {
@@ -572,6 +574,7 @@ class LockController: ObservableObject {
         inputBlocker.stopBlocking()
         sleepPreventer.allowSleep()
         LidSleepController.shared.lockEnded()
+        TokenUsageMonitor.shared.lockEnded()
     }
 
     // MARK: - Passive Touch ID

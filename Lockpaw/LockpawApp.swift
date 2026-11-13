@@ -62,6 +62,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Mac. Launch rewrites it from the real state, which clears one a crash left behind.
         MainActor.assumeIsolated { ClaudePresenceMarker.shared.start() }
 
+        // Token counter: follow Settings → Lock Screen → Token counter (off by default). It
+        // counts only while locked — LockController starts and stops it — so nothing is read
+        // here.
+        MainActor.assumeIsolated { TokenUsageMonitor.shared.followPreference() }
+
         // Start Sparkle after app is fully launched
         updateCheckViewModel.bind(to: updaterController.updater)
         MainActor.assumeIsolated {

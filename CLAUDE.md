@@ -75,6 +75,7 @@ Lockpaw/
 │   ├── SettingsWindowController.swift  Owns the Settings window: toolbar-style NSTabViewController, one SwiftUI pane per tab, last pane restored
 │   ├── PresentationController.swift  Fade-to-black effects — timer slot, NSEvent monitors, cross-fades
 │   ├── WallpaperController.swift   Desktop wallpaper per lock — per-screen resolve, off-main still decode, one shared player per Aerial
+│   ├── TokenUsageMonitor.swift     Token counter: follows its setting; the worker (FSEvents, utility queue, cache, SQLite) runs only while locked
 │   ├── AgentNotifier.swift         UNUserNotificationCenter — "Claude Code finished in <project>" (lazy auth)
 │   └── ClaudePresenceMarker.swift  Keeps the CLAUDE_CLIENT_PRESENCE_FILE marker while you're at the Mac (system events → ClaudePresence)
 ├── Models/
@@ -104,12 +105,16 @@ Lockpaw/
 │   ├── PassiveAuthPolicy.swift     Pure passive Touch ID rules (arm/re-arm/stand down + LAError scoring)
 │   ├── PasswordEntryPolicy.swift   Pure password-field rules (kiosk options, idle close, Command-key filter)
 │   ├── DesktopWallpaper.swift      Pure per-screen wallpaper lookup in the private com.apple.wallpaper store (Aerial clip or still)
-│   └── WallpaperMotion.swift       "Aerials move" setting + pure WallpaperPlaybackPolicy (battery, Low Power, Reduce Motion, visible layers)
+│   ├── WallpaperMotion.swift       "Aerials move" setting + pure WallpaperPlaybackPolicy (battery, Low Power, Reduce Motion, visible layers)
+│   ├── TokenUsage.swift            Pure token-counter core: transcript-line parser + byte prefilter, dedupe ledger, stats-cache baseline, rate, formatting
+│   ├── TokenUsageEngine.swift      Token counter engine: per-file offsets, per-day totals per source, the resumable cache file
+│   └── OpencodeUsageSource.swift   opencode's SQLite database, opened read-only; one prepared statement, no read transaction held
 ├── Views/
 │   ├── OverlayRootView.swift       Per-screen presentation switch — lock UI / pure black / attention pulse
 │   ├── MascotImage.swift           Mascot pixels for a preference — asset catalog or CustomMascot; feathered mask on custom
 │   ├── LockScreenView.swift        Lock screen — mascot, timer, message, fallback auth, agent-ping glow
 │   ├── AgentPingList.swift         Under the timer: a row per session (dot · agent · wait), status → dot colour
+│   ├── TokenCounterView.swift      Under the timer (opt-in): today's tokens + live rate and sparkline, then the year's total; observes the monitor itself
 │   ├── AgentGlow.swift             The one agent-ping glow (lock screen + attention pulse) — tone cross-fade, Glow strength
 │   ├── AmbientScreenView.swift     Secondary display — morphing gradient blobs
 │   ├── WallpaperBackgroundView.swift  Desktop wallpaper behind the lock UI — still or shared-player layer, plus the scrim
@@ -117,7 +122,7 @@ Lockpaw/
 │   ├── SupportCardView.swift       The supporter card: the ask, its endings, and the new-supporter welcome
 │   ├── Settings/                   Native grouped forms, Lockpaw teal: SettingsSection (the 4 panes, SettingsRequest, SettingLabel),
 │   │                               GeneralSettingsPane (shortcut + recorder, while locked, startup, permissions), LockScreenSettingsPane
-│   │                               (live preview, mascot, message, background, fade), AgentSettingsPane (connect grid with status, ping
+│   │                               (live preview, mascot, message, token counter, background, fade), AgentSettingsPane (connect grid with status, ping
 │   │                               look and sound, relay, CLI), AboutSettingsPane (version, updates, supporter licence), UpdateCheckViewModel
 │   └── OnboardingView.swift        5 steps: welcome (mascot), hotkey, accessibility, agent alerts, menu bar
 ├── Utilities/
@@ -160,6 +165,7 @@ LockpawTests/                       (sibling of Lockpaw/)
 ├── DesktopWallpaperTests.swift     Store layers per display/Space, leftovers, fail-safe fixtures, current Space (27 tests)
 ├── WallpaperMotionTests.swift      When the shared Aerial player runs (6 tests)
 ├── ImageDownsamplingTests.swift    Fill-size math, decode size, unreadable files (6 tests)
+├── TokenUsageTests.swift           Token counter: parsing + prefilter, dedupe, local days, baseline year rule, opencode rows + real SQLite, formatting, rate, appended-bytes reader, cache resume, stop mid-scan, off means off, locked-only worker (53 tests)
 └── ClaudePresenceTests.swift       Marker across lock/unlock, macOS lock, sleep, quit, launch while locked + env merge (20 tests)
 
 LockpawCLI/                         (sibling of Lockpaw/)
@@ -260,6 +266,15 @@ LockpawHelper/                      (sibling of Lockpaw/) — lid-closed mode's 
 - **Stills decode once, off main** (`WallpaperStill`, `ImageDownsampling`) at the size the screen draws them scaled to fill; the overlay re-renders every second for the clock, so nothing decodes in a body. Switching the setting on opens each still once in the background, so a TCC folder prompt (wallpaper in Desktop/Documents/Downloads) shows over Settings rather than behind the shield.
 - **Scrim** — 50% black plus 35% radial behind the centred content and 35% under the prompt (`WallpaperBackgroundView`). Chosen by rendering the lock screen over real Aerial frames and a near-white sky: timer (white 0.35) ≈3.1:1 over Aerials, matching today's black screen.
 - **Text shadow and a full-size stack over a wallpaper** — with no backdrop, `LockScreenView` gives the message, timer, agent rows and bottom area a soft shadow (`legibleOverWallpaper`, black 0.6, radius 6): the scrim's ~3:1 held on paper, but thin type still dissolved into busy Aerial texture on an ultrawide (checked on hardware). The content `ZStack` is also pinned to `geo.size`: `GeometryReader` places its child top-leading, the backdrop gradient was what made that stack full-width, and without it the stack shrank to the content column and sat a quarter of the way across an ultrawide.
+
+### Token counter (off by default)
+- **What** — under the timer, two quiet lines: today's tokens (rolling digits; a one-shot glow and a "+N" chip when tokens land) with the live rate and a two-minute sparkline, then "2026 · N tokens". One combined total across every model and tool, never per model, and no prices: a price table goes stale with every model, and a wrong number on a lock screen is worse than none. Settings → Lock Screen → Token counter.
+- **Off by default, and off means off** — a lock screen is read by whoever walks past. `TokenUsageMonitor.followPreference()` (called at launch) watches `showTokenCounter` by KVO. With the counter off nothing runs at all: no scan, no FSEvents stream, no cache write and no SQLite connection, and the paths aren't even resolved. Switching it off also deletes `token-usage.json` — it lists the transcripts it has read, so it carries project folder names — on the worker's own queue, so a save the stopped worker had queued lands first and goes with it.
+- **Only while locked** — `LockController` calls `lockBegan()` / `lockEnded()`, and a worker exists only while the counter is on *and* Lockpaw is locked. Locking resumes from the cache file (well under a second on real data) and catches up on what changed; unlocking releases the worker, the stream and the database connection, so Lockpaw never follows transcript writes while the Mac is in use. The numbers already published stay for the next lock — dropped if the day turned, since "tokens today" must not show yesterday's. Stopping is prompt: `stop()` raises a flag the engine checks between files, read chunks and opencode weeks, so an unlock mid-scan returns within a chunk and nothing partial is saved (a first count cut short is simply done again at the next lock).
+- **Sources, all read-only** — Claude Code (`$CLAUDE_CONFIG_DIR` or `~/.claude`): `stats-cache.json` is the baseline (`modelUsage` when the first session was this year, otherwise this year's `dailyModelTokens`; never today), and `projects/**/*.jsonl` (subagents included, `.superseded-` skipped) covers the days after its `lastComputedDate`. A message is logged several times while it streams, so a ledger keyed by `message.id` adds only each field's increase. opencode (`$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`): `session_message` assistant rows, opened `mode=ro`, same increase-only dedupe by row id, polled through the `time_created` index. Days are local.
+- **The cache** — `token-usage.json` in Lockpaw's Application Support folder (next to `CustomMascot.png`): per-file offsets, per-day totals, the last hour of the ledgers. Every lock resumes from it in well under a second and reads only appended bytes; a stale, unreadable or deleted cache means one full scan. It is written at most every 30 s, at the end of a lock and before quitting.
+- **Performance is a requirement** — nothing runs outside a lock; then one serial utility-QoS queue; files read in 1 MB chunks, and a line is parsed only if it passes a byte prefilter (`"usage"` and `"assistant"` as JSON tokens), so tool-result lines are skipped unparsed; FSEvents (file-level, 1 s latency) instead of polling; at most two passes and two published snapshots a second. The view observes the monitor itself (`.equatable()`), so token updates never re-run `LockScreenView`'s body; every animation is one-shot (`numericText`, keyframes), never `repeatForever`; the only clock is a 1 s `TimelineView` that exists while the counter is on screen. Measured on real data (185 B tokens across ~1,900 transcripts): a first count in seconds at ~35 MB peak, mostly waiting on the opencode database; a lock resume in ~0.05 s reading 0 bytes; ~0.01 s CPU over 10 s of live FSEvents.
+- **Layout** — tight under the timer in the lock screen's own type roles, at the waiting rows' opacities, with the rows still below. With the counter on, the space above the content group may give back up to its 32% so a short screen never pushes the unlock prompt off the bottom, and the rows' space is held from the start so a first ping never lifts the mascot. With it off, the layout is exactly the one without the feature. Display only (`allowsHitTesting(false)`).
 
 ### Shortcuts and ping relay (v1.6)
 - **App Intents are one-way** — `LockScreenIntent` and `IsLockedIntent` (+ `LockpawShortcuts`, `Utilities/LockpawIntents.swift`) give Shortcuts, Spotlight and Siri a lock and a status read. **There is no unlock intent, on purpose:** Siri works while the screen is covered, so "unlock Lockpaw" would open it for anyone in the room, and anything a Shortcut can run, any local script can too. Lock goes through `.lockpawLock`, observed in `LockController.init()`, so it works with the menu never opened and the icon hidden.
