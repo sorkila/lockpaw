@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings on macOS 26: the top of each pane is no longer hidden under a blurred band below the toolbar. The first rows of General, Lock Screen, Agents and About show in full.
+
 ## [1.7.3] - 2026-11-10
 
 ### Added
