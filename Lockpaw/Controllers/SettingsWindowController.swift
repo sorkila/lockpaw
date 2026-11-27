@@ -39,7 +39,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         self.tabs = tabs
         let window = NSWindow(contentViewController: tabs)
         // Sized by the pane, so no zoom or resize; a settings window has nothing to minimise to.
-        window.styleMask = [.titled, .closable]
+        // Full-size content: on macOS 26 each form's scroll view keeps a blurred "scroll
+        // pocket" a toolbar tall at its top, meant to sit under the toolbar. Without this
+        // the pane started below the toolbar and the pocket covered its first rows instead.
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
         window.delegate = self
